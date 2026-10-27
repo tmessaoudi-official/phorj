@@ -73,7 +73,7 @@ git status                                    # must be clean
 git fetch origin
 git checkout master && git pull --ff-only     # master should be d1e26e68
 git checkout -B resign origin/ccr-56056e44-aec471
-git rebase --force-rebase --gpg-sign master   # re-signs all 34; author dates kept, committer date = now
+git rebase --force-rebase --gpg-sign master   # re-signs every commit (36 with this report and its count fix); author dates kept, committer date = now
 git log --format='%h %G? %an  %s' master..resign | head -40   # expect G (good signature) on every line
 git checkout master && git merge --ff-only resign
 git push origin master                        # your pre-push hook runs the FULL gate with PHP 8.5
@@ -83,7 +83,7 @@ git push origin --delete ccr-56056e44-aec471  # optional, once master is green
 
 What to expect:
 - **No conflicts.** `master` has nothing the branch lacks [Verified: `git rev-list --count HEAD..origin/master` = 0].
-- **34 new hashes.** Docs cite the old short SHAs together with each commit's subject; doc-guards G3 is built to
+- **New hashes for every commit (36 with this report and its count fix).** Docs cite the old short SHAs together with each commit's subject; doc-guards G3 is built to
   recover a citation by its subject after a re-sign [Inferred: the guard's documented rule and commit `7ed814e7`,
   `give the cloud-kit row 4 evidence its commit subject, so doc-guards G3 can recover it`]. `/progress` may show
   some rows as "claimed" until their evidence column cites the new SHAs.
