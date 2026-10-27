@@ -3,10 +3,10 @@
 use super::*;
 
 impl Checker {
-    /// Feature B-static: type-check each class's static-field initializers (now arbitrary expressions,
-    /// not just literals), evaluated once at program start. Checked with **no `this`** (statics are
-    /// class-level — referencing `this` errors) and after full collection, so an initializer may call a
-    /// function or read another static. A type mismatch is `E-STATIC-INIT-TYPE`.
+    /// Feature B-static: type-check each class's and trait's static-field initializers (arbitrary
+    /// expressions, not just literals), evaluated once at program start. Checked with **no `this`**
+    /// (statics are class-level — referencing `this` errors) and after full collection, so an
+    /// initializer may call a function or read another static. A mismatch is `E-STATIC-INIT-TYPE`.
     pub(in crate::checker) fn check_static_inits(&mut self, program: &crate::ast::Program) {
         use crate::ast::{ClassMember, Item, Modifier};
         let prev = self.cur_class.take();
@@ -16,11 +16,17 @@ impl Checker {
         // `this` is forbidden via `in_static_init` (Batch A).
         self.in_static_init = true;
         for item in &program.items {
-            let Item::Class(c) = item else { continue };
-            self.cur_class = Some(c.name.clone());
+            // A trait's statics too (plan row 4c item 1): each using class runs its own copy, so the
+            // initializer is checked once, in the trait's scope.
+            let (owner, members) = match item {
+                Item::Class(c) => (&c.name, &c.members),
+                Item::Trait(t) => (&t.name, &t.members),
+                _ => continue,
+            };
+            self.cur_class = Some(owner.clone());
             // Q-B DV-3: a static initializer runs in its class's package (for `internal` gating).
-            self.cur_package = Self::pkg_of_mangled(&c.name).to_string();
-            for m in &c.members {
+            self.cur_package = Self::pkg_of_mangled(owner).to_string();
+            for m in members {
                 if let ClassMember::Field {
                     modifiers,
                     ty,

@@ -264,3 +264,18 @@ fn optional_field_without_initializer_is_ok() {
     let src = "class C { int? n; constructor() {} } function main() -> void { var c = new C(); }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
+
+#[test]
+fn a_trait_static_initializer_is_type_checked() {
+    // Plan row 4c item 1: the pass walked classes only, so a mistyped trait static passed `phg check`
+    // and failed at run time on every user's copy.
+    let src = "function seed() -> string { return \"x\"; } \
+               trait T { static int answer = seed(); } class C { use T; } function main() -> void {}";
+    assert!(
+        errors_of(src)
+            .iter()
+            .any(|e| e.code == Some("E-STATIC-INIT-TYPE")),
+        "{:?}",
+        errors_of(src)
+    );
+}

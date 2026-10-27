@@ -270,11 +270,6 @@ pub(super) fn compile_program_with(
     // `intern`'s unique borrow of `names_index` ends at its last call above (NLL), so the
     // immutable `&names_index` borrows below are free.
 
-    // Static fields (M-mut.7): assign each `static` field a program-wide slot index (declaration
-    // order across classes) and const-fold its literal initializer into the program's `static_inits`
-    // table. The VM seeds its runtime `statics` vector from this once at startup; the interpreter
-    // seeds its own map from the same `const_literal` kernel (F3). The checker guarantees every
-    // static has a literal-const initializer, so `unwrap_or(Unit)` is checker-unreachable.
     // Class constants (Feature A): the shared table flattens inheritance + traits. Each `(class, NAME)`
     // carries its inlined literal `Value` and operand `CTy` (from the declared `Type`), consumed by
     // `const_value`/`const_cty`. No runtime slot — a const access emits `Op::Const`.
@@ -282,84 +277,7 @@ pub(super) fn compile_program_with(
         .into_iter()
         .map(|(key, (v, ty))| (key, (v, resolve_cty(&ty))))
         .collect();
-    let mut statics_index: HashMap<(String, String), (usize, CTy)> = HashMap::new();
-    let mut static_inits: Vec<Value> = Vec::new();
-    // Feature B-static: a static whose initializer is NOT a compile-time literal gets a `Unit`
-    // placeholder in `static_inits` and a `(slot, init expr)` entry here; a `SetStatic` prelude is
-    // emitted at the start of `main` (declaration order) to evaluate it once before any user code —
-    // matching the interpreter's `eval_static_inits` and the transpiler's `__phorj_init_statics`.
-    let mut static_runtime_inits: Vec<(usize, &Expr)> = Vec::new();
-    for c in &class_decls {
-        for m in &c.members {
-            if let ClassMember::Field {
-                modifiers,
-                name,
-                ty,
-                init,
-                ..
-            } = m
-            {
-                if modifiers.contains(&Modifier::Static) {
-                    let slot = static_inits.len();
-                    statics_index.insert((c.name.clone(), name.clone()), (slot, resolve_cty(ty)));
-                    match init.as_ref().and_then(crate::value::const_literal) {
-                        Some(v) => static_inits.push(v),
-                        None => {
-                            static_inits.push(Value::Unit); // placeholder, set by the main prelude
-                            if let Some(e) = init {
-                                static_runtime_inits.push((slot, e));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    // M-RT S8: a `use`d trait's `static` field becomes a PER-USING-CLASS copy (PHP `use` semantics) —
-    // each using class gets its own slot keyed `(class, field)`. The trait synthetic's own
-    // `(trait, field)` entry from the loop above is inert (a trait is never a static holder at runtime).
-    for it in &program.items {
-        let Item::Class(c) = it else { continue };
-        for u in &c.uses {
-            for t in &program.items {
-                let Item::Trait(td) = t else { continue };
-                if td.name != u.name {
-                    continue;
-                }
-                for m in &td.members {
-                    if let ClassMember::Field {
-                        modifiers,
-                        name,
-                        ty,
-                        init,
-                        ..
-                    } = m
-                    {
-                        if modifiers.contains(&Modifier::Static) {
-                            statics_index.insert(
-                                (c.name.clone(), name.clone()),
-                                (static_inits.len(), resolve_cty(ty)),
-                            );
-                            let v = init
-                                .as_ref()
-                                .and_then(crate::value::const_literal)
-                                .unwrap_or(Value::Unit);
-                            static_inits.push(v);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    // Plan row 4c item 2: a static named through an inheriting class is its owner's ONE slot — an
-    // alias entry, never a second slot (`ast::static_field_owners`, shared with both other backends).
-    for ((class, field), owner) in crate::ast::static_field_owners(program) {
-        if owner != class {
-            if let Some(entry) = statics_index.get(&(owner, field.clone())).cloned() {
-                statics_index.insert((class, field), entry);
-            }
-        }
-    }
+    let (statics_index, static_inits, static_runtime_inits) = statics::build(program, &class_decls);
 
     // Methods follow the constructors in the index space; build the dispatch table — and the
     // `(class, method) → return type` table `ctype` reads for a method-call result — in lockstep.

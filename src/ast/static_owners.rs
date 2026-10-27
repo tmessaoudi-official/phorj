@@ -1,8 +1,9 @@
-//! The one answer to "which class's slot does `C.field` name?" for a static field (plan row 4c item 2,
-//! KNOWN_ISSUES STATIC-COMPOSITION-PARITY). Shared by the compiler, the interpreter and the transpiler
-//! so the three can never disagree on where an inherited static lives.
+//! Static fields, single-sourced for the compiler, the interpreter and the transpiler (plan row 4c,
+//! KNOWN_ISSUES STATIC-COMPOSITION-PARITY): which class's slot `C.field` names (item 2), and which
+//! non-literal initializers run before `main`, in what order (item 1). One answer each, so the three
+//! backends can never disagree on where an inherited static lives or when a side effect happens.
 
-use super::{ClassMember, Item, Modifier, Program};
+use super::{ClassMember, Expr, Item, Modifier, Program};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// `(class, static field) → owning class` for every static field reachable as `class.field`.
@@ -55,6 +56,58 @@ fn static_fields(members: &[ClassMember]) -> BTreeSet<String> {
             ClassMember::Field {
                 modifiers, name, ..
             } if modifiers.contains(&Modifier::Static) => Some(name.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The NON-literal static initializers to evaluate once before `main` (a literal one is seeded at
+/// load), as `(owning class, field, initializer)` in the one order every backend runs them: each
+/// class's own statics in program and declaration order, then — class by class, in `uses` order — the
+/// statics of the traits it `use`s, once per using class (the S8 per-user copy). A trait is never a
+/// static holder itself, so its own initializers are not run in the trait's name.
+pub fn static_runtime_inits(program: &Program) -> Vec<(String, String, &Expr)> {
+    let mut out = Vec::new();
+    for it in &program.items {
+        if let Item::Class(c) = it {
+            for (field, e) in runtime_static_fields(&c.members) {
+                out.push((c.name.clone(), field, e));
+            }
+        }
+    }
+    for it in &program.items {
+        let Item::Class(c) = it else { continue };
+        for u in &c.uses {
+            for t in &program.items {
+                if let Item::Trait(td) = t {
+                    if td.name == u.name {
+                        for (field, e) in runtime_static_fields(&td.members) {
+                            out.push((c.name.clone(), field, e));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A member list's non-literal, non-`const` static initializers, in declaration order.
+fn runtime_static_fields(members: &[ClassMember]) -> Vec<(String, &Expr)> {
+    members
+        .iter()
+        .filter_map(|m| match m {
+            ClassMember::Field {
+                modifiers,
+                name,
+                init: Some(e),
+                ..
+            } if modifiers.contains(&Modifier::Static)
+                && !modifiers.contains(&Modifier::Const)
+                && crate::value::const_literal(e).is_none() =>
+            {
+                Some((name.clone(), e))
+            }
             _ => None,
         })
         .collect()

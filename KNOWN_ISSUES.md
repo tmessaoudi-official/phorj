@@ -79,6 +79,16 @@ gives `3` on the tree-walker, while `phg run` (and `--no-jit`) stop with exit 1,
 three legs, 2026-10-26]. Only a literal `null` receiver reaches it [Inferred: any other receiver the checker
 accepts names a declared member, which is interned; `var z = null` is already rejected]. Owner: plan row 9 (the craftsmanship batch).
 
+## TEST-STDIN-INHERIT — the format-safety sweep blocks when the test process's stdin is open (found 2026-10-27)
+
+`tests/format.rs` `every_repo_phg_formats_idempotently_and_safely` runs every repo `.phg` in-process
+(`cmd_treewalk`), and `examples/cli/stdin-filter.phg` and `examples/cli/demo.phg` read standard input, so the test
+finishes only when its stdin is at EOF. CI and the git hooks give it a closed stdin; a shell whose stdin stays open
+(a background job in a cloud session, 2026-10-27) hangs it indefinitely [Verified: `sleep 200 | cargo test --test
+format every_repo_…` blocks with a thread in `unix_stream_data_wait` on fd 0; `</dev/null` passes in 19 s]. It is
+a test-isolation defect, not a language one. Workaround: run the suite with `</dev/null`. Fix: give the sweep's
+in-process runs an empty stdin. Owner: plan row 9 (the craftsmanship batch).
+
 ## FIXED — VM-WITH-STATIC-CLASS — on the VM, `with` and property-hook reads are decided at COMPILE time from the receiver's compiler type (found 2026-10-08, fixed 2026-10-26)
 
 Found by the P0 slice's close panel (rounds 2 and 3, correctness lens). It predates the 2026-10-07 audit batch: the
@@ -213,15 +223,19 @@ users store no `k` keeps the function. Tests: `src/checker/tests/trait_bare_name
 `tests/differential.rs::trait_bare_name_without_a_using_field_is_the_function_on_every_leg`; golden:
 `conformance/diagnostics/trait-bare-name.phg`.
 
-## STATIC-COMPOSITION-PARITY — static/trait/multi-parent shapes that pass `phg check` and split the legs (found 2026-10-08; items 2, 3 and 5 FIXED 2026-10-26, row 4c)
+## STATIC-COMPOSITION-PARITY — static/trait/multi-parent shapes that pass `phg check` and split the legs (found 2026-10-08; items 1, 2, 3 and 5 FIXED 2026-10-26, row 4c)
 
 The correctness pass on the round-5 re-check fix found these while probing static contexts. All four predate that
 work, and each passes `phg check`. Queued as plan row 4c.
 
-1. **A trait's non-literal static initializer never runs.** `trait T { static int s = k() + 1; } class U { use T; }`,
-   then `U.s + 1`: VM `expected int, found unit`, tree-walker `cannot apply Add to unit and int`, PHP `Typed static
-   property U::$s must not be accessed before initialization`. The checker and the interpreter walk only classes'
-   static initializers.
+1. **FIXED 2026-10-26 (row 4c) — a trait's non-literal static initializer never ran.** `trait T { static int s = k() + 1;
+   } class U { use T; }`, then `U.s + 1`: VM `expected int, found unit`, tree-walker `cannot apply Add to unit and int`,
+   PHP `Typed static property U::$s must not be accessed before initialization`. The checker and the interpreter walked
+   only classes' static initializers, and the VM evaluated the trait's once into an inert trait slot (a side effect
+   there printed on the VM only). `ast::static_runtime_inits` is now the one ordered list all three run — each class's
+   own non-literal statics, then each class's copy of its traits' — and the checker type-checks a trait's initializer
+   (`a_trait_non_literal_static_initializer_runs_once_per_user`, `a_trait_static_initializer_is_type_checked`; example
+   `guide/static-init.phg`).
 2. **FIXED 2026-10-26 (row 4c) — an inherited static field read through the subclass.** `open class A { static int sa
    = 2; } class M extends A {}`, then `M.sa`: VM `undefined variable M` (compile error), tree-walker `no static field
    sa on M`, PHP `2`; a write through `M` forked a second copy on the tree-walker. `ast::static_field_owners` now maps
