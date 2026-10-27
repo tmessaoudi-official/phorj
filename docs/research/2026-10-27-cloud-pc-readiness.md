@@ -33,6 +33,11 @@ So, in a new session:
 3. `gawk`, `cargo-nextest`, PHP 8.5 and `core.hooksPath` are all absent, so the README's setup script is not what
    the environment runs, or it failed early (its first line is one `&&` chain).
 
+The probe cannot tell **"not configured yet"** from **"configured but failing"**: both produce this output. If you have
+not set the variable and the setup script yet, set them (below). If you already have, the setup script is failing, and
+the first thing to read is its output for the session in the environment settings. The likely suspects are the PPA
+being unreachable, a relative `cd phorj`, and `/root/.ccr` not existing yet when the script runs (all [Unverified]).
+
 This long-running session has the framework only because it was installed by hand earlier. Its container also has no
 kit hook and no key [Verified: `jq '.hooks.SessionStart'` lists only the banner; `KEY_SET=no`].
 
@@ -72,20 +77,25 @@ cd /stack/projects/phorj
 git status                                    # must be clean
 git fetch origin
 git checkout master && git pull --ff-only     # master should be d1e26e68
+git rev-parse master origin/master            # MUST print the same SHA twice; if not, push or reconcile master first
 git checkout -B resign origin/ccr-56056e44-aec471
 git rebase --force-rebase --gpg-sign master   # re-signs every commit (36 with this report and its count fix); author dates kept, committer date = now
 git log --format='%h %G? %an  %s' master..resign | head -40   # expect G (good signature) on every line
 git checkout master && git merge --ff-only resign
 git push origin master                        # your pre-push hook runs the FULL gate with PHP 8.5
 git branch -d resign
-git push origin --delete ccr-56056e44-aec471  # optional, once master is green
+git push origin --delete ccr-56056e44-aec471  # optional, once master is green; ends pushes from this cloud session
 ```
 
 What to expect:
-- **No conflicts.** `master` has nothing the branch lacks [Verified: `git rev-list --count HEAD..origin/master` = 0].
-- **New hashes for every commit (36 with this report and its count fix).** Docs cite the old short SHAs together with each commit's subject; doc-guards G3 is built to
-  recover a citation by its subject after a re-sign [Inferred: the guard's documented rule and commit `7ed814e7`,
-  `give the cloud-kit row 4 evidence its commit subject, so doc-guards G3 can recover it`]. `/progress` may show
+- **No conflicts**, provided local `master` equals `origin/master` (the `rev-parse` line). `origin/master` has
+  nothing the branch lacks [Verified: `git rev-list --count HEAD..origin/master` = 0]. A local `master` with unpushed
+  commits turns the re-sign into a real rebase, where conflicts become possible.
+- **New hashes for every commit (36 with this report and its count fix).** Docs keep citing the old short SHAs. That cannot fail
+  pre-push: doc-guards G3 is textual (a SHA line needs a ref or a backticked subject) and never looks a SHA up in
+  history, and no pre-push step resolves a commit SHA [Verified: `scripts/doc-guards.sh` lines 68-81; `git rev-parse`
+  appears in pre-push, validate-infra and size-gate only as `--show-toplevel`]. The subjects let a reader map an old
+  SHA to its re-signed commit. `/progress` may show
   some rows as "claimed" until their evidence column cites the new SHAs.
 - **A long pre-push run.** It runs the full suite with `--all-features`, both clippy legs, the PHP 8.5 spine,
   size-gate, validate-infra, doc-tests, release build and microbench-gate. The cloud ran a subset; this run is the
