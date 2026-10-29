@@ -38,6 +38,14 @@ impl Checker {
                 _ => None,
             })
             .collect();
+        for (cls, used) in &class_uses {
+            for t in used {
+                self.trait_users
+                    .entry(t.clone())
+                    .or_default()
+                    .push(cls.clone());
+            }
+        }
         for (cls, used) in class_uses {
             for t in used {
                 let Some(tinfo) = self.classes.get(&t).cloned() else {

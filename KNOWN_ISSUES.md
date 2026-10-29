@@ -97,7 +97,7 @@ as `(clone(…))` wherever it is the receiver of `->`/`?->`, for both calls and 
 `src/transpile/tests_receivers.rs` and `tests/differential.rs::clone_with_as_a_receiver_agrees_on_every_leg`. Example:
 `examples/guide/clone-with.phg`.
 
-## TRAIT-BARE-NAME — in a trait method, a bare name shared by a top-level function and the USING class's field splits the legs (found 2026-10-08)
+## FIXED — TRAIT-BARE-NAME — in a trait method, a bare name shared by a top-level function and the USING class's field splits the legs (found 2026-10-08, fixed 2026-10-26)
 
 ```
 function k(): int { return 5; }
@@ -111,6 +111,12 @@ faults with `` `f` is not a function, variant, or class ``. The checker types th
 no field `k`, so it cannot see the collision. A field declared in the trait itself is `E-BARE-FIELD` (fixed in the
 2026-10-08 round-5 work). This predates that work. Workaround: write `this.k` or rename one of the two. Queued with plan
 row 4b.
+
+**Fixed 2026-10-26 (row 4b, step 3):** the checker records which classes use each trait (`trait_users`), and
+`is_cur_field` answers for all of them inside a trait body, so the program above is `E-BARE-FIELD`. A trait whose
+users store no `k` keeps the function. Tests: `src/checker/tests/trait_bare_name.rs`,
+`tests/differential.rs::trait_bare_name_without_a_using_field_is_the_function_on_every_leg`; golden:
+`conformance/diagnostics/trait-bare-name.phg`.
 
 ## STATIC-COMPOSITION-PARITY — four static/trait/multi-parent shapes pass `phg check` and split the legs (found 2026-10-08)
 

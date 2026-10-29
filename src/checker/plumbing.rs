@@ -25,6 +25,7 @@ impl Checker {
             interfaces,
             sealed_types: std::collections::BTreeSet::new(),
             traits: std::collections::HashSet::new(),
+            trait_users: HashMap::new(),
             prebound: std::collections::HashSet::new(),
             class_implements: std::collections::BTreeMap::new(),
             class_supertypes: std::collections::BTreeMap::new(),
@@ -339,11 +340,22 @@ impl Checker {
     }
     /// Is `name` an instance field of the class currently being checked? Used by the `Ident` site to
     /// turn a bare field reference into a targeted `E-BARE-FIELD` ("write `this.{name}`").
+    /// In a TRAIT body this also answers for every class using the trait (row 4b, TRAIT-BARE-NAME):
+    /// the body runs with `this` = that class, where every leg reads the field.
     pub(super) fn is_cur_field(&self, name: &str) -> bool {
-        self.cur_class
-            .as_ref()
-            .and_then(|c| self.classes.get(c))
-            .is_some_and(|info| info.fields.contains_key(name))
+        let Some(cur) = self.cur_class.as_ref() else {
+            return false;
+        };
+        let stores = |c: &String| {
+            self.classes
+                .get(c)
+                .is_some_and(|i| i.fields.contains_key(name))
+        };
+        stores(cur)
+            || self
+                .trait_users
+                .get(cur)
+                .is_some_and(|users| users.iter().any(stores))
     }
 
     // ---- totality: structural termination analysis (M-RT totality cluster) ----

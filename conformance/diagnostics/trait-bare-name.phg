@@ -1,0 +1,26 @@
+package Main;
+
+function k(): int {
+    return 5;
+}
+
+function apply(() => int f): int {
+    return f();
+}
+
+// A trait body runs with `this` = the class using it. `C` stores a field `k`, so the bare `k` below
+// is a field read there, which phorj spells `this.k` (plan row 4b, TRAIT-BARE-NAME).
+trait T {
+    function m(): int {
+        return apply(k);
+    }
+}
+
+class C {
+    use T;
+    int k = 9;
+}
+
+function main(): void {
+    int r = new C().m();
+}
