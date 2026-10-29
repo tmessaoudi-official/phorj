@@ -112,8 +112,8 @@ both runtimes agree. Don't introduce a second formatting path.
 ## T-5. Adding an `Op` variant requires its match arm in the same commit
 A new `Op` touches **three** match surfaces, and as of M9 **all three are exhaustive (no `_`
 wildcard)** — so a missing arm is a *compile error*, never a silent hole:
-- `vm::Vm::exec_op` (`src/vm/exec.rs:9`) — the per-op execution semantics (irreducibly per-`Op`).
-- `compiler::Compiler::stack_effect` (`src/compiler/emit.rs:75`) — the net stack delta.
+- `vm::Vm::exec_op` (`src/vm/exec.rs:12`) — the per-op execution semantics (irreducibly per-`Op`).
+- `compiler::Compiler::stack_effect` (`src/compiler/emit.rs:77`) — the net stack delta.
 - `BytecodeProgram::validate` (`src/chunk/validate.rs:21`) — the operand-index bounds check (EV-7). Until M9
   this carried a `_ => None` wildcard, so a new index-carrying `Op` could silently skip its bounds
   check; it now enumerates every variant (index-checked arms via `.then(|| …)` + one explicit

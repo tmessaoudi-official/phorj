@@ -1,5 +1,5 @@
-type error at 15:22: bare field reference `k` — write `this.k`
+type error at 15:22: bare name `k` matches the field `k` of `C`, which uses this trait
         return apply(k);
                      ^
   [E-BARE-FIELD]
-  hint: Phorj has no bare field access (like PHP's `$this->`): qualify it as `this.k`
+  hint: the trait body runs with `this` = `C`, where the bare name would read that field; rename the function or the field (the trait reaches a field only if it declares `k` itself)

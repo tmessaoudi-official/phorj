@@ -7947,6 +7947,74 @@ fn vm_hook_write_through_a_supertype_runs_the_setter() {
     }
 }
 
+/// The oracle looks a hook up on the RUNTIME class's own members and `use`d traits only — a
+/// grandchild does not inherit it — so a receiver typed as an extended class is decided at run time
+/// on the VM too: `d.name` with `Dog d = new Puppy(…)` reads the stored field, and a hook-only
+/// property read through such a receiver faults `no field`, never `no method … $get`. The PHP leg
+/// inherits hooks (KNOWN_ISSUES HOOK-INHERITANCE, DEC-572 PENDING), so it is not compared here.
+#[test]
+fn vm_hook_on_an_extended_class_is_decided_by_the_runtime_class() {
+    let read = with_pkg(
+        "import Core.Output; open class Animal { constructor(public mutable string name) {} } \
+         open class Dog extends Animal { string name { get => \"hooked\"; } } class Puppy extends Dog {} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Puppy p = new Puppy(\"p\"); Animal a = p; Dog d = p; \
+         Output.printLine(\"{p.name} {a.name} {d.name}\"); }",
+    );
+    let tree = cmd_treewalk(&read);
+    assert_eq!(
+        tree,
+        cmd_run(&read),
+        "interp vs VM for vwsc_hook_extended_read"
+    );
+    assert_eq!(tree.as_deref(), Ok("p p p\n"), "oracle output");
+
+    let hook_only = with_pkg(
+        "import Core.Output; open class Dog { string label { get => \"L\"; } } class Puppy extends Dog {} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Dog d = new Puppy(); Output.printLine(d.label); }",
+    );
+    let tree = cmd_treewalk(&hook_only);
+    assert_eq!(
+        tree,
+        cmd_run(&hook_only),
+        "interp vs VM for vwsc_hook_only_extended"
+    );
+    assert!(
+        tree.as_ref()
+            .is_err_and(|e| e.contains("no field `label` on `Puppy`")),
+        "oracle fault: {tree:?}"
+    );
+}
+
+/// A backed enum's `.value` stays `EnumValue` when some class has a hook-only `value` property:
+/// the hook gate is per receiver class, and an enum has no hook (panel round 1, P0 on the frozen
+/// row-4b commit: the VM compiled `c.value` to `CallMethod(value$get)` and faulted).
+#[test]
+fn backed_enum_value_ignores_an_unrelated_hook_only_value_property() {
+    agree_out_php(
+        "import Core.Output; enum Color: string { Red = \"r\", Blue = \"b\" } \
+         class Box { constructor(public int v) {} string value { get => \"boxed\"; } } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Color c = Color.from(\"r\"); \
+         Output.printLine(c.value); Output.printLine(new Box(1).value); }",
+        "r\nboxed\n",
+        "vwsc_enum_value_hook",
+    );
+}
+
+/// `this` in a trait body is any using class or a subclass of one, so a hook a subclass declares
+/// is found at run time — the trait-body form of a base-class method reading `this.name`.
+#[test]
+fn vm_trait_body_this_read_runs_a_subclass_hook() {
+    let src = with_pkg(
+        "import Core.Output; trait Tagged { mutable string name = \"stored\"; function tag(): string { return this.name; } } \
+         open class Base { use Tagged; } class Sub extends Base { string name { get => \"hooked\"; } } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Base b = new Sub(); Output.printLine(b.name); \
+         Output.printLine(b.tag()); }",
+    );
+    let tree = cmd_treewalk(&src);
+    assert_eq!(tree, cmd_run(&src), "interp vs VM for vwsc_trait_this_hook");
+    assert_eq!(tree.as_deref(), Ok("hooked\nhooked\n"), "oracle output");
+}
+
 #[test]
 fn vm_with_evaluates_overrides_in_source_order() {
     agree_out_php(

@@ -239,6 +239,9 @@ pub(super) fn compile_program_with(
                 // `Op::CallMethod`, so the method names need name-pool entries (`$` can't appear in a
                 // user identifier ⇒ never collides). The methods themselves are built below.
                 ClassMember::Hook { name, get, set, .. } => {
+                    // Plan row 4b: the bare name too — `GetFieldOrHook` / `SetFieldOrHook` fall back to
+                    // the stored field by name when the runtime class has no hook.
+                    intern(name, &mut names);
                     if get.is_some() {
                         intern(&format!("{name}$get"), &mut names);
                     }

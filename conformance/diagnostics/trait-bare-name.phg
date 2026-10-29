@@ -9,7 +9,7 @@ function apply(() => int f): int {
 }
 
 // A trait body runs with `this` = the class using it. `C` stores a field `k`, so the bare `k` below
-// is a field read there, which phorj spells `this.k` (plan row 4b, TRAIT-BARE-NAME).
+// would read that field there; rename the function or the field (plan row 4b, TRAIT-BARE-NAME).
 trait T {
     function m(): int {
         return apply(k);

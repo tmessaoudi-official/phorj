@@ -15,15 +15,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   subclass's hook was skipped when read or written through the base type, including `this.name` in a base-class
   method; `with` and hook reads on an erased receiver (`null ?? …`, a `Result` binder) failed to compile; and `with`
   evaluated side-effecting overrides in declaration order instead of source order. Exact classes keep their
-  compile-time path, so every existing example's bytecode is unchanged. Elsewhere three new ops decide at run time
-  (`CloneInstance`, `GetFieldOrHook`, `SetFieldOrHook`, in `src/vm/runtime_class.rs`), with the hook lookup cached
-  per site (monomorphic ≈1.39× faster than uncached; one site alternating classes ≈14% slower).
+  compile-time path, so every existing single-file example compiles to the same ops (two shift name-pool indices).
+  Elsewhere three new ops decide at run time (`CloneInstance`, `GetFieldOrHook`, `SetFieldOrHook`, in
+  `src/vm/runtime_class.rs`), emitted only when the receiver's class or a descendant has the hook, with the hook lookup
+  and the field slot cached per site (monomorphic ≈1.39× faster than an uncached lookup; one site alternating classes
+  ≈14% slower; a supertype read whose runtime class has no hook ≈8% slower than the pre-fix `GetField`, debug builds).
+- **Close-panel round 1 fixed the first cut before any merge**: a backed enum's `.value` faulted on the VM whenever a class
+  had a hook-only `value` property (P0); an extended class that has a hook was still called at compile time, which a
+  subclass does not inherit; and a trait body's `this` counted as exact, skipping a subclass's hook.
 - **A trait method's bare name shared by a function and the using class's field split the legs.** The checker now
-  applies the round-5 field-first rule to every class using the trait: `E-BARE-FIELD` (write `this.k`).
+  applies the round-5 field-first rule to every class using the trait: `E-BARE-FIELD`, whose message names the using
+  class and advises a rename (the trait cannot write `this.k` for a field it does not declare).
+- **The `E-UNKNOWN-IDENT` "did you mean" hint broke ties by `HashMap` order** (Invariant 10): ties now break by name.
 
 Found and recorded, not fixed: KNOWN_ISSUES SET-HOOK-DURING-CONSTRUCTION (PHP runs a subclass's set hook during
-construction and `with`; the native legs do not; PENDING as DEC-571) and DISASSEMBLE-OVERLOAD-ORDER
-(`phg disassemble` numbers overload sets nondeterministically).
+construction and `with`; the native legs do not; PENDING as DEC-571), HOOK-INHERITANCE (a subclass does not inherit a
+hook natively; DEC-572), BARE-NAME-SUBCLASS (a bare name vs a field only a subclass stores; DEC-573), TRAIT-FIELD-INIT
+(a trait's stored field gets no slot; plan row 4d) and DISASSEMBLE-OVERLOAD-ORDER (`phg disassemble` numbers overload
+sets nondeterministically).
 
 ### Fixed — the P0 slice's close panel: five defects in the fixes and around them (2026-10-08)
 

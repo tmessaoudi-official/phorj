@@ -166,7 +166,8 @@ impl Checker {
             .iter()
             .map(|c| (levenshtein(name, c), c))
             .filter(|(d, _)| *d > 0 && *d <= 2)
-            .min_by_key(|(d, _)| *d)
+            // Ties break by name: the candidates come from `HashMap` scopes (Invariant 10).
+            .min_by(|(da, a), (db, b)| da.cmp(db).then_with(|| a.cmp(b)))
             .map(|(_, c)| c.clone())
     }
 
@@ -343,19 +344,27 @@ impl Checker {
     /// In a TRAIT body this also answers for every class using the trait (row 4b, TRAIT-BARE-NAME):
     /// the body runs with `this` = that class, where every leg reads the field.
     pub(super) fn is_cur_field(&self, name: &str) -> bool {
-        let Some(cur) = self.cur_class.as_ref() else {
-            return false;
-        };
-        let stores = |c: &String| {
+        self.cur_field_owner(name).is_some()
+    }
+
+    /// The class whose field the bare `name` matched for [`Self::is_cur_field`]: the current class
+    /// itself, else (in a trait body) the first using class by name that stores it.
+    pub(super) fn cur_field_owner(&self, name: &str) -> Option<String> {
+        let cur = self.cur_class.as_ref()?;
+        let stores = |c: &&String| {
             self.classes
-                .get(c)
+                .get(*c)
                 .is_some_and(|i| i.fields.contains_key(name))
         };
-        stores(cur)
-            || self
-                .trait_users
-                .get(cur)
-                .is_some_and(|users| users.iter().any(stores))
+        if stores(&cur) {
+            return Some(cur.clone());
+        }
+        self.trait_users
+            .get(cur)?
+            .iter()
+            .filter(stores)
+            .min()
+            .cloned()
     }
 
     // ---- totality: structural termination analysis (M-RT totality cluster) ----

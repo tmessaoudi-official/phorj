@@ -59,7 +59,21 @@ impl Checker {
     }
 
     /// `E-BARE-FIELD`: Phorj has no bare field access; a field is always `this.x`.
+    /// In a trait body whose field belongs to a USING class, `this.{name}` does not check (the
+    /// trait declares no such field), so the advice there is a rename (plan row 4b, panel round 1).
     fn bare_field_err(&mut self, span: Span, name: &str) -> Ty {
+        let owner = self.cur_field_owner(name);
+        if let Some(owner) = owner.filter(|o| Some(o) != self.cur_class.as_ref()) {
+            return self.err_coded(
+                span,
+                format!("bare name `{name}` matches the field `{name}` of `{owner}`, which uses this trait"),
+                "E-BARE-FIELD",
+                Some(format!(
+                    "the trait body runs with `this` = `{owner}`, where the bare name would read that field; \
+                     rename the function or the field (the trait reaches a field only if it declares `{name}` itself)"
+                )),
+            );
+        }
         self.err_coded(
             span,
             format!("bare field reference `{name}` — write `this.{name}`"),

@@ -238,8 +238,8 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
    by definition; validate the VM against it, never the reverse.
 3. **Mechanical exhaustiveness — `Op` AND `Expr`/`Stmt`/`Pattern`** (widened 2026-07-30, DEC-356).
    A **new `Op` variant extends three exhaustive matches in the same commit:** `vm::exec_op`
-   (`src/vm/exec.rs:9`), `BytecodeProgram::validate` (`src/chunk/validate.rs:21`),
-   `compiler::stack_effect` (`src/compiler/emit.rs:75`). All three are wildcard-free (verified
+   (`src/vm/exec.rs:12`), `BytecodeProgram::validate` (`src/chunk/validate.rs:21`),
+   `compiler::stack_effect` (`src/compiler/emit.rs:77`). All three are wildcard-free (verified
    2026-07-25) — never reintroduce a `_` arm.
    **The same rule governs `Expr` (38) / `Stmt` (15) / `Pattern` (11) — and `Item` (8) since CD-31,
    2026-09-02:** a rewriter's total walk carries

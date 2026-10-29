@@ -110,6 +110,7 @@ impl Compiler<'_> {
                 Expr::Member { object, name, .. }
                     if self.hook_dynamic(object, name, "set").is_some() =>
                 {
+                    // The guard made this same pure call and saw `Some`, so the unwrap cannot fail.
                     let (fidx, hidx) = self.hook_dynamic(object, name, "set").unwrap();
                     self.expr(object)?; // [instance]
                     self.expr(value)?; // [instance, value]

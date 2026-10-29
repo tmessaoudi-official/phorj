@@ -221,6 +221,9 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              captured variable — never silently to a field — so that adding a local can never quietly\n\
              rebind what looked like a field. Qualify it:\n\n\
              \tfunction total(): int { return this.amount + this.tax; }  // not `amount + tax`\n\n\
+             In a trait body the error also fires when a class USING the trait stores the field. There the\n\
+             trait cannot write `this.field` (it declares no such field), so rename the top-level name or\n\
+             the field instead.\n\n\
              (In a static method there is no instance at all — that is `E-STATIC-THIS`.)\n"
         }
         "E-CONST-INSTANCE-ACCESS" => {
