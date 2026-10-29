@@ -26,6 +26,27 @@ class Dog extends Animal {
     }
 }
 
+// A subclass may override a base class's hooks. A write through the base type runs the RUNTIME
+// class's setter, and a read its getter.
+open class Pet {
+    mutable string stored = "?";
+    string nick {
+        get => "pet:" + this.stored;
+        set(string v) {
+            this.stored = v;
+        }
+    }
+}
+
+class Cat extends Pet {
+    string nick {
+        get => "cat:" + this.stored;
+        set(string v) {
+            this.stored = v + "!";
+        }
+    }
+}
+
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     Animal a = new Dog("unused");
@@ -39,5 +60,11 @@ function main(): void {
     // A plain (non-dog) animal reads its stored name through the same method.
     Animal c = new Animal("Tom");
     Output.printLine(c.introduce());
+    // I am Tom
+    Pet p = new Cat();
+    p.nick = "Tom";
+    Pet q = new Pet();
+    q.nick = "Rex";
+    Output.printLine("{p.nick} {q.nick}");
 }
-// I am Tom
+// cat:Tom! pet:Rex

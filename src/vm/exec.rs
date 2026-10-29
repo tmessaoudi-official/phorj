@@ -633,21 +633,8 @@ impl<'a> Vm<'a> {
                     Value::Enum(ev) => ev,
                     v => return Err(format!("cannot read `.value` on {}", v.type_name())),
                 };
-                let backing = self
-                    .program
-                    .enum_descs
-                    .iter()
-                    .find(|d| d.ty == ev.ty && d.variant == ev.variant)
-                    .and_then(|d| d.backing.clone());
-                match backing {
-                    Some(v) => self.stack.push(v),
-                    None => {
-                        return Err(format!(
-                            "enum `{}` variant `{}` has no backing value",
-                            ev.ty, ev.variant
-                        ))
-                    }
-                }
+                let v = self.enum_backing(&ev)?;
+                self.stack.push(v);
             }
             // DEC-302 `Enum.from(x)` / `Enum.tryFrom(x)`: pop the backing value, scan the enum's
             // contiguous descriptor range for a variant whose `backing` equals it, push that

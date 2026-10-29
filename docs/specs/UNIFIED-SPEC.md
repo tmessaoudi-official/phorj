@@ -730,7 +730,8 @@ each subclass (explicit > magic). Revisit as its own milestone only if a concret
 *(2026-10-26, plan `docs/plans/2026-10-08-audit-remediation.plan.md` row 4b; KNOWN_ISSUES VM-WITH-STATIC-CLASS.)*
 
 A value typed as a class may hold a subclass, so the two members that depend on the class are decided by the
-**runtime** class on every leg, never by the static type:
+**runtime** class on the native legs (and in PHP, except where the PENDING questions below say otherwise), never by
+the static type:
 
 - **`obj with { f = e, … }`** copies the runtime instance (a `Dog` behind an `Animal` stays a `Dog`) and evaluates the
   overrides in **source order**.

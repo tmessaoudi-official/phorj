@@ -24,10 +24,13 @@ the VM's `methods` table aliases inherited methods but not the synthetic `<name>
 |---|---|---|
 | `open class Animal { constructor(public mutable string name) {} }`, `open class Dog extends Animal { string name { get => "hooked"; } }`, `class Puppy extends Dog {}`; `Puppy p = new Puppy("p"); p.name` | `p` (the stored field) | inherits the hook, presumably `hooked` [Unverified: no PHP 8.5 in the cloud box] |
 | `open class Dog { string label { get => "L"; } }`, `class Puppy extends Dog {}`; `Dog d = new Puppy(); d.label` | ``runtime error: no field `label` on `Puppy` `` | inherits the hook |
+| `open class Dog { constructor(public mutable int raw) {} int label { get => this.raw; set(int v) { this.raw = v * 10; } } }`, `class Puppy extends Dog {}`; `Dog d = new Puppy(1); d.label = 5;` | the write is **silently dropped** (`raw` stays `1`): no slot, no setter | inherits the setter, presumably `raw = 50` |
 
 Until row 4b's close the VM also disagreed with the oracle on both (``no method `name$get` on `Puppy` ``); it now
 agrees (`tests/differential.rs::vm_hook_on_an_extended_class_is_decided_by_the_runtime_class`, which compares only the
-native legs). Whether hooks are inherited is a language question, recorded PENDING as DEC-572 (Invariant 15).
+native legs; the write row was found by round 2 of the close panel). The silent write drop on a program that checks
+clean is the strongest case for DEC-572's recommended option. Whether hooks are inherited is a language question,
+recorded PENDING as DEC-572 (Invariant 15).
 
 ## BARE-NAME-SUBCLASS — a bare name that matches a field only a SUBCLASS stores splits the legs (found 2026-10-26)
 
@@ -46,16 +49,12 @@ checker's `is_cur_field` looks at the current class and the trait's direct users
 is right is a language question, recorded PENDING as DEC-573 (Invariant 15). Workaround: rename the function or the
 field.
 
-## TRAIT-FIELD-INIT — a stored field declared in a trait never gets a slot in the using class (found 2026-10-26)
+## TRACE-FRAME-NAMES — two stack-trace frame names differ between the native legs (found 2026-10-26)
 
-```
-trait Tagged { mutable string name = "stored"; }
-class Base { use Tagged; }   // main: Output.printLine(new Base().name)
-```
-
-`phg check` is clean. Both native legs fault ``no field `name` on `Base` `` (the pre-row-4b binary does too); PHP's
-trait property would print `stored`. Found while writing row 4b's trait-`this` test. Not yet investigated; queued as
-plan row 4d.
+Found by row 4b's close panel (round 2, correctness lens); both predate the row and change no output, fault kind,
+message or exit code — only the frame names in the trace. (1) A fault inside a trait method names the frame `C::f`
+(the using class) on the tree-walker and `T::f` (the trait) on the VM. (2) A get hook that reads itself
+(`get => this.name`) overflows the stack on both legs, with different frame names in the trace. Not yet fixed.
 
 ## DISASSEMBLE-OVERLOAD-ORDER — `phg disassemble` numbers overload sets nondeterministically (found 2026-10-26)
 
@@ -111,11 +110,19 @@ on the pre-fix binary:
 Tests: the `vm_with_*`, `vm_hook_*`, `vm_trait_body_this_read_runs_a_subclass_hook`,
 `backed_enum_value_ignores_an_unrelated_hook_only_value_property`,
 `vm_runtime_class_ops_compose_in_one_expression` and `null_coalesce_class_rhs_null_path_runs_the_hook` cases in
-`tests/differential.rs`, and `src/compiler/tests_hook_gate.rs` (which receivers pay for run-time dispatch). Cost
-[Verified: debug builds, `taskset -c 0`, K=11 interleaved, `--no-jit`]: a read through a supertype whose subclass hooks
-the name, on an instance without the hook, takes ~8% longer per loop than the pre-fix `GetField` (median 1727 vs 1596
-ms, 6M iterations), because the op checks the hook cache before the field cache. The pre-fix VM was faster there only
-by skipping a hook the runtime class may have. Release-build size of the gap: not measured. Example:
+`tests/differential.rs`, and `src/compiler/tests_hook_gate.rs` (which receivers pay for run-time dispatch).
+
+**Cost — an OWED loss on the default engine (panel round 2, safety lens).** A function containing `GetFieldOrHook`,
+`SetFieldOrHook` or `CloneInstance` is declined by the unboxed JIT (`PHORJ_JIT_EXPLAIN=1`: `jit declined total —
+Unsupported("unboxed GetFieldOrHook(0, 1)")`), so it runs on the VM. A hot loop reading `b.n` through an open class
+that a subclass hooks took 3522 ms against 62 ms for the same program with the hook removed, ~57× [Verified:
+`target/release/phg`, one core, 2×10⁷ reads]; the pre-row-4b binary JIT-compiled it (reading the field even where a
+subclass hook should run). On the VM alone (`--no-jit`) the same read costs ~7% more than the pre-fix `GetField`
+(`phg benchmark`, median of 101: 1560.2 vs 1462.8 ms, debug builds). The fix — the unboxed JIT resolving each site
+from its exact `Kind::Inst` class to `CallMethod` or `GetField` — is plan row 4b step 5; until it lands, the session
+branch carries this disclosed regression. `bench/micro` has no entry for the shape yet, so `microbench-gate` cannot
+see it: the micro (a supertype read in a hot loop, with and without a subclass hook) and its baseline need the PC
+(docker + PHP), and are OWED with step 5. Example:
 `examples/guide/runtime-class-dispatch.phg`. Bytecode, measured with `phg disassemble` on the pre-row-4b and the final
 binary over every example that loads as a single file (277; the 74 project and library files do not): 274 listings are
 identical; `property-hooks.phg` and `traits.phg` differ only in name-pool indices (a hook's bare name is now interned
@@ -171,7 +178,9 @@ no field `k`, so it cannot see the collision. A field declared in the trait itse
 check inside the trait, which declares no `k`). Queued with plan row 4b.
 
 **Fixed 2026-10-26 (row 4b, step 3):** the checker records which classes use each trait (`trait_users`), and
-`is_cur_field` answers for all of them inside a trait body, so the program above is `E-BARE-FIELD`. A trait whose
+`is_cur_field` answers for all of them inside a trait body, so the program above is `E-BARE-FIELD`, whose hint
+names the using class and advises renaming the function `k` or the field (or, with no such function, declaring `k`
+in the trait). A trait whose
 users store no `k` keeps the function. Tests: `src/checker/tests/trait_bare_name.rs`,
 `tests/differential.rs::trait_bare_name_without_a_using_field_is_the_function_on_every_leg`; golden:
 `conformance/diagnostics/trait-bare-name.phg`.
@@ -191,7 +200,9 @@ work, and each passes `phg check`. Queued as plan row 4c.
    open class B { int j = 2; } class M extends A, B {}`: VM and tree-walker `1`; PHP `Cannot make non static method
    IA::fa() static in class A`. The synthesized parent interface declares the method non-static.
 4. **Instance-field initializers in a trait or a multi-parent parent.** `trait T { int k = 9; … } class U { use T; }`
-   reading `this.k`: VM and tree-walker `no field k on U`, PHP `18`. With `open class A { int x = 1; } open class B
+   reading `this.k`: VM and tree-walker `no field k on U`, PHP `18`. The same with a `mutable` field read from outside,
+   `trait Tagged { mutable string name = "stored"; } class Base { use Tagged; }` then `new Base().name` (re-found by row
+   4b's trait-`this` test, 2026-10-26). With `open class A { int x = 1; } open class B
    { int y = 2; } class M extends A, B`: VM and tree-walker `no field y on M`; PHP `M::$x must not be accessed before
    initialization`. The "needs a trait constructor" rule further down this file is not enforced by the checker.
 

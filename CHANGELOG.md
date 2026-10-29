@@ -19,7 +19,13 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   Elsewhere three new ops decide at run time (`CloneInstance`, `GetFieldOrHook`, `SetFieldOrHook`, in
   `src/vm/runtime_class.rs`), emitted only when the receiver's class or a descendant has the hook, with the hook lookup
   and the field slot cached per site (monomorphic ≈1.39× faster than an uncached lookup; one site alternating classes
-  ≈14% slower; a supertype read whose runtime class has no hook ≈8% slower than the pre-fix `GetField`, debug builds).
+  ≈14% slower). **Disclosed regression, OWED:** the unboxed JIT declines any function containing one of the three ops,
+  so a hot supertype read whose subclass hooks the name runs ~57× slower than the pre-fix JIT-compiled loop (release,
+  3522 vs 62 ms); on the VM alone (`--no-jit`) it is ~7% slower. Fix queued as row 4b step 5.
+- **Close-panel round 2**: a backed enum's `.value` behind a receiver the compiler cannot type (`null ?? …`, a `Result`
+  binder) faulted when a class hooks `value` — `GetFieldOrHook` now reads the backing; the example gains a subclass
+  overriding the base's get and set hooks (the first `SetFieldOrHook` in an example); the trait `E-BARE-FIELD` hint no
+  longer names a function when none shares the field's name.
 - **Close-panel round 1 fixed the first cut before any merge**: a backed enum's `.value` faulted on the VM whenever a class
   had a hook-only `value` property (P0); an extended class that has a hook was still called at compile time, which a
   subclass does not inherit; and a trait body's `this` counted as exact, skipping a subclass's hook.
@@ -30,8 +36,9 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 Found and recorded, not fixed: KNOWN_ISSUES SET-HOOK-DURING-CONSTRUCTION (PHP runs a subclass's set hook during
 construction and `with`; the native legs do not; PENDING as DEC-571), HOOK-INHERITANCE (a subclass does not inherit a
-hook natively; DEC-572), BARE-NAME-SUBCLASS (a bare name vs a field only a subclass stores; DEC-573), TRAIT-FIELD-INIT
-(a trait's stored field gets no slot; plan row 4d) and DISASSEMBLE-OVERLOAD-ORDER (`phg disassemble` numbers overload
+hook natively, and a write through such a class is silently dropped; DEC-572), BARE-NAME-SUBCLASS (a bare name vs a field
+only a subclass stores; DEC-573), TRACE-FRAME-NAMES, a second form of STATIC-COMPOSITION-PARITY item 4 (a trait's stored
+field gets no slot; row 4c) and DISASSEMBLE-OVERLOAD-ORDER (`phg disassemble` numbers overload
 sets nondeterministically).
 
 ### Fixed — the P0 slice's close panel: five defects in the fixes and around them (2026-10-08)

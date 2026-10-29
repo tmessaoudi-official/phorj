@@ -61,3 +61,22 @@ fn a_bare_field_in_the_class_itself_still_advises_this() {
         .expect("E-BARE-FIELD");
     assert!(e.message.contains("write `this.k`"), "{}", e.message);
 }
+
+#[test]
+fn the_trait_hint_without_a_shadowed_function_does_not_mention_one() {
+    // Panel round 2 (completeness F4): with no function `k` anywhere, "rename the function" names a
+    // function that does not exist; the advice is to declare the field in the trait or pass it in.
+    let src = "trait T { function m(): int { return k; } } class C { use T; int k = 9; } \
+               function main(): void { int r = new C().m(); }";
+    let errs = errors_of(src);
+    let e = errs
+        .iter()
+        .find(|e| e.code == Some("E-BARE-FIELD"))
+        .expect("E-BARE-FIELD");
+    let text = format!("{} {}", e.message, e.hint.clone().unwrap_or_default());
+    assert!(
+        !text.contains("function"),
+        "names a missing function: {text}"
+    );
+    assert!(text.contains("declare `k` in the trait"), "{text}");
+}
