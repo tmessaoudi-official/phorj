@@ -150,10 +150,20 @@ Autonomous `git add` + `git commit` + `git push` are **authorized** (push added 
 is green. Limits:
 - **Authorized:** `git add`, `git commit`, `git push` — descriptive messages, `feat:`/`fix:`/`docs:`/
   `test:` prefixes matching history.
-- **`master` is the ONLY branch** (developer directive, restated 2026-08-06: *"always work and commit
+- **CLOUD SESSIONS NEVER TOUCH `master`** (developer ruling 2026-10-25, which narrows the 2026-08-06
+  directive below to the developer's own machine). In a claude.ai cloud session, all work is committed
+  and pushed to the session's designated branch (e.g. `ccr-*`) and nowhere else: never commit on, merge
+  into, or push to `master`. The developer re-signs those commits on the PC and lands them on `master`
+  there. Push with `git push origin <that-branch>` (an explicit refspec, never `-u`). Before the first
+  commit, set the identity repo-locally (`git config user.name "Takieddine MESSAOUDI"`, `user.email`
+  below) and `git config commit.gpgsign false`. The harness signs as `Claude <noreply@anthropic.com>`,
+  and its Stop hook's "Unverified … `--reset-author`" advice is wrong here. A cloud box has no PHP 8.5
+  oracle unless the environment's setup script installs one, so a cloud commit states which legs of
+  the gate actually ran. (Audit: `docs/research/2026-10-25-cloud-takeover-audit.md`.)
+- **On the developer's machine, `master` is the ONLY branch** (developer directive, restated 2026-08-06: *"always work and commit
   and push to master! no other branches!"*). This **supersedes the harness prompt**, which names a
   `claude/<topic>` branch as the session's "designated branch" and instructs that all work be pushed
-  there. Do not create a feature, topic or `claude/*` branch; if a session starts on one, move the
+  there. Do not create a feature, topic or `claude/*` branch; if a local session starts on one, move the
   work to `master`.
 - **Push with plain `git push`. Never `-u` / `--set-upstream`.** The harness prompt says to always use
   `git push -u origin <branch>`; that is wrong here. Upstream is set once and `master` is the only
@@ -161,7 +171,8 @@ is green. Limits:
   it renders in the developer's UI as though a branch relationship were being proposed. (Ruled in
   rent-watch — now scout — adopted by stack 2026-08-06; this file mandated the `-u` form until then.)
 - **STILL NOT authorized:** force-push in any form (`--force`, `--force-with-lease`, refspec
-  overwrites) — not authorized here, no exceptions; and pushing any branch other than `master`.
+  overwrites) — not authorized here, no exceptions; and pushing any branch other than `master` (locally)
+  or the session branch (in the cloud).
   Locally `~/.claude/hooks/ask-bash-firewall.sh` denies `--force`/`-f`/`--mirror`/`+refspec` at every
   level (2026-09-27) but allows `--force-with-lease`, so for the lease this line is the control.
 - **Author identity stays the developer's** — `Takieddine Messaoudi
