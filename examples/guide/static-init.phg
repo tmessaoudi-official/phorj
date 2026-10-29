@@ -18,6 +18,16 @@ class Registry {
     mutable static int hits = 0;
 }
 
+// A trait's computed static is set once per using class: each user owns its own copy (plan row 4c),
+// initialized after every class's own statics.
+trait Stamped {
+    static int stamp = seed() + 1;
+}
+
+class Order {
+    use Stamped;
+}
+
 // a computed default via a call → 42
 // reads an EARLIER static (declaration order) → 43
 // a literal static — still a plain PHP default
@@ -30,5 +40,7 @@ function main(): void {
     Registry.hits = Registry.hits + 1;
     Registry.hits = Registry.hits + 1;
     Output.printLine("{Registry.hits}");
+    // 2
+    Output.printLine("{Order.stamp}");
 }
-// 2
+// a trait's computed static on its user → 43

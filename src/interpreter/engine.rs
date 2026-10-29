@@ -172,12 +172,6 @@ impl<'c> Interp<'c> {
         }
     }
 
-    /// Feature B-static: evaluate every **non-literal** static-field initializer once, in declaration
-    /// order across classes, BEFORE `main` — overwriting the `Unit` placeholder `collect` seeded.
-    /// Evaluated with no `this` (statics are class-level); a later static may read an earlier one
-    /// (already stored). Literal statics are already seeded by `collect`, so they are skipped here —
-    /// matching the VM, which keeps literals in `static_inits` and emits a `SetStatic` prelude only for
-    /// the non-literals. Runs after `collect`, so every function/static is available.
     /// The `statics` key a `cls.name` access names: the owning class's slot when `cls` inherits the
     /// static (plan row 4c item 2), else `cls` itself (an unknown name then faults as before).
     pub(super) fn static_key(&self, cls: &str, name: &str) -> (String, String) {
@@ -188,31 +182,20 @@ impl<'c> Interp<'c> {
         }
     }
 
+    /// Feature B-static: evaluate every **non-literal** static-field initializer once, BEFORE `main`,
+    /// overwriting the `Unit` placeholder `collect` seeded — in the shared order of
+    /// [`crate::ast::static_runtime_inits`] (classes' own statics, then each class's copy of its traits'
+    /// statics; plan row 4c item 1), the order the VM's prelude and the transpiler's
+    /// `__phorj_init_statics` use. Evaluated with no `this` (statics are class-level); a later static
+    /// may read an earlier one (already stored). Runs after `collect`, so every function is available.
     pub(super) fn eval_static_inits(&mut self, program: &Program) -> R<()> {
-        for item in &program.items {
-            let Item::Class(c) = item else { continue };
-            for m in &c.members {
-                if let ClassMember::Field {
-                    modifiers,
-                    name,
-                    init: Some(e),
-                    ..
-                } = m
-                {
-                    if modifiers.contains(&Modifier::Static)
-                        && !modifiers.contains(&Modifier::Const)
-                        && crate::value::const_literal(e).is_none()
-                    {
-                        let saved_frame = std::mem::replace(&mut self.frame, CallScopes::new());
-                        let saved_this = self.this.take();
-                        let v = self.eval(e);
-                        self.frame = saved_frame;
-                        self.this = saved_this;
-                        let v = v?;
-                        self.statics.insert((c.name.clone(), name.clone()), v);
-                    }
-                }
-            }
+        for (class, field, e) in crate::ast::static_runtime_inits(program) {
+            let saved_frame = std::mem::replace(&mut self.frame, CallScopes::new());
+            let saved_this = self.this.take();
+            let v = self.eval(e);
+            self.frame = saved_frame;
+            self.this = saved_this;
+            self.statics.insert((class, field), v?);
         }
         Ok(())
     }

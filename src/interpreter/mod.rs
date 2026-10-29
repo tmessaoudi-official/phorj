@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::ast::{
     BinaryOp, ClassDecl, ClassMember, CtorParam, Expr, FunctionDecl, Item, LambdaBody, MatchArm,
-    Modifier, Param, Pattern, Program, Stmt, StrPart, UnaryOp,
+    Param, Pattern, Program, Stmt, StrPart, UnaryOp,
 };
 use crate::diagnostic::Diagnostic;
 pub(super) use crate::value::faults;

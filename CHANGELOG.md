@@ -8,6 +8,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed — plan row 4c: static and composition parity (2026-10-26)
 
+- **A trait's computed static** (`trait T { static int s = k() + 1; }`) was never initialized: every user read `Unit`
+  (a type fault on both native legs, an uninitialized-property error in PHP), and the VM evaluated it once into an
+  unused slot, so its side effects printed on the VM only. It now runs once per using class, after every class's own
+  statics, in one order shared by all three backends; `phg check` also type-checks it.
 - **An inherited static field read or written through a subclass** (`M.sa` with `sa` declared in `A`) was a VM compile
   error and a tree-walker fault, and a write through `M` forked a second copy. It is now the declaring class's one slot
   on every leg, as in PHP (`ast::static_field_owners`, shared by all three backends); a redeclaring subclass keeps its

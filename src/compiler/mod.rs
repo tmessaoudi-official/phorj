@@ -473,6 +473,7 @@ fn native_ret_cty(idx: usize) -> CTy {
 mod expr;
 mod matches;
 mod program;
+mod statics;
 mod stmt;
 mod variants;
 use ctors::*;

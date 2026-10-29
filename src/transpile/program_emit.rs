@@ -8,32 +8,13 @@ use super::*;
 pub(super) type ParentAliasMap = std::collections::BTreeMap<(Option<String>, String), String>;
 
 /// Feature B-static: the program's **non-literal** static-field initializers, as `(class, field,
-/// init_expr)` in declaration order. These can't be PHP property defaults (PHP requires a constant
+/// init_expr)` in the shared backend order. These can't be PHP property defaults (PHP requires a constant
 /// expression), so they are set once by a generated `__phorj_init_statics()` called before `main()`.
 /// A literal static stays a plain PHP `static $x = <lit>;` default and is absent here.
-fn runtime_static_inits(program: &Program) -> Vec<(&str, &str, &Expr)> {
-    let mut out = Vec::new();
-    for it in &program.items {
-        if let Item::Class(c) = it {
-            for m in &c.members {
-                if let ClassMember::Field {
-                    modifiers,
-                    name,
-                    init: Some(e),
-                    ..
-                } = m
-                {
-                    if modifiers.contains(&Modifier::Static)
-                        && !modifiers.contains(&Modifier::Const)
-                        && crate::value::const_literal(e).is_none()
-                    {
-                        out.push((c.name.as_str(), name.as_str(), e));
-                    }
-                }
-            }
-        }
-    }
-    out
+fn runtime_static_inits(program: &Program) -> Vec<(String, String, &Expr)> {
+    // Plan row 4c item 1: the shared order every backend runs — a trait's static is set once per using
+    // class (`U::$s = …`), the trait itself declaring it uninitialised.
+    crate::ast::static_runtime_inits(program)
 }
 
 /// The entry-point bootstrap shape (Batch-1 B): `(main takes an argv param, main returns int)`. Drives

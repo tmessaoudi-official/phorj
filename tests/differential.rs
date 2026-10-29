@@ -8270,3 +8270,20 @@ fn a_subclass_of_a_trait_user_inherits_the_trait_members() {
         "row4c_trait_members_through_a_subclass",
     );
 }
+
+/// Item 1: a trait's NON-literal static initializer runs once per using class (the S8 per-user copy),
+/// in one shared order (`ast::static_runtime_inits`): every class's own statics in program order,
+/// then each class's traits' statics. Before, the VM evaluated it once into an inert trait slot (a
+/// side effect printed there, never on the tree-walker) and every user read `Unit`.
+#[test]
+fn a_trait_non_literal_static_initializer_runs_once_per_user() {
+    agree_out_php(
+        "import Core.Output; function k(int n): int { Output.printLine(\"init {n}\"); return n; } \
+         trait T { static mutable int s = k(4) + 1; } class U { use T; } class W { use T; } \
+         class C { static int c = k(1); } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { U.s = U.s + 10; \
+         Output.printLine(\"{U.s} {W.s} {C.c}\"); }",
+        "init 1\ninit 4\ninit 4\n15 5 1\n",
+        "row4c_trait_static_runtime_init",
+    );
+}
