@@ -464,3 +464,12 @@ fn bytecode_program_holds_functions_and_main_index() {
     assert_eq!(prog.functions[prog.main].name, "main");
     assert_eq!(prog.functions[0].arity, 0);
 }
+
+#[test]
+fn op_stays_32_bytes() {
+    // Every executed instruction is an `Op`; a payload that grows the enum slows every VM run. Plan
+    // row 4b added `CloneInstance`, `GetFieldOrHook` and `SetFieldOrHook` without growing it (the
+    // `with` field list rides the stack, not the op). A new variant that breaks this needs a
+    // measured before/after (Invariant 11), not a bumped number.
+    assert_eq!(std::mem::size_of::<crate::chunk::Op>(), 32);
+}
