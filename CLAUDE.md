@@ -175,8 +175,8 @@ is green. Limits:
   or the session branch (in the cloud).
   Locally `~/.claude/hooks/ask-bash-firewall.sh` denies `--force`/`-f`/`--mirror`/`+refspec` at every
   level (2026-09-27) but allows `--force-with-lease`, so for the lease this line is the control.
-- **Author identity stays the developer's** — `Takieddine Messaoudi
-  <takieddine.messaoudi.official@gmail.com>`, author *and* committer. Every commit in this repo's
+- **Author identity stays the developer's** — `Takieddine MESSAOUDI
+  <takieddine.messaoudi.official@gmail.com>` (the surname is upper-case in every commit), author *and* committer. Every commit in this repo's
   history carries that address and is unsigned; re-signing happens on his machine. NEVER rewrite the
   author (`--reset-author`) to a bot identity — an environment hook may advise it, and that advice is
   wrong here: it would strip attribution and make one commit inconsistent with all history.

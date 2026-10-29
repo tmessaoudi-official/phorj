@@ -47,7 +47,7 @@ here or the developer runs pre-push on the PC. Every cloud commit must say so.
 | generation | where it survives | status |
 |---|---|---|
 | **G1, container-era copy** (bundle `claude-setup-global-20260722`, phorj-adapted 2026-07-22/27) | this repo's history: `git show e13b7199:scripts/claude-bootstrap/{CLAUDE-global.md,THINKING.md,BLAST-RADIUS.md,install.sh,hooks/*}`, and 14 global skills at `c5cded43^:.claude/skills/` | recoverable, but **adapted the wrong way for today**: it says `AskUserQuestion` is FORBIDDEN and `advisor()` does not exist; both were reversed on 2026-08-18 [Verified] |
-| **G2, machine export of 2026-08-30** (`claude-setup-global-20260830-214852`, 299 files) | public repo `tmessaoudi-official/stack`, `claude-setup/claude-setup-global.tar.gz` (sha256 `b14e2b19…4cee` matches its `.sha256`) | **best available source.** Post-de-containerization (AskUserQuestion mandatory, `advisor()` gates). It has 48 skills, 21 hooks including `ask-bash-firewall.sh`, `bin/claude-import.sh`, `refs/SKILLS.md`, THINKING, BLAST-RADIUS and a `settings.json.template`. `.claude.json` appears scrubbed (`oauthAccount` null, no token patterns) [Verified] |
+| **G2, machine export of 2026-08-30** (`claude-setup-global-20260830-214852`, 299 files) | public repo `tmessaoudi-official/stack`, `claude-setup/claude-setup-global.tar.gz` (sha256 `b14e2b19…4cee` matches its `.sha256`) | **best available source.** Post-de-containerization (AskUserQuestion mandatory, `advisor()` gates). It has 49 skill dirs, and 20 hook scripts plus 2 hook dirs, including `ask-bash-firewall.sh`, `bin/claude-import.sh`, `refs/SKILLS.md`, THINKING, BLAST-RADIUS and a `settings.json.template`. `.claude.json` appears scrubbed (`oauthAccount` null, no token patterns) [Verified] |
 | **G3, the live install after 2026-08-30** | only on the developer's PC | **not recoverable from anywhere reachable.** It is referenced but absent from G2 (§ 3.2) [Verified by grep of G2] |
 
 ### 3.2 Referenced by phorj but in no recoverable generation (G3-only)
@@ -105,9 +105,10 @@ All verified this session, and none in the 2026-10-08 remediation plan's text un
 5. CLAUDE.md's cited match sites drifted: `vm::exec_op` is `src/vm/exec.rs:12` (cited :9) and `stack_effect` is
    `src/compiler/emit.rs:76` (cited :75). All three remain wildcard-free.
 6. `ci.yml` runs default features only. `--all-features`, `--no-default-features`, size/surface/doc-guards and the
-   gates' self-tests run only in the local pre-push. **A cloud session cannot run pre-push, so for cloud work CI is
-   the only gate, and CI is narrower than the documented "full gate".** Overlaps row 9's CI feature jobs and makes
-   them more urgent.
+   gates' self-tests run only in the local pre-push. Worse, `ci.yml` triggers only on pushes and PRs to `master`.
+   **So a cloud commit on a session branch today gets no automated gate at all.** Pre-push cannot run here (no
+   oracle) and CI never sees the branch until the developer lands it. Overlaps row 9's CI feature jobs and makes
+   them urgent.
 7. `http-server-tls` is a Cargo feature with no `src/ext/registry.rs` row and no stated exemption.
 8. `editors/vscode` registers no debugger, so `phg debug --dap` has no editor wiring (Invariant 17 surface).
 
@@ -120,7 +121,11 @@ global layer is what carries the *workflow* (phases, mode, sabotage, stamping) a
 1. **Framework**: install G2 (the 2026-08-30 export) into the session's `~/.claude` at session start. Prefer that the
    developer first re-exports the live G3 (`claude-export.sh`) into the stack repo, so the source is current. This keeps
    the 2026-08-18 *global-is-reference* ruling intact: the framework arrives through the environment and is never
-   vendored back into phorj.
+   vendored back into phorj. **Import it with the cloud adaptations, not as-is.** The `ask-human-question-guard.sh`
+   and `ask-human-gate-*` Stop hooks were ruled OUT for containers (DEC-354/387) because they double-gate against
+   the harness's own `stop-hook-reply-gate.py` and `stop-hook-git-check.sh`. And `~/.claude/settings.json` must be
+   *merged*, never overwritten: the old `install.sh` did an unconditional `cp -f`, and the harness keeps its own keys
+   there (e.g. `advisorModel`).
 2. **Memory**: export `~/.claude/projects/-stack-projects-phorj/memory/` alongside, or accept losing it. The
    rationale it held is partly re-derivable from the register, but the named-memory citations in `src/` would dangle.
 3. **`var/claude/review-2026-10-07/`**: copy the DEC-567 probes (raw/6 + probes6) somewhere a cloud session can read,
