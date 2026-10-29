@@ -19,6 +19,18 @@ impl Transpiler {
         }
     }
 
+    /// The PHP text of an expression used as the RECEIVER of `->` / `?->` (a method call or a field
+    /// read). PHP 8.5 does not dereference a bare `clone(…)` — `clone($p, ['x' => 5])->d()` is a parse
+    /// error (TRANSPILE-WITH-CALL) — so a `with` result is parenthesized; every other form the
+    /// emitter produces is already dereferenceable as printed.
+    pub(super) fn emit_receiver(&mut self, object: &Expr) -> Result<String, String> {
+        let o = self.emit_expr(object)?;
+        Ok(match object {
+            Expr::CloneWith { .. } => format!("({o})"),
+            _ => o,
+        })
+    }
+
     pub(super) fn emit_expr(&mut self, e: &Expr) -> Result<String, String> {
         match e {
             Expr::Int(n, _) => Ok(n.to_string()),
@@ -347,7 +359,7 @@ impl Transpiler {
                         return Ok(s);
                     }
                 }
-                let o = self.emit_expr(object)?;
+                let o = self.emit_receiver(object)?;
                 let arrow = if *safe { "?->" } else { "->" };
                 Ok(format!("{o}{arrow}{name}"))
             }

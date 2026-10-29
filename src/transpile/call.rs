@@ -490,7 +490,7 @@ impl Transpiler {
                     }
                 }
             }
-            let o = self.emit_expr(object)?;
+            let o = self.emit_receiver(object)?;
             let a = self.emit_args(args)?;
             let arrow = if *safe { "?->" } else { "->" };
             return Ok(format!("{o}{arrow}{name}({a})"));

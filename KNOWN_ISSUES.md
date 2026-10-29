@@ -47,12 +47,16 @@ are queued with plan row 5 (A5, the editor-tooling no-crash work):
   `vec![0u8; len]` from the header. `Content-Length: 18446744073709551615` panics with "capacity overflow", and
   `9223372036854775807` aborts on a failed allocation. This is row 5's planned `Content-Length` cap.
 
-## TRANSPILE-WITH-CALL — a method call directly on a `with` result transpiles to invalid PHP (found 2026-10-08)
+## FIXED — TRANSPILE-WITH-CALL — a method call directly on a `with` result transpiles to invalid PHP (found 2026-10-08, fixed 2026-10-26)
 
 `int a = p with { x = 5 }.d();` prints `10` on the VM and the tree-walker. The transpiler emits
 `$a = clone($p, ['x' => 5])->d();`, which php-8.5.11 rejects with `Parse error: syntax error, unexpected token "->"`.
 This predates the 2026-10-07 batch. Workaround: bind the copy first (`P q = p with { x = 5 }; q.d()`). The fix
 (parenthesize the `clone(…)` when it is a receiver) is queued with plan row 4b.
+**Fixed 2026-10-26 (row 4b, step 1):** `Transpiler::emit_receiver` (`src/transpile/expr.rs`) wraps a `with` result
+as `(clone(…))` wherever it is the receiver of `->`/`?->`, for both calls and field reads. Tests:
+`src/transpile/tests_receivers.rs` and `tests/differential.rs::clone_with_as_a_receiver_agrees_on_every_leg`. Example:
+`examples/guide/clone-with.phg`.
 
 ## TRAIT-BARE-NAME — in a trait method, a bare name shared by a top-level function and the USING class's field splits the legs (found 2026-10-08)
 

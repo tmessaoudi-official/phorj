@@ -33,5 +33,10 @@ function main(): void {
     // The override value can read the source's fields.
     Point shifted = p with { x = p.x + 10 };
     Output.printLine("shifted = ({shifted.x}, {shifted.y})");
+    // (13, 4)
+    // A `with` result can be the receiver of a call or a field read directly, without a binding.
+    int d = origin with { x = 6, y = 8 }.dist2();
+    int y = origin with { y = 7 }.y;
+    Output.printLine("direct = {d} {y}");
 }
-// (13, 4)
+// 100 7
