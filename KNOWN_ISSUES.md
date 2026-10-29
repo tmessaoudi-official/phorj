@@ -223,7 +223,7 @@ users store no `k` keeps the function. Tests: `src/checker/tests/trait_bare_name
 `tests/differential.rs::trait_bare_name_without_a_using_field_is_the_function_on_every_leg`; golden:
 `conformance/diagnostics/trait-bare-name.phg`.
 
-## STATIC-COMPOSITION-PARITY — static/trait/multi-parent shapes that pass `phg check` and split the legs (found 2026-10-08; items 1, 2, 3 and 5 FIXED 2026-10-26, row 4c)
+## STATIC-COMPOSITION-PARITY — static/trait/multi-parent shapes that pass `phg check` and split the legs (found 2026-10-08; all five items FIXED 2026-10-26/27, row 4c)
 
 The correctness pass on the round-5 re-check fix found these while probing static contexts. All four predate that
 work, and each passes `phg check`. Queued as plan row 4c.
@@ -248,12 +248,19 @@ work, and each passes `phg check`. Queued as plan row 4c.
    function fa(): int { return 1; } } open class B { int j = 2; } class M extends A, B {}`: VM and tree-walker `1`; PHP
    `Cannot make non static method IA::fa() static in class A`. The synthesized parent interface declared the method
    non-static; it now says `public static function` (`static_method_on_a_decomposed_parent_agrees`).
-4. **Instance-field initializers in a trait or a multi-parent parent.** `trait T { int k = 9; … } class U { use T; }`
-   reading `this.k`: VM and tree-walker `no field k on U`, PHP `18`. The same with a `mutable` field read from outside,
-   `trait Tagged { mutable string name = "stored"; } class Base { use Tagged; }` then `new Base().name` (re-found by row
-   4b's trait-`this` test, 2026-10-26). With `open class A { int x = 1; } open class B
-   { int y = 2; } class M extends A, B`: VM and tree-walker `no field y on M`; PHP `M::$x must not be accessed before
-   initialization`. The "needs a trait constructor" rule further down this file is not enforced by the checker.
+4. **FIXED 2026-10-27 (row 4c) — instance-field initializers in a trait or a multi-parent parent.** `trait T { int k = 9; …
+   } class U { use T; }` reading `this.k`: VM and tree-walker `no field k on U`, PHP `18`; `trait Tagged { mutable string
+   name = "stored"; }` read as `new Base().name` the same; `open class A { int x = 1; } open class B { int y = 2; } class M
+   extends A, B`: native `no field y on M`, PHP `M::$x must not be accessed before initialization`. The slot existed
+   (`class_field_layout` gathers trait fields); the INITIALIZER did not run, because `ast::field_initializers` returned
+   only the invoked class's own declared initializers. It now mirrors `ast::ctor_plan` (`ast/field_inits.rs`): a class's
+   set is its traits' then its own, owned by the class whose constructor plan runs, and a multi-parent class with
+   nothing of its own runs every parent's set in `extends` order. The PHP leg follows: a trait no longer synthesizes an
+   init-only `__construct` (a user's own constructor overrode it; two traits collided), the user's constructor carries
+   the set, a class composing a trait constructor plus other initializers emits its constructor from the plan, and a
+   decomposed parent runs its own initializers (`new A().x` was itself broken in PHP). The synthesized constructor now
+   promotes, initializes, then runs bodies — the native order (`trait_and_multi_parent_field_initializers_run_on_every_leg`,
+   `transpile::tests_static_composition`; example `guide/traits.phg`).
 5. **FIXED 2026-10-26 (row 4c) — a subclass of a trait-using class did not see the trait's members** (found 2026-10-26 by
    row 4c; pre-existing). With
    `trait T { function f(): int { return 1; } } open class U { use T; } class V extends U {}`, `new V().f()` is a type

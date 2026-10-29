@@ -17,7 +17,8 @@
 //! occurrence is reachable here and the backends never see a `ParentCall{method:"constructor"}`.
 
 use crate::ast::{
-    own_field_initializers, CatchClause, ClassMember, CtorParam, Expr, Item, Program, Stmt,
+    own_field_initializers_with_traits, CatchClause, ClassMember, CtorParam, Expr, Item, Program,
+    Stmt,
 };
 use crate::token::Span;
 use std::collections::HashMap;
@@ -28,7 +29,7 @@ struct ClassSnap {
     extends: Vec<String>,
     /// This class's *own* constructor (params, body), if it declares one.
     own_ctor: Option<(Vec<CtorParam>, Vec<Stmt>)>,
-    /// This class's *own* expression field initializers (declaration order).
+    /// This class's expression field initializers: its traits', then its own (declaration order).
     field_inits: Vec<(String, Expr)>,
 }
 
@@ -67,7 +68,8 @@ fn snapshot(program: &Program) -> Snap {
                 ClassSnap {
                     extends: c.extends.clone(),
                     own_ctor,
-                    field_inits: own_field_initializers(c),
+                    // The owner's set includes its traits' initializers (plan row 4c item 4).
+                    field_inits: own_field_initializers_with_traits(program, c),
                 },
             );
         }

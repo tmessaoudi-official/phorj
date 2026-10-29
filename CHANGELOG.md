@@ -6,8 +6,13 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
-### Fixed — plan row 4c: static and composition parity (2026-10-26)
+### Fixed — plan row 4c: static and composition parity (2026-10-26/27)
 
+- **Field initializers composed from a trait or a second parent never ran**: `trait T { int k = 9; } class U { use T; }`
+  faulted `no field k on U` on both native legs, and so did a multi-parent class's second parent's initializer. A class's
+  initializers are now its traits' then its own, run by whichever class's constructor plan runs (every parent's, for a
+  multi-parent class), on all three legs. In PHP a trait no longer carries an init-only `__construct` that a user's
+  own constructor would override, and a multi-parent parent's initializers run for itself and its children.
 - **A trait's computed static** (`trait T { static int s = k() + 1; }`) was never initialized: every user read `Unit`
   (a type fault on both native legs, an uninitialized-property error in PHP), and the VM evaluated it once into an
   unused slot, so its side effects printed on the VM only. It now runs once per using class, after every class's own

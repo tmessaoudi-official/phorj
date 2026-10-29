@@ -17,15 +17,16 @@ impl Transpiler {
     /// (`ast::ctor_plan`) — used where promotion cannot be (a decomposed concrete class and a
     /// multi-parent subclass, whose fields live in `use`d traits as plain properties). Params are the
     /// plan entries' params concatenated; the body sets each promoted param (`$this->p = $p;`) then runs
-    /// each entry's body, in order — mirroring the interpreter's per-entry promote-then-body and the
-    /// VM's `MakeInstance`-then-bodies. Emits nothing for an empty plan (a zero-arg class).
+    /// the initializer set, then each entry's body, in order — the interpreter's and the VM's order
+    /// (promote all, initialize, run bodies). Emits nothing for an empty plan with no initializers.
     pub(super) fn emit_synth_construct(
         &mut self,
         c: &ClassDecl,
         program: &Program,
     ) -> Result<(), String> {
         let plan = crate::ast::ctor_plan(program, &c.name);
-        if plan.is_empty() {
+        let field_inits = crate::ast::field_initializers(program, &c.name);
+        if plan.is_empty() && field_inits.is_empty() {
             return Ok(());
         }
         let params: Vec<String> = plan
@@ -44,12 +45,20 @@ impl Transpiler {
                 self.declare(&p.name);
             }
         }
-        for (ps, body) in &plan {
+        // The native order (plan row 4c item 4): every promoted param across the plan, then the
+        // initializer set (`ast::field_initializers`), then each plan entry's body.
+        for (ps, _) in &plan {
             for p in ps {
                 if is_promoted(&p.modifiers) {
                     self.line(&format!("$this->{0} = ${0};", p.name));
                 }
             }
+        }
+        for (fname, init) in &field_inits {
+            let e = self.emit_expr(init)?;
+            self.line(&format!("$this->{fname} = {e};"));
+        }
+        for (_, body) in &plan {
             for s in body {
                 self.emit_stmt(s)?;
             }

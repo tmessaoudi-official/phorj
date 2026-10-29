@@ -13,8 +13,10 @@ import Core.Output;
 import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
-// Method reuse, including a `private` helper only other trait methods can call.
+// Method reuse, including a `private` helper only other trait methods can call — and a field
+// initializer, which runs when each using class is constructed (plan row 4c).
 trait Loud {
+    int volume = 11;
     private function emphasize(string s): string {
         return "{s}!";
     }
@@ -82,6 +84,8 @@ function main(): void {
     Manager m = new Manager(2000);
     Output.printLine(m.shout("lead"));
     // Loud, through the subclass: lead!
+    Output.printLine("{e.volume} {m.volume}");
+    // Loud's initializer ran for both, beside Paid's constructor: 11 11
     Manager.created = Manager.created + 1;
     Output.printLine("{m.annual} {Employee.created}");
 }

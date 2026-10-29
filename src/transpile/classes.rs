@@ -77,6 +77,9 @@ impl Transpiler {
         }
         let prev = self.cur_class_fields.replace(fields);
         self.emit_class_members(c, &promoted_names, is_error, false)?;
+        if self.trait_ctor_route.contains(&c.name) {
+            self.emit_synth_construct(c, program)?; // plan row 4c item 4
+        }
         self.emit_tostring_delegate(c)?; // DEC-331 D9b (magic_php.rs)
         self.cur_class_fields = prev;
         self.indent -= 1;
@@ -330,7 +333,7 @@ impl Transpiler {
                     // Feature B: this class's own expression field initializers lower into the ctor
                     // prelude (after promotion + any `parent::__construct`, before the body), so an
                     // initializer reads `this` and an earlier sibling — matching the Rust backends.
-                    let field_inits = crate::ast::own_field_initializers(c);
+                    let field_inits = self.init_set(c);
                     if body.is_empty() && parent_args.is_none() && field_inits.is_empty() {
                         self.line(&format!(
                             "{cvis}function __construct({}) {{}}",
@@ -409,13 +412,19 @@ impl Transpiler {
         // Feature B: a class with expression field initializers but NO constructor needs a synthesized
         // zero-arg `__construct` to run them (PHP property defaults can't be arbitrary expressions). Not
         // for a decomposed trait body (`as_trait`) — its construction is emitted via `emit_synth_construct`.
+        // Plan row 4c item 4: never on a user trait — its initializers belong to the using class's set,
+        // so two traits cannot collide on `__construct` and a user's own constructor cannot drop them;
+        // never on a class that takes a trait constructor (`trait_ctor_users`; the routed ones emit theirs
+        // from the plan).
         if !as_trait
+            && !self.trait_names.contains(&c.name)
+            && !self.trait_ctor_users.contains(&c.name)
             && !c
                 .members
                 .iter()
                 .any(|m| matches!(m, ClassMember::Constructor { .. }))
         {
-            let field_inits = crate::ast::own_field_initializers(c);
+            let field_inits = self.init_set(c);
             if !field_inits.is_empty() {
                 self.line("function __construct() {");
                 self.indent += 1;

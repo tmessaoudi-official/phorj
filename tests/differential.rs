@@ -8287,3 +8287,74 @@ fn a_trait_non_literal_static_initializer_runs_once_per_user() {
         "row4c_trait_static_runtime_init",
     );
 }
+
+/// Item 4: field initializers composed from traits and multiple parents run on every leg. A class's
+/// initializer set is its traits' (in `uses` order) then its own, owned by the class whose
+/// constructor plan runs (`ast::field_initializers` mirrors `ast::ctor_plan`); a multi-parent class
+/// with nothing of its own runs each parent's set in `extends` order. Before, only the invoked
+/// class's OWN initializers ran natively (a trait's never, a second parent's never), and the PHP leg
+/// kept trait initializers in a trait `__construct` that a user's constructor overrode.
+#[test]
+fn trait_and_multi_parent_field_initializers_run_on_every_leg() {
+    for (src, expected, tag) in [
+        (
+            "trait T { int k = 9; } class U { use T; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{new U().k}\"); }",
+            "9\n",
+            "row4c_init_trait_only",
+        ),
+        (
+            "trait T { int k = 9; } class U { use T; int j; constructor(int j0) { this.j = j0; } } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { U u = new U(2); \
+             Output.printLine(\"{u.k} {u.j}\"); }",
+            "9 2\n",
+            "row4c_init_trait_with_user_ctor",
+        ),
+        (
+            "trait T { int k = 9; } class U { use T; int j = this.k + 1; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { U u = new U(); \
+             Output.printLine(\"{u.k} {u.j}\"); }",
+            "9 10\n",
+            "row4c_init_own_reads_trait",
+        ),
+        (
+            "trait T { int k = 9; } trait R { int r = 4; } class U { use T; use R; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { U u = new U(); \
+             Output.printLine(\"{u.k} {u.r}\"); }",
+            "9 4\n",
+            "row4c_init_two_traits",
+        ),
+        (
+            "trait T { int k = 9; int m; constructor(int m0) { this.m = m0; } } class U { use T; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { U u = new U(5); \
+             Output.printLine(\"{u.k} {u.m}\"); }",
+            "9 5\n",
+            "row4c_init_trait_ctor",
+        ),
+        (
+            "trait T { int k = 9; int m; constructor(int m0) { this.m = m0; } } \
+             trait R { int r = 4; } class U { use T; use R; int j = 3; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { U u = new U(5); \
+             Output.printLine(\"{u.k} {u.m} {u.r} {u.j}\"); }",
+            "9 5 4 3\n",
+            "row4c_init_trait_ctor_plus_others",
+        ),
+        (
+            "open class A { int x = 1; } open class B { int y = 2; } class M extends A, B {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { M m = new M(); \
+             Output.printLine(\"{m.x} {m.y} {new A().x} {new B().y}\"); }",
+            "1 2 1 2\n",
+            "row4c_init_multi_parent",
+        ),
+        (
+            "open class A { mutable int x = 1; constructor(public int a) { this.x = this.a + 10; } } \
+             open class B { int y = 2; constructor(public int b) {} } class M extends A, B {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { M m = new M(5, 6); \
+             Output.printLine(\"{m.x} {m.y} {m.a} {m.b}\"); }",
+            "15 2 5 6\n",
+            "row4c_init_multi_parent_order",
+        ),
+    ] {
+        agree_out_php(&format!("import Core.Output; {src}"), expected, tag);
+    }
+}
