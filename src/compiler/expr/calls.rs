@@ -424,15 +424,34 @@ impl Compiler<'_> {
         fields: &[(String, Expr)],
         line: u32,
     ) -> Result<(), String> {
-        let class = match self.ctype(object)? {
-            CTy::Class(name) => name,
-            _ => return Err("`with` requires a class instance".into()),
+        // Plan row 4b: the compile-time build below is exact only for a class nobody extends AND
+        // overrides already in declaration order (it evaluates them in that order). Anything else —
+        // a supertype, an erased receiver, out-of-order overrides — clones the RUNTIME instance and
+        // writes each override in SOURCE order, exactly as the interpreter does.
+        let static_desc = match self.ctype(object)? {
+            CTy::Class(name) if self.is_exact_class(&name) => self
+                .class_descs
+                .iter()
+                .position(|d| d.class.as_ref() == name),
+            _ => None,
+        }
+        .filter(|&d| {
+            let pos = |n: &String| self.class_descs[d].fields.iter().position(|f| f == n);
+            let order: Vec<Option<usize>> = fields.iter().map(|(n, _)| pos(n)).collect();
+            order.iter().all(Option::is_some) && order.windows(2).all(|w| w[0] < w[1])
+        });
+        let Some(desc_idx) = static_desc else {
+            self.expr(object)?; // [.., src]
+            self.emit(Op::CloneInstance, line); // [.., copy] — its runtime class and fields
+            let copy_slot = self.height - 1; // numeric scratch, like the static path below
+            for (fname, e) in fields {
+                self.emit(Op::GetLocal(copy_slot), line); // [.., copy, copy]
+                self.expr(e)?; // [.., copy, copy, override]
+                let idx = self.field_name_index(fname)?;
+                self.emit(Op::SetField(idx), line); // [.., copy]
+            }
+            return Ok(());
         };
-        let desc_idx = self
-            .class_descs
-            .iter()
-            .position(|d| d.class.as_ref() == class)
-            .ok_or_else(|| format!("unknown class `{class}` in `with`"))?;
         let field_names = self.class_descs[desc_idx].fields.clone();
         self.expr(object)?; // [.., src]
         let src_slot = self.height - 1; // numeric scratch (transients may sit below), like `compile_match`

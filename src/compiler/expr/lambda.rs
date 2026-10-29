@@ -76,9 +76,9 @@ impl Compiler<'_> {
             self.method_overloads,
             sub_base,
         );
-
-        // 5. Seed the sub-compiler's locals: [this?, captures.., params..] — matching the frame
-        //    layout `Op::CallValue` builds (the receiver, if captured, is pushed first below).
+        sub.class_parents_all = self.class_parents_all; // row 4b class exactness
+                                                        // 5. Seed the sub-compiler's locals: [this?, captures.., params..] — matching the frame
+                                                        //    layout `Op::CallValue` builds (the receiver, if captured, is pushed first below).
         if uses_this {
             // The receiver's operand type is its class, so `this.x + 1` specializes in the lambda
             // (without `cur_class`, `ctype(This)` would fail — the documented CTy-operand trap).

@@ -233,6 +233,7 @@ mod closure;
 mod cmp_seq;
 mod concat;
 mod exec;
+mod runtime_class;
 
 // Cooperative green-thread driver (M6 W4 / S4.3) — native + `green` only (stackful coroutines, which
 // corosensei cannot provide on wasm32; the wasm VM keeps the eager model).

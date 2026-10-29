@@ -698,6 +698,11 @@ pub(super) fn annotate(op: &Op, chunk: &Chunk, p: &BytecodeProgram) -> Option<St
             .map(|f| format!("-> {}/{}", f.name, f.arity)),
         Op::GetField(i) => p.names.get(*i).map(|n| format!(".{n}")),
         Op::CallMethod(i, argc) => p.names.get(*i).map(|n| format!(".{n}(argc={argc})")),
+        Op::GetFieldOrHook(f, h) | Op::SetFieldOrHook(f, h) => p
+            .names
+            .get(*f)
+            .zip(p.names.get(*h))
+            .map(|(f, h)| format!(".{f} or .{h}()")),
         Op::CallNative(i, argc) => crate::native::registry()
             .get(*i)
             .map(|n| format!("-> {}.{}(argc={argc})", n.module, n.name)),

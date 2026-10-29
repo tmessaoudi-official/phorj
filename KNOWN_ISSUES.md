@@ -1,6 +1,14 @@
 # Known Issues & Limitations
 
-## VM-WITH-STATIC-CLASS — on the VM, `with` and property-hook reads are decided at COMPILE time from the receiver's compiler type (found 2026-10-08)
+## DISASSEMBLE-OVERLOAD-ORDER — `phg disassemble` numbers overload sets nondeterministically (found 2026-10-26)
+
+Running `phg disassemble examples/guide/overloading.phg` six times on one binary gave four different listings: the
+overload-set indices in `CallOverload(set, argc)` are permuted from run to run. The program's output is stable, and
+every leg runs it the same way. But the listing is user-facing, and Invariant 10 requires any list derived from
+`HashMap` iteration to be sorted before it is rendered. This predates the 2026-10-26 work. Likely cause [Inferred]:
+overload sets are numbered by iterating a `HashMap` in the compiler. Not yet fixed.
+
+## FIXED — VM-WITH-STATIC-CLASS — on the VM, `with` and property-hook reads are decided at COMPILE time from the receiver's compiler type (found 2026-10-08, fixed 2026-10-26)
 
 Found by the P0 slice's close panel (rounds 2 and 3, correctness lens). It predates the 2026-10-07 audit batch: the
 2026-10-06 release binary behaves the same. Three VM paths pick a class at compile time from the receiver's `CTy`:
@@ -24,6 +32,23 @@ The first three are silent byte-identity breaks (Invariant 1); the last two are 
 covers any of these shapes. Fix queued as plan row 4b (`docs/plans/2026-10-08-audit-remediation.plan.md`): resolve the
 hook and the `with` target at run time when the compiler's type is not exact. Its failing-first tests are the five rows
 above, plus the null path of that differential test.
+
+**Fixed 2026-10-26 (row 4b, step 2).** The compile-time path stays only where it is exact: a class no class extends
+(`Compiler::is_exact_class`), and for `with`, overrides already in declaration order. Everywhere else the VM decides
+at run time with three new ops (`src/vm/runtime_class.rs`): `CloneInstance` copies the runtime instance, and the
+overrides are then written in SOURCE order; `GetFieldOrHook` / `SetFieldOrHook` call the runtime class's
+`<name>$get` / `<name>$set`, or else use the stored field. A hook-only property compiles to `CallMethod`. The fix also
+covers three shapes found while building it, each split on the pre-fix binary:
+- a hooked WRITE through a supertype (the VM wrote the stored field; the oracle runs the setter);
+- `this.name` read inside a base-class method that a subclass hooks;
+- a `with` whose overrides have side effects, written out of declaration order (the VM evaluated them in
+  declaration order; the oracle uses source order).
+
+Tests: the `vm_with_*`, `vm_hook_*`, `vm_runtime_class_ops_compose_in_one_expression` and
+`null_coalesce_class_rhs_null_path_runs_the_hook` cases in `tests/differential.rs`. Example:
+`examples/guide/runtime-class-dispatch.phg`. Bytecode of every other example is unchanged: all 436 listings were
+disassembled before and after, and the only listing that differed is DISASSEMBLE-OVERLOAD-ORDER below, which is not
+this change.
 
 ## DEEP-INPUT-CRASHES — some inputs still abort a `phg` process instead of failing cleanly (found 2026-10-08)
 

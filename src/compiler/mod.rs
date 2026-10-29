@@ -220,6 +220,10 @@ struct Compiler<'a> {
     /// `None` for a free function. A `parent.m()` resolves its target via this + the `methods` table
     /// (which already encodes dispatch origins), matching the interpreter's `resolve_parent_method`.
     parent_parents: Option<&'a std::collections::BTreeMap<String, Vec<String>>>,
+    /// Direct parents of every class, set in EVERY body (free functions and lambdas too — unlike
+    /// `parent_parents`). Plan row 4b: a class nobody extends is exact, so `with` and property hooks
+    /// on it keep their compile-time path; `None` reads as "not exact" (the runtime-class ops).
+    class_parents_all: Option<&'a std::collections::BTreeMap<String, Vec<String>>>,
     /// Active `match`-arm bindings (a stack; innermost shadows). Populated while compiling an arm
     /// body, truncated after.
     match_bindings: Vec<MatchBinding>,

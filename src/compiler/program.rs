@@ -548,6 +548,7 @@ pub(super) fn compile_program_with(
             &method_overloads,
             base,
         );
+        c.class_parents_all = Some(&class_parents); // row 4b class exactness
         for p in &f.params {
             c.add_local(&p.name, resolve_cty(&p.ty));
         }
