@@ -27,9 +27,9 @@ pub(super) fn static_members(
     if !is_class || super::scope::local_definition(program, receiver, offset).is_some() {
         return Vec::new();
     }
-    let supers = crate::ast::class_supertypes(program);
-    let chain = std::iter::once(receiver.to_string())
-        .chain(supers.get(receiver).cloned().unwrap_or_default());
+    // The checker's lookup order (nearest owner first, depth-first in `extends` order) — not
+    // `class_supertypes`, which is sorted by name and so answered with the farthest redeclaration.
+    let chain = crate::ast::class_lookup_order(program, receiver);
     let mut out: Vec<(String, u32, Span)> = Vec::new();
     for owner in chain {
         // A class's own statics, then those of the traits it `use`s — a trait static is the using

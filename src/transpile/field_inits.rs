@@ -4,6 +4,25 @@
 
 use super::*;
 
+/// The precomputed tables (the member emitter has no `program`).
+#[derive(Default)]
+pub(super) struct Composition {
+    /// `(class, static field) → owning class` (row 4c item 2): `C.f` emits the one slot `Owner::$f`
+    /// (for a multi-parent child, `M::$f` would be M's own copy of a decomposed parent's trait static).
+    pub(super) static_owners: std::collections::BTreeMap<(String, String), String>,
+    /// Each class's initializer set (its traits' then its own) and each trait's own, for the
+    /// `__construct` prelude a class or a trait constructor emits (`ast::field_inits`).
+    pub(super) init_sets: HashMap<String, Vec<(String, Expr)>>,
+    /// The user traits: a trait never synthesizes an init-only `__construct` (its user carries them).
+    pub(super) trait_names: HashSet<String>,
+    /// Classes with no constructor of their own that compose a trait constructor AND have other
+    /// initializers: their `__construct` is emitted from the plan (`emit_synth_construct`).
+    pub(super) trait_ctor_route: HashSet<String>,
+    /// Every class with no constructor of its own that takes a trait constructor: it never
+    /// synthesizes a zero-arg `__construct`, which would override that constructor (routed or not).
+    pub(super) trait_ctor_users: HashSet<String>,
+}
+
 impl Transpiler {
     /// Precompute the initializer sets and the trait-constructor route before any class is emitted
     /// (the member emitter has no `program`).
@@ -20,7 +39,7 @@ impl Transpiler {
                     // `__construct` runs only that trait's initializers; when the class's set holds
                     // more, the class emits its own `__construct` from the plan instead.
                     if !has_ctor && crate::ast::uses_trait_ctor(program, c) {
-                        self.trait_ctor_users.insert(c.name.clone());
+                        self.composition.trait_ctor_users.insert(c.name.clone());
                         let ctor_trait_inits: usize = c
                             .uses
                             .iter()
@@ -40,14 +59,15 @@ impl Transpiler {
                             .map(|td| crate::ast::own_initializers(&td.members).len())
                             .sum();
                         if set.len() > ctor_trait_inits {
-                            self.trait_ctor_route.insert(c.name.clone());
+                            self.composition.trait_ctor_route.insert(c.name.clone());
                         }
                     }
-                    self.init_sets.insert(c.name.clone(), set);
+                    self.composition.init_sets.insert(c.name.clone(), set);
                 }
                 Item::Trait(t) => {
-                    self.trait_names.insert(t.name.clone());
-                    self.init_sets
+                    self.composition.trait_names.insert(t.name.clone());
+                    self.composition
+                        .init_sets
                         .insert(t.name.clone(), crate::ast::own_initializers(&t.members));
                 }
                 _ => {}
@@ -57,7 +77,8 @@ impl Transpiler {
 
     /// The initializer set a class's (or a user trait's real) constructor prelude runs.
     pub(super) fn init_set(&self, c: &ClassDecl) -> Vec<(String, Expr)> {
-        self.init_sets
+        self.composition
+            .init_sets
             .get(&c.name)
             .cloned()
             .unwrap_or_else(|| crate::ast::own_field_initializers(c))

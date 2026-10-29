@@ -9,8 +9,9 @@
 // `exclude P.m` (drop one) — else `E-MI-CONFLICT`. A *diamond* shared base (a method reached through
 // two arms that both resolve to the SAME declaring method) auto-merges and is never a conflict.
 //
-// (Inherited fields and constructors across multiple parents land in a later slice; this guide stays
-// field-free, like the single-inheritance guide.)
+// Fields and statics compose too (plan row 4c, DEC-574): constructing Duck runs BOTH parents'
+// field initializers, in `extends` order, and a parent's static is that parent's one slot, whichever
+// child names it.
 package Main;
 
 import Core.Output;
@@ -18,6 +19,7 @@ import Core.Runtime.Entry;
 import Core.Runtime.EntryKind;
 
 open class Animal {
+    mutable static int ducks = 0;
     function name(): string {
         // Reached by Duck through BOTH Swimmer and Flyer — but it is the same `Animal.name`, so it
         // auto-merges (the diamond): no conflict, no resolution clause needed.
@@ -26,12 +28,14 @@ open class Animal {
 }
 
 open class Swimmer extends Animal {
+    int depth = 3;
     open function move(): string {
         return "swims";
     }
 }
 
 open class Flyer extends Animal {
+    int height = 9;
     open function move(): string {
         return "flies";
     }
@@ -49,5 +53,10 @@ function main(): void {
     Output.printLine(d.move());
     // "swims" — resolved by `use Swimmer.move`
     Output.printLine(d.name());
+    // "animal" — diamond shared base, auto-merged
+    Output.printLine("{d.depth} {d.height}");
+    // "3 9" — both parents' initializers ran
+    Duck.ducks = Duck.ducks + 1;
+    Output.printLine("{Animal.ducks}");
 }
-// "animal" — diamond shared base, auto-merged
+// "1" — Animal's one static slot, named through Duck

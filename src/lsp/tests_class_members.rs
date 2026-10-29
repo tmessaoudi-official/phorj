@@ -134,3 +134,36 @@ function f(): int {
         assert!(got.contains(&want), "want {want} in {got:?}");
     }
 }
+
+/// Hover and definition on an inherited static name the NEAREST declaration — the checker's and the
+/// backends' owner (`ast::class_lookup_order`), not the first ancestor by name (row 4c close panel,
+/// completeness F2: `M.s` landed on `A` when `Z` redeclares it). Also pins a trait static on a
+/// subclass of its user (F5).
+#[test]
+fn hover_and_definition_on_an_inherited_static_reach_the_nearest_declaration() {
+    let src = "package Main;
+open class A { static int s = 1; }
+open class Z extends A { static int s = 2; }
+class M extends Z {}
+trait T { mutable static int ts = 7; }
+open class U { use T; }
+class V extends U {}
+function f(): int { return M.s + V.ts; }
+";
+    let mut s = Server::default();
+    s.handle(&did_open("file:///x.phg", src));
+    let pos = |needle: &str, into: usize| {
+        let at = src.find(needle).unwrap() + into;
+        let line = src[..at].matches('\n').count();
+        let col = at - src[..at].rfind('\n').unwrap() - 1;
+        (line as u32, col as u32)
+    };
+    let (l, c) = pos("M.s ", 2);
+    let hover = &s.handle(&super::tests::req_at("hover", l, c))[0];
+    assert!(hover.contains("static int s = 2"), "nearest is Z: {hover}");
+    let def = &s.handle(&super::tests::req_at("definition", l, c))[0];
+    assert!(def.contains("\"start\":{\"line\":2,"), "Z's line: {def}");
+    let (l, c) = pos("V.ts", 2);
+    let def = &s.handle(&super::tests::req_at("definition", l, c))[0];
+    assert!(def.contains("\"start\":{\"line\":4,"), "T's static: {def}");
+}

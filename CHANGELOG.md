@@ -8,6 +8,11 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed — plan row 4c: static and composition parity (2026-10-26/27)
 
+- **Close panel round 1**: an inherited static is found in the checker's order (depth-first), so a diamond whose arm
+  redeclares a static with another type no longer splits the native legs; each class initializes its traits' computed
+  statics before its own, so a class static may read its trait's; a non-public computed static is assigned inside its
+  class's scope in PHP; a multi-parent parent's static is emitted `public` in PHP (DEC-574: one shared slot); LSP hover
+  and definition on an inherited static reach the nearest declaration.
 - **Field initializers composed from a trait or a second parent never ran**: `trait T { int k = 9; } class U { use T; }`
   faulted `no field k on U` on both native legs, and so did a multi-parent class's second parent's initializer. A class's
   initializers are now its traits' then its own, run by whichever class's constructor plan runs (every parent's, for a

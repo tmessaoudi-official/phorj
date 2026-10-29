@@ -18,7 +18,7 @@ impl Checker {
                 if self.lookup_binding(cls).is_none() && self.classes.contains_key(cls) {
                     // A `const` class constant (Feature A) is resolved before a static field — it is
                     // class-name-only and visibility-checked. `consts` already carries inherited
-                    // entries (merge_inherited), so `Sub.MAX` resolves an inherited `MAX`.
+                    // entries (merge_inherited_pass), so `Sub.MAX` resolves an inherited `MAX`.
                     if let Some(entry) = self.classes[cls].consts.get(name).cloned() {
                         let visible = match entry.vis {
                             MemberVis::Public => true,

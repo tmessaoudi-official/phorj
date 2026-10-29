@@ -30,7 +30,7 @@
 
 ## 0. CURSOR — WHERE WE ARE (update every working session)
 
-> **▶ 2026-10-08 — the 2026-10-07 full audit is ruled; the live work is `docs/plans/2026-10-08-audit-remediation.plan.md`** (the P0 fix slice, rows 1–4, is DONE as of 2026-10-08 — commits listed in `SLICE-STATE.md`; its close panel added row 4b — the VM `with`/property-hook static-class defect and the transpiled `clone(…)->m()` parse error, KNOWN_ISSUES `VM-WITH-STATIC-CLASS`/`TRANSPILE-WITH-CALL`/`TRAIT-BARE-NAME` — DONE 2026-10-26 on the cloud session branch `ccr-56056e44-aec471` (evidence `12fe3107`; lands on `master` when the developer merges it; five close-panel rounds, the round-5 cap ruled by the developer; the panel raised DEC-571/572/573, all RULED (a) on 2026-10-26 and queued as rows 4f/4e/4g) — then row 4c, the static and composition parity defects the round-5 re-check found (`STATIC-COMPOSITION-PARITY`; items 1, 2, 3 and 5 BUILT 2026-10-26, item 4 next), rows 4e–4g, then row 5), mirrored in §0.10 below and in `SLICE-STATE.md`. The table below is stale (dated 2026-09-02); rewriting it as a pointer is that plan's row 7.
+> **▶ 2026-10-08 — the 2026-10-07 full audit is ruled; the live work is `docs/plans/2026-10-08-audit-remediation.plan.md`** (the P0 fix slice, rows 1–4, is DONE as of 2026-10-08 — commits listed in `SLICE-STATE.md`; its close panel added row 4b — the VM `with`/property-hook static-class defect and the transpiled `clone(…)->m()` parse error, KNOWN_ISSUES `VM-WITH-STATIC-CLASS`/`TRANSPILE-WITH-CALL`/`TRAIT-BARE-NAME` — DONE 2026-10-26 on the cloud session branch `ccr-56056e44-aec471` (evidence `12fe3107`; lands on `master` when the developer merges it; five close-panel rounds, the round-5 cap ruled by the developer; the panel raised DEC-571/572/573, all RULED (a) on 2026-10-26 and queued as rows 4f/4e/4g) — then row 4c, the static and composition parity defects the round-5 re-check found (`STATIC-COMPOSITION-PARITY`; all five items BUILT 2026-10-26/27, close panel in progress; it raised DEC-574/575, RULED (a), and rows 4h/4i), rows 4e–4i, then row 5), mirrored in §0.10 below and in `SLICE-STATE.md`. The table below is stale (dated 2026-09-02); rewriting it as a pointer is that plan's row 7.
 
 > **THE FINISHING WAVE is the active programme** (see the section immediately after §1) — all plans/specs
 > consolidated into THIS file + UNIFIED-SPEC (2026-07-11), then execution to **100% VISION** (full PHP
@@ -67,7 +67,7 @@
 | `2026-07-26-capture-write-rejection.md` | DEC-357 | Writing to a captured local is rejected. RULED, unbuilt |
 | `2026-07-26-ufcs-lsp-companion.md` | DEC-342 / 346 / 375 | UFCS completion, import-gating, and the LSP-as-expert-companion bar. RULED, unbuilt — relevant to Invariant 17's 100% rule |
 
-## 0.10 THE 2026-10-07 AUDIT RULINGS — mirror rows (DEC-562 … DEC-568, DEC-571 … DEC-573)
+## 0.10 THE 2026-10-07 AUDIT RULINGS — mirror rows (DEC-562 … DEC-568, DEC-571 … DEC-575)
 
 > Invariant 19 mirror: the register row is the ruling, `docs/plans/2026-10-08-audit-remediation.plan.md` is the
 > plan, `SLICE-STATE.md` is the live cursor. The register wins on any difference.
@@ -84,6 +84,8 @@
 | DEC-571 | A subclass's set hook runs for the parent constructor's promoted assignment and for `with`, as in PHP (row 4b close panel; KNOWN_ISSUES SET-HOOK-DURING-CONSTRUCTION) | RULED (a) 2026-10-26 — plan row 4f |
 | DEC-572 | Property hooks are inherited like methods, as in PHP; a write through a class without the hook calls the inherited setter (KNOWN_ISSUES HOOK-INHERITANCE) | RULED (a) 2026-10-26 — plan row 4e |
 | DEC-573 | A bare name never reads a field: one matching only a subclass's field is the top-level function on every leg (KNOWN_ISSUES BARE-NAME-SUBCLASS) | RULED (a) 2026-10-26 — plan row 4g |
+| DEC-574 | A multi-parent class's parent static is the parent's one shared slot, as in single inheritance; PHP emits a decomposed parent's statics public (row 4c close panel; KNOWN_ISSUES STATIC-COMPOSITION-PARITY item 2) | RULED (a) 2026-10-27 — built in plan row 4c |
+| DEC-575 | Every class's field initializers run on construction, base-first down the chain, each class's traits then its own (KNOWN_ISSUES INIT-CHAIN) | RULED (a) 2026-10-27 — plan row 4h |
 
 ## 0.08 THE SCOUT FORCING-FUNCTION RULINGS — mirror rows (DEC-504 … DEC-512)
 

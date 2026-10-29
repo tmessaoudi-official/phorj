@@ -238,7 +238,7 @@ struct ClassInfo {
     /// alongside [`Self::ctor`] for a class with no own constructor. Empty for a non-throwing ctor.
     ctor_throws: Vec<Ty>,
     /// Whether the class declares its **own** constructor (vs. inheriting one). Distinguishes a class
-    /// with a zero-arg ctor from one with no ctor at all (both leave `ctor` empty) — `merge_inherited`
+    /// with a zero-arg ctor from one with no ctor at all (both leave `ctor` empty) — `merge_inherited_pass`
     /// inherits a single parent's `ctor` only into a class that has none of its own (M-RT S6c.2a).
     has_ctor: bool,
     /// DEC-194 2b: this class carries the `#[Attribute]` marker → it is a user-defined attribute type,
