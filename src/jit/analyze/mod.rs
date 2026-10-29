@@ -1881,6 +1881,7 @@ pub(super) fn unboxed_analyze(
                     disc.inst_fields.push((*cidx, sig));
                     kinds.push(Kind::Inst(*cidx, Own::Owned));
                 }
+                Op::CloneInstance => analyze_clone_instance(program, info, &mut kinds)?,
                 Op::GetField(nidx) => {
                     let k = kinds.pop().ok_or_else(|| {
                         JitError::Codegen("unboxed analyze: GetField underflow".to_string())

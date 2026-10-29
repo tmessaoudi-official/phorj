@@ -30,6 +30,7 @@ pub(super) fn counts_fault_exit(op: &Op) -> bool {
         | Op::GetField(_)
         | Op::GetFieldOrHook(..) // resolves to a field op or `CallMethod` (row 4b)
         | Op::SetFieldOrHook(..)
+        | Op::CloneInstance // its handle-field clones fault to code 5 (row 4b step 5b)
         | Op::Fault(_)
         // STRING `Op::Eq`/`Op::Ne` emit a defensive bad-handle `fault_if` (the
         // `Eq(str)` helper arm, :1058); int/float/bool Eq/Ne go to `arm_cmp` and

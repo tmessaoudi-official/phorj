@@ -102,3 +102,67 @@ fn the_runtime_class_ops_agree_with_the_oracle_end_to_end() {
     assert_eq!(jit_out, oracle);
     assert_eq!(oracle, "30 70 9 11\n");
 }
+
+/// Step 5b: `with` on a class that has a subclass compiles to `CloneInstance` (the copy keeps the
+/// RUNTIME class). The unboxed tier copies the exact class's slot word by word and clones each
+/// string/list handle word, so two instances never own the same word. The string field is built at
+/// run time (`t.tag + "x"`): a const-interned word is release-exempt, so only an owned one can show
+/// a shared word being freed under the original — and each iteration allocates a fresh string
+/// (`probe`), which would reuse a slot freed by a dying copy that had not cloned the word.
+const CLONE_SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Runtime.EntryKind;\n\
+    import Core.Output;\n\
+    open class Base { constructor(public int n) {} }\n\
+    class Sub extends Base { int n { get => 7; } }\n\
+    open class Tagged { constructor(public int x, public mutable string tag) {} }\n\
+    class SubTagged extends Tagged {}\n\
+    function cloneBase(int k): int { Base b = new Base(1); mutable int s = 0; \
+      for (mutable int i = 0; i < k; i++) { Base c = b with { n = i }; s = s + c.n; } return s; }\n\
+    function cloneSub(int k): int { Base b = new Sub(1); Base c = b with { n = k + 0 }; return c.n; }\n\
+    function cloneTagged(int k): int { Tagged t = new Tagged(1, \"ab\"); t.tag = t.tag + \"x\"; mutable int s = 0; \
+      for (mutable int i = 0; i < k; i++) { Tagged u = t with { x = i }; \
+        string probe = u.tag + \"!\"; if (probe == \"abx!\") { s = s + u.x; } } return s + t.x; }\n\
+    #[Entry(kind: EntryKind.Cli)]\n\
+    function main(): void { Output.printLine(\"{cloneBase(10)} {cloneSub(3)} {cloneTagged(10)}\"); }\n";
+
+fn emits_clone_instance(program: &BytecodeProgram, f: usize) -> bool {
+    program.functions[f]
+        .chunk
+        .code
+        .iter()
+        .any(|op| matches!(op, crate::chunk::Op::CloneInstance))
+}
+
+#[test]
+fn a_with_on_a_non_exact_class_compiles_and_copies_the_instance() {
+    let program = compile_source(CLONE_SRC);
+    for (name, arg, want) in [
+        ("cloneBase", 1000, 499_500),
+        ("cloneSub", 3, 7),
+        ("cloneTagged", 1000, 499_501),
+    ] {
+        let f = func_index(&program, name);
+        assert!(
+            emits_clone_instance(&program, f),
+            "{name}: the `with` must be CloneInstance"
+        );
+        let args = [Value::Int(arg)];
+        assert_eq!(
+            ub_int(&program, f, &args),
+            want,
+            "{name}: unboxed JIT result"
+        );
+        assert_eq!(
+            vm_int(&program, f, args.to_vec()),
+            want,
+            "{name}: VM oracle"
+        );
+    }
+}
+
+#[test]
+fn the_clone_lowering_agrees_with_the_oracle_end_to_end() {
+    let jit_out = crate::cli::cmd_run(CLONE_SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(CLONE_SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle);
+    assert_eq!(oracle, "45 7 46\n");
+}
