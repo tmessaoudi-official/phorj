@@ -112,17 +112,20 @@ Tests: the `vm_with_*`, `vm_hook_*`, `vm_trait_body_this_read_runs_a_subclass_ho
 `vm_runtime_class_ops_compose_in_one_expression` and `null_coalesce_class_rhs_null_path_runs_the_hook` cases in
 `tests/differential.rs`, and `src/compiler/tests_hook_gate.rs` (which receivers pay for run-time dispatch).
 
-**Cost — an OWED loss on the default engine (panel round 2, safety lens).** A function containing `GetFieldOrHook`,
-`SetFieldOrHook` or `CloneInstance` is declined by the unboxed JIT (`PHORJ_JIT_EXPLAIN=1`: `jit declined total —
-Unsupported("unboxed GetFieldOrHook(0, 1)")`), so it runs on the VM. A hot loop reading `b.n` through an open class
-that a subclass hooks took 3522 ms against 62 ms for the same program with the hook removed, ~57× [Verified:
-`target/release/phg`, one core, 2×10⁷ reads]; the pre-row-4b binary JIT-compiled it (reading the field even where a
-subclass hook should run). On the VM alone (`--no-jit`) the same read costs ~7% more than the pre-fix `GetField`
-(`phg benchmark`, median of 101: 1560.2 vs 1462.8 ms, debug builds). The fix — the unboxed JIT resolving each site
-from its exact `Kind::Inst` class to `CallMethod` or `GetField` — is plan row 4b step 5; until it lands, the session
-branch carries this disclosed regression. `bench/micro` has no entry for the shape yet, so `microbench-gate` cannot
-see it: the micro (a supertype read in a hot loop, with and without a subclass hook) and its baseline need the PC
-(docker + PHP), and are OWED with step 5. Example:
+**Cost on the default engine (panel round 2, safety lens; step 5).** The first cut made the unboxed JIT decline every
+function containing a runtime-class op, so a hot loop fell to the VM: a supertype read whose subclass hooks the name
+took 3522 ms against 62 ms hook-free (~57×), a supertype write 3865 vs 50 ms (~80×) [Verified: `target/release/phg`,
+one core, 2×10⁷ iterations]. **Step 5 closed both**: the unboxed tier knows each receiver's exact class
+(`Kind::Inst`), so `src/jit/analyze/runtime_class.rs` resolves each site to the class's own hook (`CallMethod`) or the
+field (`GetField`, or `SetField` consuming the `Pop` after it); the same probes now run in 47–55 ms, equal to the
+hook-free controls. Two shapes still decline: (1) a write whose runtime class HAS the setter runs a void method, which
+the unboxed subset declines, exactly as the exact-class static path declines the same call; (2) **`with` on a non-exact
+class (`CloneInstance`) — 1330 vs 35 ms (~38×) in a hot loop, OWED as row 4b step 5b** (a clone needs an
+ownership-aware copy of string and handle fields in the unsafe island). On the VM alone (`--no-jit`) a supertype read
+costs ~7% more than the pre-fix `GetField` (`phg benchmark`, median of 101: 1560.2 vs 1462.8 ms, debug builds).
+`bench/micro` has no entry for these shapes, so `microbench-gate` cannot see them; the micro (with and without a
+subclass hook) and its baseline need the PC (docker + PHP) and are OWED. Tests: `src/jit/tests/runtime_class_ops.rs`.
+Example:
 `examples/guide/runtime-class-dispatch.phg`. Bytecode, measured with `phg disassemble` on the pre-row-4b and the final
 binary over every example that loads as a single file (277; the 74 project and library files do not): 274 listings are
 identical; `property-hooks.phg` and `traits.phg` differ only in name-pool indices (a hook's bare name is now interned
