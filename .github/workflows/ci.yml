@@ -6,9 +6,11 @@ name: CI
 # FAILS (never silently skips) if transpiled PHP diverges from the interpreter/VM. The
 # `cross-build` job exercises `phg build --target` parity across the four Phase-2 cross targets.
 
+# `ccr-*` are cloud-session branches (DEC-569): cloud work never lands on master, and a cloud box
+# may lack the PHP 8.5 oracle that pre-push needs, so CI is their only automated gate.
 on:
   push:
-    branches: [master]
+    branches: [master, 'ccr-*']
   pull_request:
     branches: [master]
 
