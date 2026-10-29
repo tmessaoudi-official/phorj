@@ -20,6 +20,10 @@ import Core.Runtime.EntryKind;
 
 open class Animal {
     mutable static int ducks = 0;
+    static function kingdom(): string {
+        // A static method on a multi-parent ancestor is static in PHP too (plan row 4c).
+        return "animalia";
+    }
     function name(): string {
         // Reached by Duck through BOTH Swimmer and Flyer — but it is the same `Animal.name`, so it
         // auto-merges (the diamond): no conflict, no resolution clause needed.
@@ -58,5 +62,7 @@ function main(): void {
     // "3 9" — both parents' initializers ran
     Duck.ducks = Duck.ducks + 1;
     Output.printLine("{Animal.ducks}");
+    // "1" — Animal's one static slot, named through Duck
+    Output.printLine(Duck.kingdom());
 }
-// "1" — Animal's one static slot, named through Duck
+// "animalia" — Animal's static method, inherited through both arms
