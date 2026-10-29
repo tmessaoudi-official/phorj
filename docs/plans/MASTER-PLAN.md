@@ -67,7 +67,7 @@
 | `2026-07-26-capture-write-rejection.md` | DEC-357 | Writing to a captured local is rejected. RULED, unbuilt |
 | `2026-07-26-ufcs-lsp-companion.md` | DEC-342 / 346 / 375 | UFCS completion, import-gating, and the LSP-as-expert-companion bar. RULED, unbuilt — relevant to Invariant 17's 100% rule |
 
-## 0.10 THE 2026-10-07 AUDIT RULINGS — mirror rows (DEC-562 … DEC-568)
+## 0.10 THE 2026-10-07 AUDIT RULINGS — mirror rows (DEC-562 … DEC-568, DEC-571 … DEC-573)
 
 > Invariant 19 mirror: the register row is the ruling, `docs/plans/2026-10-08-audit-remediation.plan.md` is the
 > plan, `SLICE-STATE.md` is the live cursor. The register wins on any difference.
@@ -81,6 +81,9 @@
 | DEC-566 | Opt-in in-source layer rules, loader stays manifest-less | QUEUED — plan row 17 |
 | DEC-567 | Six strictness/neutrality questions (flow lints, provably-null `!`, ctor rule, `List.get`, refinement types, subtree visibility) | PENDING (Invariant 15) |
 | DEC-568 | Whether DEC-363's header guard widens past CR/LF/NUL: leading-whitespace (obs-fold) lines, lines with no `:`, handler-supplied `Content-Length`/`Transfer-Encoding` (slice-close panel 2026-10-08; disclosed in KNOWN_ISSUES) | PENDING (Invariant 15) |
+| DEC-571 | A subclass's set hook runs for the parent constructor's promoted assignment and for `with`, as in PHP (row 4b close panel; KNOWN_ISSUES SET-HOOK-DURING-CONSTRUCTION) | RULED (a) 2026-10-26 — plan row 4f |
+| DEC-572 | Property hooks are inherited like methods, as in PHP; a write through a class without the hook calls the inherited setter (KNOWN_ISSUES HOOK-INHERITANCE) | RULED (a) 2026-10-26 — plan row 4e |
+| DEC-573 | A bare name never reads a field: one matching only a subclass's field is the top-level function on every leg (KNOWN_ISSUES BARE-NAME-SUBCLASS) | RULED (a) 2026-10-26 — plan row 4g |
 
 ## 0.08 THE SCOUT FORCING-FUNCTION RULINGS — mirror rows (DEC-504 … DEC-512)
 
