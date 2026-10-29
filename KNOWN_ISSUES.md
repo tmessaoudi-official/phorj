@@ -102,6 +102,20 @@ empty block (`checker/inline_parent_ctor.rs` `find_owner` looks only for an own 
 the developer, 2026-10-27: every class's initializers run, base-first down the chain**, each class's traits then its
 own; PHP via a `protected function __phorj_init_<Class>()` per class. Queued as plan row 4h.
 
+## DECOMPOSED-PARENT-TRAITS — a multi-parent parent's own `use T` is dropped in PHP (found 2026-10-27)
+
+Found by row 4c's close panel round 2 on frozen `216af26c`; pre-existing in the transpiler (neither row-4c diff touches it),
+made reachable by item 5's checker fix [Inferred]. `trait T { function hi(): string { return "hi"; } static int s = 3; }
+open class A { use T; } open class B {} class M extends A, B {}`, then `new M().hi()` and `M.s`: VM and tree-walker
+`hi 3`; PHP `Call to undefined method M::hi()` [Verified: release `phg` at `216af26c`, PHP 8.3 — the transpiled `trait TA`
+is empty]. `emit_decomposed_class` and `emit_multi_class` (`src/transpile/classes_synth.rs`) never read `c.uses`, so the
+decomposed parent's trait never reaches its `TA`; `class M extends A, B { use T; }` likely drops it too [Inferred].
+Second half (item 6 of STATIC-COMPOSITION-PARITY): DEC-574's forced `public` covers only a decomposed class's OWN
+statics, so a `protected` trait static it owns, named `A::$s` from `M`, fails in PHP (`Cannot access protected
+property A::$s`) once the first half is fixed; PHP cannot widen a trait property's visibility at `use`, so this may need
+a ladder decision (Invariant 14/15). No example or differential case exercises a trait-using decomposed parent, which is
+why CI stayed green. Owner: plan row 4c (close round 3). Probes: the round-2 report's p1/p1b/p3.
+
 ## STATIC-REDECL-TYPE — a static or member redeclared with another type through a trait or an arm splits the legs (found 2026-10-27)
 
 Found by row 4c's close panel; all predate the row and pass `phg check`. (1) A class that redeclares its trait's static
@@ -281,7 +295,7 @@ INIT-CHAIN and STATIC-REDECL-TYPE.
    breadth-first MRO, so a diamond whose right arm redeclared the static with another type split the native legs
    (VM `r1`, tree-walker a type fault); the LSP's hover and definition use the same order (they answered with the
    farthest redeclaration); and per DEC-574 (RULED, one shared slot) a decomposed parent's static is emitted `public`
-   in PHP, so a `protected` one named through a multi-parent child is valid there.
+   in PHP, so a `protected` one it declares itself, named through a multi-parent child, is valid there — NOT one a trait supplies (item 6).
 3. **FIXED 2026-10-26 (row 4c) — a multi-parent class whose parent has a static method.** `open class A { static
    function fa(): int { return 1; } } open class B { int j = 2; } class M extends A, B {}`: VM and tree-walker `1`; PHP
    `Cannot make non static method IA::fa() static in class A`. The synthesized parent interface declared the method
