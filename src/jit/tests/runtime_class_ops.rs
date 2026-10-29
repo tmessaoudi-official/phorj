@@ -121,8 +121,20 @@ const CLONE_SRC: &str = "package Main; import Core.Runtime.Entry; import Core.Ru
     function cloneTagged(int k): int { Tagged t = new Tagged(1, \"ab\"); t.tag = t.tag + \"x\"; mutable int s = 0; \
       for (mutable int i = 0; i < k; i++) { Tagged u = t with { x = i }; \
         string probe = u.tag + \"!\"; if (probe == \"abx!\") { s = s + u.x; } } return s + t.x; }\n\
+    open class Wide { constructor(public int a, public int b, public int c, public int d, public int e, \
+      public int f, public int g, public int h, public int i, public int j) {} }\n\
+    class SubWide extends Wide {}\n\
+    open class Listy { constructor(public List<int> xs, public int k) {} }\n\
+    class SubListy extends Listy {}\n\
+    function cloneTemp(int k): int { Base c = new Base(1) with { n = k + 0 }; return c.n; }\n\
+    function cloneWide(int k): int { Wide w = new Wide(1, 2, 3, 4, 5, 6, 7, 8, 9, 10); mutable int s = 0; \
+      for (mutable int i = 0; i < k; i++) { Wide v = w with { j = i }; s = s + v.j + v.a + v.i; } return s; }\n\
+    function cloneList(int k): int { Listy l = new Listy([1, 2, 3], 0); mutable int s = 0; \
+      for (mutable int i = 0; i < k; i++) { Listy m = l with { k = i }; List<int> probe = [i, i]; \
+        s = s + m.k + m.xs[2] + probe[0]; } return s; }\n\
     #[Entry(kind: EntryKind.Cli)]\n\
-    function main(): void { Output.printLine(\"{cloneBase(10)} {cloneSub(3)} {cloneTagged(10)}\"); }\n";
+    function main(): void { Output.printLine(\"{cloneBase(10)} {cloneSub(3)} {cloneTagged(10)} {cloneTemp(4)} \
+      {cloneWide(3)} {cloneList(3)}\"); }\n";
 
 fn emits_clone_instance(program: &BytecodeProgram, f: usize) -> bool {
     program.functions[f]
@@ -139,6 +151,11 @@ fn a_with_on_a_non_exact_class_compiles_and_copies_the_instance() {
         ("cloneBase", 1000, 499_500),
         ("cloneSub", 3, 7),
         ("cloneTagged", 1000, 499_501),
+        // An OWNED temp receiver (released after the copy), a WIDE class (two-slot layout), and a
+        // list field cloned per iteration with a fresh list allocated beside it.
+        ("cloneTemp", 4, 4),
+        ("cloneWide", 1000, 499_500 + 10 * 1000),
+        ("cloneList", 1000, 2 * 499_500 + 3 * 1000),
     ] {
         let f = func_index(&program, name);
         assert!(
@@ -164,5 +181,5 @@ fn the_clone_lowering_agrees_with_the_oracle_end_to_end() {
     let jit_out = crate::cli::cmd_run(CLONE_SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(CLONE_SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle);
-    assert_eq!(oracle, "45 7 46\n");
+    assert_eq!(oracle, "45 7 46 4 33 15\n");
 }
