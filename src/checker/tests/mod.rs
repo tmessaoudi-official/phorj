@@ -55,6 +55,7 @@ mod throw_expr;
 mod throws;
 mod totality;
 mod trait_bare_name;
+mod trait_subclass;
 mod traits;
 mod tuple_field_assign;
 mod turbofish;

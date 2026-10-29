@@ -213,7 +213,7 @@ users store no `k` keeps the function. Tests: `src/checker/tests/trait_bare_name
 `tests/differential.rs::trait_bare_name_without_a_using_field_is_the_function_on_every_leg`; golden:
 `conformance/diagnostics/trait-bare-name.phg`.
 
-## STATIC-COMPOSITION-PARITY — static/trait/multi-parent shapes that pass `phg check` and split the legs (found 2026-10-08; items 2 and 3 FIXED 2026-10-26, row 4c)
+## STATIC-COMPOSITION-PARITY — static/trait/multi-parent shapes that pass `phg check` and split the legs (found 2026-10-08; items 2, 3 and 5 FIXED 2026-10-26, row 4c)
 
 The correctness pass on the round-5 re-check fix found these while probing static contexts. All four predate that
 work, and each passes `phg check`. Queued as plan row 4c.
@@ -240,12 +240,18 @@ work, and each passes `phg check`. Queued as plan row 4c.
    4b's trait-`this` test, 2026-10-26). With `open class A { int x = 1; } open class B
    { int y = 2; } class M extends A, B`: VM and tree-walker `no field y on M`; PHP `M::$x must not be accessed before
    initialization`. The "needs a trait constructor" rule further down this file is not enforced by the checker.
-5. **A subclass of a trait-using class does not see the trait's members** (found 2026-10-26 by row 4c; pre-existing). With
+5. **FIXED 2026-10-26 (row 4c) — a subclass of a trait-using class did not see the trait's members** (found 2026-10-26 by
+   row 4c; pre-existing). With
    `trait T { function f(): int { return 1; } } open class U { use T; } class V extends U {}`, `new V().f()` is a type
    error (`type V has no method f`); so are `V.sf()` for a trait static method, `v.k = 4` for a trait field and `V.s`
    for a trait static. It is a false rejection on every leg, not a split: PHP accepts all four. The checker flattens
-   class inheritance before it merges traits into their using classes, so nothing a trait supplies reaches a subclass.
-   Queued with row 4c.
+   class inheritance before it merges traits into their using classes, so nothing a trait supplies reached a subclass. A
+   trait constructor did not either (`new V(3)`: `V expects 0 argument(s)`). The checker now inherits a second time
+   after the trait merge; every member copy keeps the first pass's precedence, and a class with no own constructor
+   rebuilds its signature from its parents' final ones. The trait merge now also carries the constructor's parameter names,
+   so `new U(k: 3)` (DEC-297) resolves on the user and the subclass alike (it was `E-NAMED-ARG-UNKNOWN` on `U` too), and the
+   LSP lists a trait's statics after `U.` and `V.` (`checker::tests::trait_subclass`,
+   `a_subclass_of_a_trait_user_inherits_the_trait_members`; example `guide/traits.phg`).
 
 ## STRING-EQ-DECIMAL-ERASED — a decimal compared inside an erased generic BODY is scale-sensitive on the PHP leg (DEC-557, 2026-10-02)
 

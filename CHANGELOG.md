@@ -14,6 +14,11 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   own slot and a trait's static stays a per-using-class copy.
 - **A multi-parent class whose parent has a static method** transpiled to PHP that was fatal (`Cannot make non static
   method IA::fa() static`): the synthesized parent interface now declares the method `static`.
+- **A subclass of a trait-using class could not use the trait's members**: `phg check` rejected a trait method, static
+  method, field, static or constructor reached through `class V extends U` when only `U` declares `use T;`, although
+  every backend (and PHP) inherits them. The checker now inherits again after merging traits. Named arguments to a trait
+  constructor (`new U(k: 3)`) resolve on the user and its subclasses, and completion, hover and go-to-definition after
+  `U.` / `V.` include the trait's statics.
 
 ### Fixed — plan row 4b: three backend parity defects around `with`, property hooks and traits (2026-10-26)
 

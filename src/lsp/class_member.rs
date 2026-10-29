@@ -32,9 +32,23 @@ pub(super) fn static_members(
         .chain(supers.get(receiver).cloned().unwrap_or_default());
     let mut out: Vec<(String, u32, Span)> = Vec::new();
     for owner in chain {
-        for (name, kind, span) in own_statics(program, &owner) {
-            if !out.iter().any(|(n, ..)| *n == name) {
-                out.push((name, kind, span));
+        // A class's own statics, then those of the traits it `use`s — a trait static is the using
+        // class's member, inherited by its subclasses like any other (plan row 4c item 5).
+        let uses: Vec<String> = program
+            .items
+            .iter()
+            .find_map(|it| match it {
+                Item::Class(c) if c.name == owner => {
+                    Some(c.uses.iter().map(|u| u.name.clone()).collect())
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        for decl in std::iter::once(owner).chain(uses) {
+            for (name, kind, span) in own_statics(program, &decl) {
+                if !out.iter().any(|(n, ..)| *n == name) {
+                    out.push((name, kind, span));
+                }
             }
         }
     }

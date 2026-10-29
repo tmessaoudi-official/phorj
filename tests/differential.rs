@@ -8252,3 +8252,21 @@ fn an_inherited_static_field_is_the_declaring_classs_one_slot() {
         agree_out_php(&format!("import Core.Output; {src}"), expected, tag);
     }
 }
+
+/// Item 5: a subclass of a trait-using class inherits what its parent composed — a trait method, a
+/// static method, a static field (the user's copy, shared with the subclass), an instance field and
+/// the trait constructor. The checker rejected all of them on the subclass before (a false rejection
+/// on every leg); the backends already inherited them.
+#[test]
+fn a_subclass_of_a_trait_user_inherits_the_trait_members() {
+    agree_out_php(
+        "import Core.Output; trait T { constructor(public mutable int k) {} static mutable int s = 1; \
+         function f(): int { return this.k * 10; } static function sf(): int { return 3; } } \
+         open class U { use T; } class V extends U {} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { V v = new V(2); v.k = v.k + 1; \
+         V.s = 4; Output.printLine(\"{v.f()} {V.sf()} {U.s} {V.s} {v.k}\"); \
+         V w = new V(k: 5); U u = new U(k: 6); Output.printLine(\"{w.k} {u.k}\"); }",
+        "30 3 4 4 3\n5 6\n",
+        "row4c_trait_members_through_a_subclass",
+    );
+}
