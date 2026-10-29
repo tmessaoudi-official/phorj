@@ -26,10 +26,12 @@ gets the same methodology, gates and memory as the PC.
 3. Cloud environment settings → setup script:
    ```sh
    add-apt-repository -y ppa:ondrej/php && apt-get update -qq \
-     && apt-get install -y php8.5-cli php8.5-bcmath php8.5-mbstring php8.5-sqlite3 age
+     && apt-get install -y php8.5-cli php8.5-bcmath php8.5-mbstring php8.5-sqlite3 age gawk
    cargo install cargo-nextest --locked
    cd phorj && git config core.hooksPath scripts/git-hooks && bash tools/cloud-kit/arm.sh
    ```
+   `gawk` is required: Ubuntu's default awk (mawk 1.3.4) panics on the framework's `^ {0,3}(…|…)` regexes, which
+   breaks `project-state.sh` and so `/progress`, `/next` and decision stamping.
 4. Merge the session branch to `master` on the PC. New cloud sessions branch from `master`, so the kit only
    reaches a new session after the merge.
 
@@ -56,9 +58,20 @@ gets the same methodology, gates and memory as the PC.
 - Skips session-remember, precompact-handoff, rtk, the statusline, push-batch, the permission engine, MCP servers
   and plugins.
 
+## First new session: did it work?
+
+At session start, the banner prints `▸ MODE: autonomous …` and the hook prints `cloud-kit: … installed`.
+Neither line → `arm.sh` refused in the setup script (e.g. `/root/.ccr` not there yet) or the harness rewrote
+`~/.claude/settings.json`. Remedy: `bash tools/cloud-kit/install.sh` once by hand; errors go to
+`~/.claude/logs/hooks-errors.log`.
+
 ## Memory back to the PC
 
 ```sh
 # PC (each delta, in order):
-age -d -i ~/.config/phorj-cloud-kit.key tools/cloud-kit/memory-deltas/<stamp>.age | tar -x -C ~/.claude/projects
+age -d -i ~/.config/phorj-cloud-kit.key tools/cloud-kit/memory-deltas/<stamp>.age >/tmp/delta.tar
+tar -tf /tmp/delta.tar                    # look first
+tar -x -C ~/.claude/projects -f /tmp/delta.tar --exclude='*/MEMORY.md'
 ```
+A delta that holds `MEMORY.md` would **replace** the PC's index, so it is excluded above: merge that one file
+by hand (`tar -xOf /tmp/delta.tar ./-stack-projects-phorj/memory/MEMORY.md`).
