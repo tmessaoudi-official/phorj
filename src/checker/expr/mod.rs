@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod bare_field;
 mod core;
 mod lambda;
 mod literals;

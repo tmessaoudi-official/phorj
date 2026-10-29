@@ -304,15 +304,10 @@ impl Compiler<'_> {
                         self.emit(Op::EnumValue, line);
                     }
                 } else if *safe {
-                    self.compile_safe_access(object, line, |c| {
-                        let idx = c.field_name_index(name)?;
-                        c.emit(Op::GetField(idx), line);
-                        Ok(())
-                    })?;
+                    self.compile_safe_access(object, line, |c| c.emit_field_read(name, line))?;
                 } else {
                     self.expr(object)?;
-                    let idx = self.field_name_index(name)?;
-                    self.emit(Op::GetField(idx), line);
+                    self.emit_field_read(name, line)?;
                 }
             }
             Expr::Index {
