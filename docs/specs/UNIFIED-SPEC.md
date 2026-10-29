@@ -730,8 +730,8 @@ each subclass (explicit > magic). Revisit as its own milestone only if a concret
 *(2026-10-26, plan `docs/plans/2026-10-08-audit-remediation.plan.md` row 4b; KNOWN_ISSUES VM-WITH-STATIC-CLASS.)*
 
 A value typed as a class may hold a subclass, so the two members that depend on the class are decided by the
-**runtime** class on the native legs (and in PHP, except where the PENDING questions below say otherwise), never by
-the static type:
+**runtime** class on the native legs (and in PHP, except for the ruled-but-unbuilt shapes below), never by the
+static type:
 
 - **`obj with { f = e, … }`** copies the runtime instance (a `Dog` behind an `Animal` stays a `Dog`) and evaluates the
   overrides in **source order**.
@@ -739,6 +739,8 @@ the static type:
   traits it `use`s; the stored field is used when that class has no hook. A read through a supertype, an untyped
   receiver (an erased generic binder, `null ?? …`) or a trait body's `this` all follow this rule. A hook-only property
   read on a class without the hook faults `no field`.
+- **A backed enum's `.value`** reads its backing (DEC-302) whatever the receiver's static type, including one the
+  compiler cannot type (a `Result` binder, `m ?? …`), and whatever members named `value` the program's classes declare.
 
 The VM decides at compile time only when it is exact (a class no class extends) and otherwise emits
 `CloneInstance` / `GetFieldOrHook` / `SetFieldOrHook`. Those are emitted only when the receiver's class or a descendant

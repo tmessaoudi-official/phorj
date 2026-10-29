@@ -758,6 +758,13 @@ impl<'a> Vm<'a> {
                             }
                         }
                     }
+                    // An untyped receiver's `.value` compiles to `GetField` once some class names a
+                    // `value` member; on a backed enum it reads the backing, as `GetFieldOrHook` does
+                    // (plan row 4b, close panel round 4).
+                    Value::Enum(ev) if self.program.names[idx] == "value" => {
+                        let backing = self.enum_backing(&ev)?;
+                        self.stack.push(backing);
+                    }
                     v => {
                         return Err(format!(
                             "cannot read `.{}` on {}",

@@ -20,10 +20,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   `src/vm/runtime_class.rs`), emitted only when the receiver's class or a descendant has the hook, with the hook lookup
   and the field slot cached per site (monomorphic ≈1.39× faster than an uncached lookup; one site alternating classes
   ≈14% slower). The unboxed JIT lowers the read and write ops per site from the receiver's exact class (step 5), which
-  closed the ~57× / ~80× default-engine cliffs the first cut had (release: 3522 → 49 ms, 3865 → 52 ms), and lowers
-  `CloneInstance` to a slot copy that clones each string/list field (step 5b: 1330 → 49 ms on a hot `with` loop). Where a
+  closed the ~57× / ~80× default-engine cliffs the first cut had (release: 3522 → 47–55 ms, 3865 → 47–55 ms), and lowers
+  `CloneInstance` to a slot copy that clones each string/list field (step 5b: 1330 → 46–53 ms on a hot `with` loop). Where a
   read is not JIT-compiled (`--no-jit`, or a function the unboxed tier declines) the run-time check still costs a few
   percent (~7% debug `--no-jit`; +2 to +12% release).
+- **Close-panel round 4**: once any class names a `value` member (a stored field or a method, no hook), an untyped
+  `.value` compiles to `GetField`, and on a backed enum the VM faulted `cannot read .value on enum` while the tree-walker
+  read the backing (a `Result<Enum>` match beside an unrelated class with a `value` field) — the VM's `GetField` now
+  reads the backing for `value`, as `GetFieldOrHook` does.
 - **Close-panel round 3**: a backed enum's `.value` behind a receiver the compiler cannot type, with no class declaring a
   `value` field or hook, was a VM compile error while the tree-walker read the backing — it now lowers to `EnumValue`; the
   trait `E-BARE-FIELD` hint no longer advises declaring the field in the trait (that faults today, row 4c).
@@ -40,9 +44,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 - **The `E-UNKNOWN-IDENT` "did you mean" hint broke ties by `HashMap` order** (Invariant 10): ties now break by name.
 
 Found and recorded, not fixed: KNOWN_ISSUES SET-HOOK-DURING-CONSTRUCTION (PHP runs a subclass's set hook during
-construction and `with`; the native legs do not; PENDING as DEC-571), HOOK-INHERITANCE (a subclass does not inherit a
-hook natively, and a write through such a class is silently dropped; DEC-572), BARE-NAME-SUBCLASS (a bare name vs a field
-only a subclass stores; DEC-573), TRACE-FRAME-NAMES, a second form of STATIC-COMPOSITION-PARITY item 4 (a trait's stored
+construction and `with`; the native legs do not; DEC-571 RULED (a), plan row 4f), HOOK-INHERITANCE (a subclass does not
+inherit a hook natively, and a write through such a class is silently dropped; DEC-572 RULED (a), row 4e),
+BARE-NAME-SUBCLASS (a bare name vs a field only a subclass stores; DEC-573 RULED (a), row 4g), TRACE-FRAME-NAMES,
+NULL-SAFE-UNKNOWN-MEMBER (`null?.foo` on a literal `null` is a VM compile error; row 9), a second form of STATIC-COMPOSITION-PARITY item 4 (a trait's stored
 field gets no slot; row 4c) and DISASSEMBLE-OVERLOAD-ORDER (`phg disassemble` numbers overload
 sets nondeterministically).
 
