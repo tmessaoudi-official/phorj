@@ -213,7 +213,7 @@ users store no `k` keeps the function. Tests: `src/checker/tests/trait_bare_name
 `tests/differential.rs::trait_bare_name_without_a_using_field_is_the_function_on_every_leg`; golden:
 `conformance/diagnostics/trait-bare-name.phg`.
 
-## STATIC-COMPOSITION-PARITY — four static/trait/multi-parent shapes pass `phg check` and split the legs (found 2026-10-08)
+## STATIC-COMPOSITION-PARITY — static/trait/multi-parent shapes that pass `phg check` and split the legs (found 2026-10-08; items 2 and 3 FIXED 2026-10-26, row 4c)
 
 The correctness pass on the round-5 re-check fix found these while probing static contexts. All four predate that
 work, and each passes `phg check`. Queued as plan row 4c.
@@ -222,17 +222,30 @@ work, and each passes `phg check`. Queued as plan row 4c.
    then `U.s + 1`: VM `expected int, found unit`, tree-walker `cannot apply Add to unit and int`, PHP `Typed static
    property U::$s must not be accessed before initialization`. The checker and the interpreter walk only classes'
    static initializers.
-2. **An inherited static field read through the subclass.** `open class A { static int sa = 2; } class M extends A {}`,
-   then `M.sa`: VM `undefined variable M` (compile error), tree-walker `no static field sa on M`, PHP `2`.
-3. **A multi-parent class whose parent has a static method.** `open class A { static function fa(): int { return 1; } }
-   open class B { int j = 2; } class M extends A, B {}`: VM and tree-walker `1`; PHP `Cannot make non static method
-   IA::fa() static in class A`. The synthesized parent interface declares the method non-static.
+2. **FIXED 2026-10-26 (row 4c) — an inherited static field read through the subclass.** `open class A { static int sa
+   = 2; } class M extends A {}`, then `M.sa`: VM `undefined variable M` (compile error), tree-walker `no static field
+   sa on M`, PHP `2`; a write through `M` forked a second copy on the tree-walker. `ast::static_field_owners` now maps
+   `(class, field)` to its owning class (own and trait statics are owned; the rest resolve up the MRO, most-derived
+   first — spec Area A's rule for static methods), and all three backends use it: the VM aliases the owner's slot, the
+   interpreter keys reads and writes on the owner, the transpiler emits `Owner::$f` (for a multi-parent child,
+   `M::$f` would be M's own trait copy). Tests: `an_inherited_static_field_is_the_declaring_classs_one_slot`,
+   `transpile::tests_static_composition`; example `guide/static-inheritance.phg`.
+3. **FIXED 2026-10-26 (row 4c) — a multi-parent class whose parent has a static method.** `open class A { static
+   function fa(): int { return 1; } } open class B { int j = 2; } class M extends A, B {}`: VM and tree-walker `1`; PHP
+   `Cannot make non static method IA::fa() static in class A`. The synthesized parent interface declared the method
+   non-static; it now says `public static function` (`static_method_on_a_decomposed_parent_agrees`).
 4. **Instance-field initializers in a trait or a multi-parent parent.** `trait T { int k = 9; … } class U { use T; }`
    reading `this.k`: VM and tree-walker `no field k on U`, PHP `18`. The same with a `mutable` field read from outside,
    `trait Tagged { mutable string name = "stored"; } class Base { use Tagged; }` then `new Base().name` (re-found by row
    4b's trait-`this` test, 2026-10-26). With `open class A { int x = 1; } open class B
    { int y = 2; } class M extends A, B`: VM and tree-walker `no field y on M`; PHP `M::$x must not be accessed before
    initialization`. The "needs a trait constructor" rule further down this file is not enforced by the checker.
+5. **A subclass of a trait-using class does not see the trait's members** (found 2026-10-26 by row 4c; pre-existing). With
+   `trait T { function f(): int { return 1; } } open class U { use T; } class V extends U {}`, `new V().f()` is a type
+   error (`type V has no method f`); so are `V.sf()` for a trait static method, `v.k = 4` for a trait field and `V.s`
+   for a trait static. It is a false rejection on every leg, not a split: PHP accepts all four. The checker flattens
+   class inheritance before it merges traits into their using classes, so nothing a trait supplies reaches a subclass.
+   Queued with row 4c.
 
 ## STRING-EQ-DECIMAL-ERASED — a decimal compared inside an erased generic BODY is scale-sensitive on the PHP leg (DEC-557, 2026-10-02)
 

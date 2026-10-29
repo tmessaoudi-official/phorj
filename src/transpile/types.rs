@@ -9,7 +9,11 @@ impl Transpiler {
     pub(super) fn static_ref(&self, object: &Expr, name: &str) -> Option<String> {
         if let Expr::Ident(cls, _) = object {
             if !self.is_local(cls) && self.classes.contains(cls) {
-                return Some(format!("{cls}::${name}"));
+                let owner = self
+                    .static_owners
+                    .get(&(cls.clone(), name.to_string()))
+                    .unwrap_or(cls);
+                return Some(format!("{owner}::${name}"));
             }
         }
         None

@@ -8209,3 +8209,46 @@ fn static_method_on_a_decomposed_parent_agrees() {
         "row4c_static_method_decomposed_parent",
     );
 }
+
+/// Item 2: a static field read or written through a subclass is the declaring class's ONE slot, as in
+/// PHP (spec "Comprehensive statics", Area A: statics are inherited, resolved to the declaring class,
+/// the most-derived owner first). A redeclaring subclass keeps its own slot; a trait's static stays a
+/// per-using-class copy (S8). Before the fix the VM rejected
+/// `M.sa` at compile time and the tree-walker faulted on the read and forked a second copy on a write.
+#[test]
+fn an_inherited_static_field_is_the_declaring_classs_one_slot() {
+    for (src, expected, tag) in [
+        (
+            "open class A { static mutable int sa = 2; } class M extends A {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { int v = M.sa + 1; \
+             Output.printLine(\"{v}\"); M.sa = 7; Output.printLine(\"{A.sa} {M.sa}\"); \
+             A.sa = 9; Output.printLine(\"{A.sa} {M.sa}\"); M.sa += 1; Output.printLine(\"{A.sa}\"); }",
+            "3\n7 7\n9 9\n10\n",
+            "row4c_static_inherited_shared",
+        ),
+        (
+            "open class A { static mutable int sa = 2; } class M extends A { static mutable int sa = 5; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { M.sa = 7; \
+             Output.printLine(\"{A.sa} {M.sa}\"); }",
+            "2 7\n",
+            "row4c_static_redeclared_own_slot",
+        ),
+        (
+            "open class A { static mutable int sa = 2; } open class B { function g(): int { return 1; } } \
+             class M extends A, B {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { M.sa = 7; \
+             Output.printLine(\"{A.sa} {M.sa}\"); }",
+            "7 7\n",
+            "row4c_static_inherited_multi_parent",
+        ),
+        (
+            "trait T { static mutable int s = 1; } class U { use T; } class W { use T; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { U.s = 4; \
+             Output.printLine(\"{U.s} {W.s}\"); }",
+            "4 1\n",
+            "row4c_static_trait_copy_per_user",
+        ),
+    ] {
+        agree_out_php(&format!("import Core.Output; {src}"), expected, tag);
+    }
+}

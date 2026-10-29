@@ -14,6 +14,7 @@ impl Transpiler {
             foreign_classes: HashSet::new(),
             classes: HashSet::new(),
             consts: HashSet::new(),
+            static_owners: std::collections::BTreeMap::new(),
             variants: HashSet::new(),
             enums: HashSet::new(),
             keep: None,

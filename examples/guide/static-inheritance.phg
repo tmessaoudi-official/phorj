@@ -2,6 +2,10 @@
 // subclass by name (`Child.make(..)`), resolving to the declaring class's body. Same for a static
 // supplied by a `trait`. This closes the B0 limitation where a static call was own-class-only.
 //
+// A static FIELD is inherited the same way: `Triangle.made` names `Shape`'s one slot, so a write
+// through the subclass is seen through the base, as in PHP (plan row 4c). A subclass that redeclares
+// the field gets its own slot instead.
+//
 // (Still deliberately out of scope: late static binding — `static::` / `new static()` — see
 // KNOWN_ISSUES; the explicit per-subclass override is the workaround.)
 package Main;
@@ -12,6 +16,7 @@ import Core.Runtime.EntryKind;
 
 // `open` is required to allow extension (Phorj classes are final by default).
 open class Shape {
+    mutable static int made = 0;
     static function describe(int sides): string {
         return "a polygon with {sides} sides";
     }
@@ -40,4 +45,8 @@ function main(): void {
     Output.printLine(Shape.describe(6));
     // A trait-supplied static, called on the using class.
     Output.printLine(Widget.tag());
+    // One counter, written through the subclass, read through the base.
+    Triangle.made = Triangle.made + 2;
+    Shape.made = Shape.made + 1;
+    Output.printLine("made: {Shape.made} {Triangle.made}");
 }

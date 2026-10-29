@@ -351,6 +351,15 @@ pub(super) fn compile_program_with(
             }
         }
     }
+    // Plan row 4c item 2: a static named through an inheriting class is its owner's ONE slot — an
+    // alias entry, never a second slot (`ast::static_field_owners`, shared with both other backends).
+    for ((class, field), owner) in crate::ast::static_field_owners(program) {
+        if owner != class {
+            if let Some(entry) = statics_index.get(&(owner, field.clone())).cloned() {
+                statics_index.insert((class, field), entry);
+            }
+        }
+    }
 
     // Methods follow the constructors in the index space; build the dispatch table — and the
     // `(class, method) → return type` table `ctype` reads for a method-call result — in lockstep.

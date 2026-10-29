@@ -158,6 +158,9 @@ impl<'c> Interp<'c> {
             .into_iter()
             .map(|(key, (v, _ty))| (key, v))
             .collect();
+        self.static_owners = crate::ast::static_field_owners(program)
+            .into_iter()
+            .collect();
         // Expression field initializers (Feature B): the shared ordered list per class.
         for it in &program.items {
             if let Item::Class(c) = it {
@@ -175,6 +178,16 @@ impl<'c> Interp<'c> {
     /// (already stored). Literal statics are already seeded by `collect`, so they are skipped here —
     /// matching the VM, which keeps literals in `static_inits` and emits a `SetStatic` prelude only for
     /// the non-literals. Runs after `collect`, so every function/static is available.
+    /// The `statics` key a `cls.name` access names: the owning class's slot when `cls` inherits the
+    /// static (plan row 4c item 2), else `cls` itself (an unknown name then faults as before).
+    pub(super) fn static_key(&self, cls: &str, name: &str) -> (String, String) {
+        let key = (cls.to_string(), name.to_string());
+        match self.static_owners.get(&key) {
+            Some(owner) => (owner.clone(), key.1),
+            None => key,
+        }
+    }
+
     pub(super) fn eval_static_inits(&mut self, program: &Program) -> R<()> {
         for item in &program.items {
             let Item::Class(c) = item else { continue };

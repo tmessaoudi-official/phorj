@@ -65,6 +65,7 @@ pub fn emit_split(
     t.class_implements = crate::ast::class_implements(program);
     t.class_tables = crate::native::ClassTables::from_program(program);
     t.consts = crate::ast::class_consts(program).into_keys().collect();
+    t.static_owners = crate::ast::static_field_owners(program);
     t.decomposed = decomposed_classes(program);
     t.collect(program);
 

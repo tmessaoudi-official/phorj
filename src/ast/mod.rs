@@ -14,6 +14,7 @@ mod item_meta;
 #[macro_use]
 mod leaves;
 mod lower_using;
+mod static_owners;
 mod subexprs;
 mod walk;
 #[cfg(test)]
@@ -24,6 +25,7 @@ pub use class_layout::*;
 pub use entry::*;
 pub use item_meta::*;
 pub use lower_using::*;
+pub use static_owners::*;
 pub use subexprs::*;
 pub use walk::*;
 

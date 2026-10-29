@@ -144,7 +144,7 @@ impl<'c> Interp<'c> {
                             if let Some(v) = self.consts.get(&(cls.clone(), name.clone())) {
                                 return Ok(v.clone());
                             }
-                            return match self.statics.get(&(cls.clone(), name.clone())) {
+                            return match self.statics.get(&self.static_key(cls, name)) {
                                 Some(v) => Ok(v.clone()),
                                 None => rt(format!("no static field `{name}` on `{cls}`")),
                             };
