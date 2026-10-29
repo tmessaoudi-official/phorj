@@ -7916,16 +7916,35 @@ fn null_coalesce_class_rhs_null_path_runs_the_hook() {
     );
 }
 
+/// The VM fix is guarded on the two native legs. The PHP leg is PINNED to its known, different
+/// output: PHP runs a subclass's set hook when the parent constructor assigns a promoted field
+/// (`set:d` at construction); the native legs do not. Which semantics phorj wants is a PENDING
+/// language question (KNOWN_ISSUES SET-HOOK-DURING-CONSTRUCTION, register DEC-571), so this test
+/// asserts today's split exactly — any change on either side reopens it instead of drifting.
 #[test]
 fn vm_hook_write_through_a_supertype_runs_the_setter() {
-    agree_out_php(
+    let src = with_pkg(
         "import Core.Output; open class Animal { constructor(public mutable string name) {} } \
          class Dog extends Animal { string name { get => \"hooked\"; set(string v) { Output.printLine(\"set:{v}\"); } } } \
          #[Entry(kind: EntryKind.Cli)] function main(): void { Dog d = new Dog(\"d\"); Animal a = d; a.name = \"w\"; \
          Output.printLine(\"{d.name} {a.name}\"); }",
-        "set:w\nhooked hooked\n",
-        "vwsc_hook_write_supertype",
     );
+    let tree = cmd_treewalk(&src);
+    let vm = cmd_run(&src);
+    assert_eq!(tree, vm, "interp vs VM for vwsc_hook_write_supertype");
+    assert_eq!(
+        tree.as_deref(),
+        Ok("set:w\nhooked hooked\n"),
+        "oracle output"
+    );
+    if let Some(php) = php_or_gate("vwsc_hook_write_supertype") {
+        let php_src = cli::cmd_transpile(&src).expect("transpile ok");
+        assert_eq!(
+            run_php(&php, &php_src, "vwsc_hook_write_supertype"),
+            "set:d\nset:w\nhooked hooked\n",
+            "the PHP leg's known SET-HOOK-DURING-CONSTRUCTION split changed — reopen DEC-571"
+        );
+    }
 }
 
 #[test]
@@ -7955,5 +7974,21 @@ fn vm_runtime_class_ops_compose_in_one_expression() {
          Output.printLine(\"{n.kind()} {a.show()} {m?.name ?? \"none\"}\"); }",
         "dog/dog\ndog show:hooked hooked\n",
         "vwsc_compose",
+    );
+}
+
+/// The runtime-class hook ops cache their lookup per site, keyed on the runtime class. One site
+/// (`this.name` in `Animal.tag`) alternately sees a hookless `Animal` and a hooked `Dog`, so a cache
+/// that ignored the class would answer the second with the first's result.
+#[test]
+fn vm_runtime_hook_cache_is_keyed_on_the_runtime_class() {
+    agree_out_php(
+        "import Core.Output; open class Animal { constructor(public string name) {} \
+         function tag(): string { return this.name; } } \
+         class Dog extends Animal { string name { get => \"rex\"; } } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { List<Animal> xs = [new Animal(\"a\"), new Dog(\"x\"), new Animal(\"b\"), new Dog(\"y\")]; \
+         mutable string out = \"\"; for (Animal x in xs) { out = out + x.tag() + \" \"; } Output.printLine(out); }",
+        "a rex b rex \n",
+        "vwsc_hook_cache_polymorphic",
     );
 }

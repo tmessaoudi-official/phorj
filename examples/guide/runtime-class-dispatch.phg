@@ -6,7 +6,7 @@ import Core.Runtime.EntryKind;
 
 // A value typed as a base class still behaves as the class it IS at run time. `with` copies the
 // runtime class (the constructor does not run), and a property hook declared by a subclass runs
-// even when the value is read or written through the base type.
+// even when the value is read through the base type.
 open class Animal {
     constructor(public mutable string name) {}
     open function kind(): string {
@@ -20,9 +20,6 @@ open class Animal {
 class Dog extends Animal {
     string name {
         get => "Rex";
-        set(string v) {
-            Output.printLine("(a dog keeps its name, ignoring {v})");
-        }
     }
     function kind(): string {
         return "dog";
@@ -39,9 +36,8 @@ function main(): void {
     // The subclass's hook runs through the base type, including inside a base-class method.
     Output.printLine("{a.name} / {a.introduce()}");
     // Rex / I am Rex
-    // A write through the base type runs the subclass's setter.
-    a.name = "Max";
-    // (a dog keeps its name, ignoring Max)
-    Output.printLine(a.name);
+    // A plain (non-dog) animal reads its stored name through the same method.
+    Animal c = new Animal("Tom");
+    Output.printLine(c.introduce());
 }
-// Rex
+// I am Tom

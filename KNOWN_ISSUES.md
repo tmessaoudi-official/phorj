@@ -1,5 +1,19 @@
 # Known Issues & Limitations
 
+## SET-HOOK-DURING-CONSTRUCTION — PHP runs a subclass's set hook during construction and `with`; the native legs do not (found 2026-10-26)
+
+Found by row 4b's CI run (the PHP leg of `tests/differential.rs`). This predates the row: the transpiler output is
+unchanged by it, and the interpreter and the VM agree. Two shapes split the interpreter from PHP:
+
+| program | interpreter = VM | PHP 8.5 / 8.6-dev |
+|---|---|---|
+| `open class Animal { constructor(public mutable string name) {} }` with `class Dog extends Animal { string name { get => "hooked"; set(string v) { Output.printLine("set:{v}"); } } }`, then `new Dog("d")` | prints nothing at construction | `set:d`: the parent constructor's promoted assignment goes through the child's set hook |
+| the same `Dog`, then `d with { name = "Fido" }` | writes the slot; the setter does not run | `clone($d, ['name' => 'Fido'])` runs the set hook |
+
+A get-only hook is not affected (no setter to run). Which behaviour phorj wants is a language question, recorded
+PENDING as DEC-571 (Invariant 15). `vm_hook_write_through_a_supertype_runs_the_setter` pins today's PHP output so
+that either side changing reopens it.
+
 ## DISASSEMBLE-OVERLOAD-ORDER — `phg disassemble` numbers overload sets nondeterministically (found 2026-10-26)
 
 Running `phg disassemble examples/guide/overloading.phg` six times on one binary gave four different listings: the
