@@ -134,6 +134,7 @@ check that proves the gate runs) and carries an Invariant-9 example where it cha
 ### Fragile
 - Rows 10–12 change module paths that `tests/*.rs` and `playground/` import; each stage lands green on its own.
 ### Known issues
+- Hashes cited in the Decisions Log of 2026-10-26..29 (e.g. `cc82b710` = `9d745520`, `12fe3107` = `d27814bb` on `master`) are the cloud branch's; they resolve through `docs/research/2026-10-29-ccr-resign-map.md` (the entries themselves are left as written).
 - Row 4b's default-engine cliffs are closed (steps 5 and 5b). OWED from the PC (docker + PHP): the bench/micro entries for
   a supertype read/write and a non-exact `with`, with and without a subclass hook, and their baselines — see KNOWN_ISSUES
   VM-WITH-STATIC-CLASS.

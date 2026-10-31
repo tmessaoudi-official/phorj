@@ -1,5 +1,7 @@
 # Known Issues & Limitations
 
+> Commit hashes cited below from the 2026-10-25..29 cloud branch (`216af26c` = `909a5045`, `3b61324c` = `098d72d9` on `master`, and any other) resolve through `docs/research/2026-10-29-ccr-resign-map.md`.
+
 ## SET-HOOK-DURING-CONSTRUCTION — PHP runs a subclass's set hook during construction and `with`; the native legs do not (found 2026-10-26)
 
 Found by row 4b's CI run (the PHP leg of `tests/differential.rs`). This predates the row: the transpiler output is
