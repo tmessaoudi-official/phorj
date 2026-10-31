@@ -1,5 +1,7 @@
 # Cloud and PC readiness — verification round, 2026-10-27
 
+> **Status 2026-10-31:** this report is the PRE-landing state. The branch landed on `master` as `b8f383ba` on 2026-10-29 (a rebase, not the fast-forward described below: 3 PC commits had stayed unpushed), so `tools/cloud-kit/` is on `master`; re-signed hashes resolve through `docs/research/2026-10-29-ccr-resign-map.md`. Still open: the key env var, the setup script and a fresh-session check (cloud-kit plan row 5).
+
 Branch `ccr-56056e44-aec471` at `b4b4ad6e` (`docs: row 4c close round 2 on frozen 216af26c — DECOMPOSED-PARENT-TRAITS recorded`).
 Every claim carries its evidence grade. "Verified" means it was run or read in this session, with the output quoted.
 
