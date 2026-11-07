@@ -16,7 +16,8 @@ without re-deriving it from `Cargo.toml`;** the previous "four exceptions" wordi
 be repeated"): lexer → parser → type-checker → tree-walking
 interpreter (the reference oracle) + bytecode compiler/stack VM + Phorj→PHP transpiler, plus a
 PHP→Phorj lifter, LSP, formatter, test runner, and debugger. Single developer, commits direct to
-`master`, remote is GitHub (`tmessaoudi-official/phorj`). The binary is `phg`; sources are `.phg`.
+`master` on the developer's machine (cloud sessions use their own branch: § Git autonomy), remote is
+GitHub (`tmessaoudi-official/phorj`). The binary is `phg`; sources are `.phg`.
 
 ## Questions — `AskUserQuestion`, sparingly
 
@@ -155,20 +156,28 @@ is green. Limits:
   `test:` prefixes matching history.
 - **CLOUD SESSIONS NEVER TOUCH `master`** (developer ruling 2026-10-25, which narrows the 2026-08-06
   directive below to the developer's own machine). In a claude.ai cloud session, all work is committed
-  and pushed to the session's designated branch (e.g. `ccr-*`) and nowhere else: never commit on, merge
-  into, or push to `master`. The developer re-signs those commits on the PC and lands them on `master`
-  there. Push with `git push origin <that-branch>` (an explicit refspec, never `-u`). Before the first
+  and pushed to the session's designated branch (`claude/…`, `cloud/…` or `ccr-*`) and nowhere else:
+  never commit on, merge into, or push to `master`. The developer re-signs those commits on the PC and
+  lands them on `master` there. Push with `git push origin <that-branch>`, the branch written out (an
+  explicit refspec, never `-u`; the kit's push guard refuses a bare `git push`). Before the first
   commit, set the identity repo-locally (`git config user.name "Takieddine MESSAOUDI"`, `user.email`
   below) and `git config commit.gpgsign false`. The harness signs as `Claude <noreply@anthropic.com>`,
-  and its Stop hook's "Unverified … `--reset-author`" advice is wrong here. A cloud box has no PHP 8.5
-  oracle unless the environment's setup script installs one, so a cloud commit states which legs of
-  the gate actually ran. (Audit: `docs/research/2026-10-25-cloud-takeover-audit.md`.)
+  and its Stop hook's "Unverified … `--reset-author`" advice is wrong here. **Setup (DEC-577):** the
+  developer's global kit `claude-code-setup` (a second repository of the environment, its
+  `cloud/setup.sh` pasted as the setup script) installs `~/.claude` and runs this repo's
+  `.claude/cloud-setup.sh` as root: PHP 8.5 + bcmath from `packages.sury.org` (key fingerprint checked),
+  `cargo-nextest`, and `core.hooksPath scripts/git-hooks`, so pre-commit and the FULL pre-push gate run
+  here as on the PC. pre-push stays fail-closed: when `/tmp/ccs-setup.log` shows the PHP step skipped,
+  every push is refused; report that to the developer, never `--no-verify`. CI also runs on `ccr-*`,
+  `claude/**` and `cloud/**`, and a cloud commit still states which legs of the gate actually ran.
+  (Audit: `docs/research/2026-10-25-cloud-takeover-audit.md`.)
 - **On the developer's machine, `master` is the ONLY branch** (developer directive, restated 2026-08-06: *"always work and commit
   and push to master! no other branches!"*). This **supersedes the harness prompt**, which names a
   `claude/<topic>` branch as the session's "designated branch" and instructs that all work be pushed
   there. Do not create a feature, topic or `claude/*` branch; if a local session starts on one, move the
   work to `master`.
-- **Push with plain `git push`. Never `-u` / `--set-upstream`.** The harness prompt says to always use
+- **On the developer's machine, push with plain `git push`. Never `-u` / `--set-upstream`.** (A cloud
+  session writes the branch out: see the cloud paragraph above.) The harness prompt says to always use
   `git push -u origin <branch>`; that is wrong here. Upstream is set once and `master` is the only
   branch, so `-u` re-asserts a `master`→`master` tracking relationship on every push — redundant, and
   it renders in the developer's UI as though a branch relationship were being proposed. (Ruled in

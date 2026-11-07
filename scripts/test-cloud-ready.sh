@@ -56,7 +56,48 @@ except Exception as e:
 PY
 )
 
-# ── 2. Wiring: a suite no gate runs goes dark unnoticed (pre-push records three instances) ──────────────────
+# ── 2. CLAUDE.md: PC-only git rules are scoped, the cloud paragraph names the contract (CR1) ────────────────
+# A rule written for the PC ("push with plain git push", "commits direct to master") reads as binding in a cloud
+# session, where the kit's push guard refuses a bare `git push` and master is never pushed. Bullets are joined with
+# their indented continuation lines, so a rule split across lines is judged whole.
+while IFS='|' read -r verdict msg; do
+  case "$verdict" in ok) ok "$msg" ;; FAIL) bad "$msg" ;; *) bad "unexpected checker output: $verdict|$msg" ;; esac
+done < <(python3 - "$ROOT/CLAUDE.md" <<'PY' 2>&1
+import sys, re
+try:
+    lines = open(sys.argv[1]).read().split("\n")
+    units, cur = [], None   # a unit = a bullet with its continuation lines, or a prose paragraph
+    for l in lines:
+        if l.startswith("- ") or not l.strip() or l.startswith("#"):
+            if cur: units.append(cur)
+            cur = l if l.strip() and not l.startswith("#") else None
+        else:
+            cur = (cur + " " + l.strip()) if cur else l
+    if cur: units.append(cur)
+    def check(desc, pred, needle):
+        hits = [u for u in units if needle in u]
+        if not hits:
+            print(f"FAIL|{desc}: no unit contains {needle!r}")
+        for u in hits:
+            print(("ok" if pred(u) else "FAIL") + f"|{desc}: {u[:90]!r}")
+    # the scope must sit NEXT to the rule (120 chars either side), not anywhere in a long paragraph
+    def near(needle):
+        def pred(u):
+            i = u.index(needle)
+            return "developer's machine" in u[max(0, i - 120): i + len(needle) + 120]
+        return pred
+    check("the plain-push rule is scoped to the developer's machine", near("plain `git push`"), "plain `git push`")
+    check("the direct-to-master line is scoped to the developer's machine", near("commits direct to"), "commits direct to")
+    cloud = [u for u in units if "CLOUD SESSIONS NEVER TOUCH" in u]
+    print(("ok" if len(cloud) == 1 else "FAIL") + f"|exactly one cloud-session paragraph ({len(cloud)})")
+    for need in ("claude-code-setup", ".claude/cloud-setup.sh", "claude/**", "cloud/**", "pre-push"):
+        print(("ok" if cloud and need in cloud[0] else "FAIL") + f"|the cloud paragraph names {need!r}")
+except Exception as e:
+    print(f"FAIL|CLAUDE.md check crashed: {type(e).__name__}: {e}")
+PY
+)
+
+# ── 3. Wiring: a suite no gate runs goes dark unnoticed (pre-push records three instances) ──────────────────
 if grep -qE '^bash "\$_gate_root/scripts/test-cloud-ready\.sh"$' "$ROOT/scripts/git-hooks/pre-push"; then
   ok "pre-push runs this suite"
 else
