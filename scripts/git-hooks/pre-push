@@ -110,6 +110,8 @@ bash "$_gate_root/scripts/test-validate-infra.sh"
 # run, ~2s, no builds, no network.
 echo "[pre-push] test-cloud-ready (the cloud-session contract)"
 bash "$_gate_root/scripts/test-cloud-ready.sh"
+echo "[pre-push] test-cloud-setup (the cloud toolchain hook's own behaviour tests)"
+bash "$_gate_root/scripts/test-cloud-setup.sh"
 
 # Third instance of the SAME failure, and the worst so far: surface-ratchet.sh shipped 2026-08-08
 # with no behaviour suite, and had been measuring the wrong thing from day one — `grep --include`

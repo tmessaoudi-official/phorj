@@ -98,11 +98,20 @@ PY
 )
 
 # ── 3. Wiring: a suite no gate runs goes dark unnoticed (pre-push records three instances) ──────────────────
-if grep -qE '^bash "\$_gate_root/scripts/test-cloud-ready\.sh"$' "$ROOT/scripts/git-hooks/pre-push"; then
-  ok "pre-push runs this suite"
-else
-  bad "pre-push does not run scripts/test-cloud-ready.sh"
-fi
+for suite in test-cloud-ready test-cloud-setup; do
+  if grep -qE "^bash \"\\\$_gate_root/scripts/$suite\\.sh\"\$" "$ROOT/scripts/git-hooks/pre-push"; then
+    ok "pre-push runs scripts/$suite.sh"
+  else
+    bad "pre-push does not run scripts/$suite.sh"
+  fi
+done
+
+# ── 4. The toolchain hook is TRACKED executable (CR3) ───────────────────────────────────────────────────────
+# The kit runs <workspace>/.claude/cloud-setup.sh only when it is an executable regular file on a FRESH clone, so the
+# mode git records is what counts — and core.fileMode=false on the PC means a local chmod never reaches the index.
+mode="$(git -C "$ROOT" ls-files -s .claude/cloud-setup.sh | cut -c1-6)"
+[[ "$mode" == 100755 ]] && ok ".claude/cloud-setup.sh is tracked as 100755" \
+                        || bad ".claude/cloud-setup.sh is tracked as '${mode:-untracked}', not 100755 (git update-index --chmod=+x)"
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [[ $FAIL -eq 0 && $PASS -gt 0 ]]
