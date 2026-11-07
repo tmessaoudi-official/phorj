@@ -31,10 +31,10 @@ after-states-inside-options, and the DEC-row discipline are unchanged. Protocol:
 
 This sub-project is handled with the global reasoning framework (`~/.claude/CLAUDE.md`) — the
 developer's own persistent install; this repo never writes it on the PC (the container-era
-`scripts/claude-bootstrap/` reinstaller was removed 2026-08-18). The one exception is deliberate:
-`tools/cloud-kit/` (DEC-570) carries an **encrypted** copy that installs **only** in claude.ai cloud
-containers, triggered by the cloud environment's setup script, never by anything in this repo's
-`.claude/`. It is inert on the PC; do not remove it as a duplicate. It is
+`scripts/claude-bootstrap/` reinstaller was removed 2026-08-18). In claude.ai cloud sessions the
+developer's separate global kit `claude-code-setup` installs it, and runs this repo's
+`.claude/cloud-setup.sh` for phorj's toolchain (DEC-577, § Git autonomy); the in-repo encrypted copy
+`tools/cloud-kit/` (DEC-570) is RETIRED and removed — never restore it. This repo is
 NOT `/stack` infrastructure, and there is **no orchestrator agent to route to** — the
 `global-stack-lead-dev` agent was deleted 2026-08-19 at the developer's request; never recreate it,
 and never route work here (or in `/stack`) to it. Work is done directly in this conversation; the

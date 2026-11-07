@@ -113,5 +113,18 @@ mode="$(git -C "$ROOT" ls-files -s .claude/cloud-setup.sh | cut -c1-6)"
 [[ "$mode" == 100755 ]] && ok ".claude/cloud-setup.sh is tracked as 100755" \
                         || bad ".claude/cloud-setup.sh is tracked as '${mode:-untracked}', not 100755 (git update-index --chmod=+x)"
 
+# ── 5. One cloud contract: the DEC-570 kit is retired (D1) ──────────────────────────────────────────────────
+# Two installers of ~/.claude for one environment (it runs ONE setup script) is how the PHP install silently stopped.
+[[ -z "$(git -C "$ROOT" ls-files tools/cloud-kit)" ]] && ok "tools/cloud-kit tracks no file" \
+                                                    || bad "tools/cloud-kit still tracks files (DEC-577 retired it)"
+if grep -q 'do not remove it as a duplicate' "$ROOT/CLAUDE.md"; then
+  bad "CLAUDE.md still protects tools/cloud-kit as a live path"
+else
+  ok "CLAUDE.md no longer protects tools/cloud-kit"
+fi
+row="$(grep -E '^\| DEC-570 \|' "$ROOT/docs/research/full-audit/raw/C-decisions.md" | awk -F' \\| ' '{print $NF}')"
+[[ "$row" == *RETIRED*DEC-577* ]] && ok "the register marks DEC-570 RETIRED by DEC-577" \
+                                  || bad "DEC-570's status cell is not 'RETIRED … DEC-577': ${row:0:80}"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [[ $FAIL -eq 0 && $PASS -gt 0 ]]
