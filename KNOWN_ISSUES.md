@@ -18,7 +18,7 @@ and `master` by the `master-signed` ruleset.
 Pre-existing: any branch anyone with push access pushed could do this before DEC-577; the cloud branch patterns only add
 a session that pushes branches. Who can push a workflow change is the real boundary (GitHub refuses a push touching
 `.github/workflows/**` from a credential without the `workflows` permission) — whether the claude.ai cloud credential
-has it is [Unverified]. Closing it is the developer's call (asked 2026-11-07).
+has it is [Unverified]. **ACCEPTED as documented by the developer, 2026-11-07** (`AskUserQuestion`, 6C round 1): `dev` is a throwaway channel; `v*` and `master` stay ruleset-protected.
 
 ## SET-HOOK-DURING-CONSTRUCTION — PHP runs a subclass's set hook during construction and `with`; the native legs do not (found 2026-10-26)
 
