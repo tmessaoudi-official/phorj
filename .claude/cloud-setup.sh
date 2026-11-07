@@ -4,7 +4,7 @@
 # starts, with stdout and stderr appended to /tmp/ccs-setup.log, inside ONE time budget shared by every workspace's hook
 # (CCS_HOOK_BUDGET, default 120 s). It installs what phorj's gates need beyond the kit:
 #   1. core.hooksPath scripts/git-hooks  — pre-commit and the FULL pre-push gate run as on the PC (D4); pre-push stays
-#                                          fail-closed, so a push needs step 2's oracle;
+#                                          fail-closed, so a push needs step 3's oracle;
 #   2. gpg + PyYAML                      — only when absent, from the image's own archive: step 3's trust check needs gpg, and
 #                                          scripts/test-cloud-ready.sh (run by pre-push) imports yaml;
 #   3. PHP 8.5 + bcmath                  — the byte-identity oracle, from packages.sury.org (D2; Ubuntu ships 8.3 and the
@@ -48,11 +48,15 @@ prereqs() {
   # the import's exit status is the answer; the ModuleNotFoundError traceback it prints when absent is not news
   python3 -c 'import yaml' >/dev/null 2>&1 || need+=(python3-yaml)
   if [[ ${#need[@]} -eq 0 ]]; then say INFO "prereqs: gpg and PyYAML present"; return 0; fi
-  if apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${need[@]}"; then
-    say INFO "prereqs: installed ${need[*]} from the image archive"
-  else
+  if ! { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${need[@]}"; }; then
     say ERROR "prereqs: apt-get failed for ${need[*]} (output above)"
   fi
+  # judged by what is there afterwards, not by apt's exit status
+  local still=()
+  command -v gpg >/dev/null || still+=(gnupg)
+  python3 -c 'import yaml' >/dev/null 2>&1 || still+=(python3-yaml)
+  if [[ ${#still[@]} -eq 0 ]]; then say INFO "prereqs: installed ${need[*]} from the image archive"
+  else say ERROR "prereqs: still missing: ${still[*]}: pre-push will refuse every push"; fi
 }
 
 php_oracle() {
@@ -72,9 +76,12 @@ php_oracle() {
     say ERROR "php: sury key download failed ($SURY_KEY_URL): PHP skipped, pre-push will refuse every push"
   elif ! gpg --homedir "$t/gnupg" --batch --dearmor <"$t/apt.gpg" >"$t/key.gpg" 2>"$t/gpg.err"; then
     say ERROR "php: sury key is not an OpenPGP key (gpg: $(tr '\n' ' ' <"$t/gpg.err" | cut -c1-300)): PHP skipped"
-  elif fprs="$(gpg --homedir "$t/gnupg" --batch --show-keys --with-colons "$t/key.gpg" 2>"$t/gpg.err" \
-                | awk -F: '$1=="pub"||$1=="sec"{want=1} $1=="fpr"&&want{print $10; want=0}')" \
-       && [[ "$fprs" != "$SURY_FPR" ]]; then
+  # Listing and comparing are separate branches: joined with `&&`, a failing awk (status 127) made the whole test false
+  # and fell through to TRUST the key. Here a failing awk refuses it; a failing gpg leaves fprs empty, which the pin refuses.
+  elif ! fprs="$(gpg --homedir "$t/gnupg" --batch --show-keys --with-colons "$t/key.gpg" 2>"$t/gpg.err" \
+                | awk -F: '$1=="pub"||$1=="sec"{want=1} $1=="fpr"&&want{print $10; want=0}')"; then
+    say ERROR "php: the sury key's fingerprints cannot be listed (gpg: $(tr '\n' ' ' <"$t/gpg.err" | cut -c1-300)): PHP skipped"
+  elif [[ "$fprs" != "$SURY_FPR" ]]; then
     say ERROR "php: sury key is not exactly the pinned key $SURY_FPR (got: $(tr '\n' ' ' <<<"$fprs"); gpg: $(tr '\n' ' ' <"$t/gpg.err" | cut -c1-300)): PHP skipped"
   # a missing os-release is reported by the codename test itself, so sed's own complaint is not needed
   elif codename="$(sed -n 's/^VERSION_CODENAME=//p' "$P/etc/os-release" 2>/dev/null | tr -d '"')"

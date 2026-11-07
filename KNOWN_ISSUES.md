@@ -12,13 +12,19 @@ then gates the job: the environment holds no secret (`gh api …/environments/re
 the only credential is the `GITHUB_TOKEN`, and a same-repo branch workflow may request `contents: write` even though the
 repository default is read (the `dev` prerelease itself is written that way). With it, a branch can force-move
 `refs/tags/dev` (outside the `v*` tag ruleset on purpose: publish-dev moves it) and recreate the `dev` prerelease with
-other binaries. The `v*` tags are protected by their ruleset (only a repository admin can create, move or delete them),
-and `master` by the `master-signed` ruleset.
+other binaries. The `v*` tags are protected by their ruleset (only a repository admin can create, move or delete them).
+`master`: the `master-signed` ruleset first required only signatures, no deletion and no force-push, which a commit the
+API creates for the Actions token would likely satisfy (GitHub signs those, [Inferred: not tested, it would write
+master]); since 2026-11-07 (6C round 2, the developer's ruling) it also restricts updates, with a Repository-admin bypass
+only [Verified: `gh api …/rulesets/26086018` → rules required_signatures, deletion, non_fast_forward, update; bypass
+RepositoryRole 5]. Release ASSETS are not covered by either ruleset (immutable releases are off): the same token could
+replace the files of a future `v*` release. Out of the cloud-ready scope (ruled 2026-11-07); recorded so it is not lost.
 
 Pre-existing: any branch anyone with push access pushed could do this before DEC-577; the cloud branch patterns only add
 a session that pushes branches. Who can push a workflow change is the real boundary (GitHub refuses a push touching
 `.github/workflows/**` from a credential without the `workflows` permission) — whether the claude.ai cloud credential
-has it is [Unverified]. **ACCEPTED as documented by the developer, 2026-11-07** (`AskUserQuestion`, 6C round 1): `dev` is a throwaway channel; `v*` and `master` stay ruleset-protected.
+has it is [Unverified]. **ACCEPTED as documented by the developer, 2026-11-07** (`AskUserQuestion`, 6C round 1): `dev` is a
+throwaway channel; the `v*` tags and (since round 2) `master` updates are ruleset-restricted to a repository admin.
 
 ## SET-HOOK-DURING-CONSTRUCTION — PHP runs a subclass's set hook during construction and `with`; the native legs do not (found 2026-10-26)
 

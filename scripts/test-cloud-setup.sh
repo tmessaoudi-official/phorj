@@ -2,11 +2,18 @@
 # Behaviour tests for .claude/cloud-setup.sh — the toolchain hook the developer's global kit runs as root when a
 # claude.ai cloud environment is set up (DEC-577). Run by scripts/git-hooks/pre-push via test-cloud-ready.sh's
 # wiring check. The hook trusts a third-party apt key and installs packages, so its guards are tested by EXECUTION:
-#   - off the cloud (no CLAUDE_CODE_REMOTE, or a stray export with HOME not /root) it does nothing at all;
-#   - the sury key is trusted only when it is exactly ONE key with the pinned fingerprint (a wrong key, an extra key
-#     riding along, a failed download: ERROR, no keyring, no apt source, apt never runs);
+#   - off the cloud (no CLAUDE_CODE_REMOTE, a stray export with HOME not /root, or HOME=/root without the export) it
+#     does nothing at all;
+#   - the sury key is trusted only when it is exactly ONE key, public or secret, with the pinned fingerprint (a wrong
+#     key, an extra public or SECRET key riding along, a failed download, awk missing: ERROR, no keyring, no apt
+#     source, apt never runs);
+#   - prerequisites: gpg and PyYAML are installed only when absent, judged afterwards by what is there; gpg missing is
+#     reported as gpg missing, never as a bad key;
+#   - every other failure branch (apt fails, no VERSION_CODENAME, keyring unwritable, php8.5 without bcmath, not
+#     phorj's root) is logged and leaves nothing half-installed;
 #   - cargo-nextest is installed only when the download matches the pinned sha256;
-#   - every step logs its seconds; the hook always exits 0 (it must never fail the environment).
+#   - every step logs its seconds; the hook always exits 0 (it must never fail the environment); no run leaves a
+#     temp dir.
 # Isolation: a closed PATH (fake curl/apt-get + symlinks to the real tools the hook needs; this PC's own php8.5,
 # llvm-objcopy and cargo-nextest must be invisible), root-only paths under PHORJ_CLOUD_SETUP_PREFIX, a private
 # TMPDIR, a throwaway git repo. Real gpg (on a temp --homedir) parses the real sury public key in
@@ -46,6 +53,7 @@ for t in bash sh env awk sed grep cat mkdir mktemp rm chmod install tar gzip sha
   p="$(command -v "$t" 2>/dev/null)" && [[ "$p" == /* ]] && ln -sf "$p" "$TOOLS/$t"
 done
 NOGPG="$TMP/tools-nogpg"; cp -a "$TOOLS" "$NOGPG"; rm -f "$NOGPG/gpg"   # the same closed PATH, minus gpg
+NOAWK="$TMP/tools-noawk"; cp -a "$TOOLS" "$NOAWK"; rm -f "$NOAWK/awk"   # ... minus awk (the fingerprint filter)
 REAL_GPG="$(command -v gpg)"
 # fake curl: serves a fixture chosen per run (CS_KEY = file for the sury key URL, CS_FAIL=1 = every download fails)
 cat >"$FAKE/curl" <<'EOF'
@@ -94,7 +102,9 @@ run() {   # $1 = HOME, $2 = CLAUDE_CODE_REMOTE ("" = unset)
          PHORJ_CLOUD_SETUP_PREFIX="$TMP/p" CS_CALLS="$TMP/calls" CS_FAKE="$FAKE" CS_KEY="${CS_KEY:-$KEY}" \
          CS_NEXTEST="$TMP/nextest.tgz" ${CS_FAIL:+CS_FAIL=1} ${CS_APT_FAIL:+CS_APT_FAIL=1} \
          ${CS_NO_BCMATH:+CS_NO_BCMATH=1} ${CS_NO_YAML:+CS_NO_YAML=1} ${CS_GPG:+CS_GPG="$CS_GPG"} bash "$HOOK" 2>&1)"; RC=$?
+  [[ -z "$(ls -A "$TMP/tmp" 2>/dev/null)" ]] || LEAKED+=" [${CASE:-?}]"   # fresh() empties it, so check every run
 }
+LEAKED=""
 php_installed() { grep -qE "^apt-get .*install .*php8\.5-cli" "$TMP/calls"; }
 KR="$TMP/p/usr/share/keyrings/debsuryorg-archive-keyring.gpg"
 SRC="$TMP/p/etc/apt/sources.list.d/php.list"
@@ -148,12 +158,21 @@ check "a failed download still sets hooksPath (the steps are independent)" '[[ "
 fresh; CS_TOOLS="$NOGPG" CS_GPG="$REAL_GPG" run /root true
 check "gpg absent: gnupg is installed from the image archive first, then PHP proceeds" \
   'grep -qE "^apt-get .*install .*gnupg" $TMP/calls && php_installed && [[ -f $KR ]]'
-fresh; CS_TOOLS="$NOGPG" run /root true
+fresh; CASE=gpg-not-installable CS_TOOLS="$NOGPG" run /root true
 check "gpg absent and not installable: ERROR names gpg (not a bad key), no keyring, no PHP install, exit 0" \
   '[[ $RC -eq 0 && ! -e $KR ]] && ! php_installed && grep -qE "ERROR \| php: .*gpg" <<<"$OUT" && ! grep -q "not an OpenPGP key" <<<"$OUT"'
-fresh; CS_NO_YAML=1 run /root true
+check "an install that leaves gpg missing is an ERROR naming it, not an INFO 'installed'" \
+  'grep -qE "ERROR \| prereqs: .*gnupg" <<<"$OUT" && ! grep -qE "INFO \| prereqs: installed" <<<"$OUT"'
+fresh; CASE=prereqs-apt-fails CS_TOOLS="$NOGPG" CS_APT_FAIL=1 run /root true
+check "prereqs apt-get fails: ERROR, exit 0, no keyring" '[[ $RC -eq 0 && ! -e $KR ]] && grep -qE "ERROR \| prereqs: apt-get failed" <<<"$OUT"'
+fresh; CASE=no-yaml CS_NO_YAML=1 run /root true
 check "PyYAML absent: python3-yaml is installed (test-cloud-ready.sh needs it, pre-push runs it)" \
   'grep -qE "^apt-get .*install .*python3-yaml" $TMP/calls'
+check "PyYAML still absent after the install: ERROR says pre-push will refuse every push" \
+  'grep -qE "ERROR \| prereqs: .*python3-yaml.*pre-push will refuse every push" <<<"$OUT"'
+fresh; CASE=no-awk CS_TOOLS="$NOAWK" CS_KEY="$TMP/other.gpg" run /root true
+check "awk absent: a key with another fingerprint is still refused (the pin fails closed), no keyring, no PHP install" \
+  '[[ $RC -eq 0 && ! -e $KR && ! -e $SRC ]] && ! php_installed && grep -qE "ERROR \| php: " <<<"$OUT"'
 
 # ── 6. Every other failure branch: logged, nothing half-installed, exit 0 ───────────────────────────────────
 fresh; CS_APT_FAIL=1 run /root true
@@ -171,7 +190,7 @@ check "not phorj's root (no scripts/git-hooks/pre-push): WARN, hooksPath left un
   '[[ -z "$(hooks_path)" ]] && grep -qE "WARN \| hooksPath: " <<<"$OUT"'
 
 # ── 7. Nothing leaks: the hook's temp dirs are gone ─────────────────────────────────────────────────────────
-check "no temp dir left in TMPDIR" '[[ -z "$(ls -A "$TMP/tmp")" ]]'
+check "no run left a temp dir in TMPDIR (checked after every run)" '[[ -z "$LEAKED" ]]'
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [[ $FAIL -eq 0 && $PASS -gt 0 ]]

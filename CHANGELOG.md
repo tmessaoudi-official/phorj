@@ -14,7 +14,8 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   fingerprint), and a sha256-pinned cargo-nextest, and checks llvm-objcopy. A no-op off the cloud; never fails the
   environment. Behaviour suite `scripts/test-cloud-setup.sh` (fake PATH, real gpg), run by pre-push.
 - CI runs on the cloud branch patterns `ccr-*`, `claude/**` and `cloud/**`; the two publish jobs run in the GitHub
-  environment `release` (branch `master`, tags `v*`), and `v*` tags have a ruleset. Contract test
+  environment `release` (branch `master`, tags `v*`); `v*` tags have a ruleset, and `master-signed` restricts updates
+  to a repository admin. Contract test
   `scripts/test-cloud-ready.sh` (workflows, CLAUDE.md scoping, pre-push wiring, the hook's tracked mode), run by pre-push.
   Residual exposure: KNOWN_ISSUES DEV-PRERELEASE-FROM-BRANCH.
 - CLAUDE.md: the PC-only git rules (plain `git push`, `master` only) are scoped to the developer's machine; one

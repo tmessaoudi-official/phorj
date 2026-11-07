@@ -165,10 +165,11 @@ is green. Limits:
   and its Stop hook's "Unverified … `--reset-author`" advice is wrong here. **Setup (DEC-577):** the
   developer's global kit `claude-code-setup` (a second repository of the environment, its
   `cloud/setup.sh` pasted as the setup script) installs `~/.claude` and runs this repo's
-  `.claude/cloud-setup.sh` as root: PHP 8.5 + bcmath from `packages.sury.org` (key fingerprint checked),
-  `cargo-nextest`, and `core.hooksPath scripts/git-hooks`, so pre-commit and the FULL pre-push gate run
-  here as on the PC. pre-push stays fail-closed: when `/tmp/ccs-setup.log` shows the PHP step skipped,
-  every push is refused; report that to the developer, never `--no-verify`. CI also runs on `ccr-*`,
+  `.claude/cloud-setup.sh` as root: gpg and PyYAML when absent, PHP 8.5 + bcmath from `packages.sury.org`
+  (key fingerprint checked), `cargo-nextest`, and `core.hooksPath scripts/git-hooks`, so pre-commit and the
+  FULL pre-push gate run here as on the PC. pre-push stays fail-closed: when `/tmp/ccs-setup.log` shows the
+  PHP step skipped or a prereq still missing, every push is refused; report that to the developer, never
+  `--no-verify`. CI also runs on `ccr-*`,
   `claude/**` and `cloud/**`, and a cloud commit still states which legs of the gate actually ran.
   (Audit: `docs/research/2026-10-25-cloud-takeover-audit.md`.)
 - **On the developer's machine, `master` is the ONLY branch** (developer directive, restated 2026-08-06: *"always work and commit
