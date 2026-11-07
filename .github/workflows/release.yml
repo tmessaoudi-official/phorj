@@ -109,6 +109,9 @@ jobs:
     name: publish dev prerelease
     needs: build
     if: github.event_name == 'push'
+    # DEC-577: the `release` environment's deployment policy (branch master, tag v*) refuses this job
+    # from a cloud branch. The `if:` above is not that guard: a pushed branch runs its own copy of this file.
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -122,7 +125,7 @@ jobs:
 
       # `gh` is preinstalled on GitHub runners; GITHUB_TOKEN + `contents: write` (set at workflow
       # level) covers release + tag management. `--latest=false` keeps the "Latest" badge on the
-      # newest stable `v*` release — nigdevhtly is a prerelease channel, never the storefront.
+      # newest stable `v*` release — `dev` is a prerelease channel, never the storefront.
       - name: Recreate the rolling dev release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

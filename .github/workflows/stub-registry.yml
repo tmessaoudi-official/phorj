@@ -74,6 +74,8 @@ jobs:
   primary-and-publish:
     name: manifest + primary + publish
     needs: build-stubs
+    # DEC-577: the `release` environment allows branch master and tags v* only (a GitHub setting).
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
