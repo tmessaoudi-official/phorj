@@ -7,8 +7,9 @@ name: CI
 # `cross-build` job exercises `phg build --target` parity across the four Phase-2 cross targets.
 
 # `ccr-*`, `claude/**` and `cloud/**` are cloud-session branches (DEC-569, DEC-577): cloud work never
-# lands on master, and a cloud box may lack the PHP 8.5 oracle that pre-push needs, so CI is their
-# gate of record. scripts/test-cloud-ready.sh keeps these patterns from drifting.
+# lands on master, so CI runs the gate on them on GitHub's runners, independently of the cloud box (whose
+# pre-push is fail-closed: it needs the PHP 8.5 oracle that .claude/cloud-setup.sh installs).
+# scripts/test-cloud-ready.sh, run by pre-push, keeps these patterns from drifting.
 on:
   push:
     branches: [master, 'ccr-*', 'claude/**', 'cloud/**']

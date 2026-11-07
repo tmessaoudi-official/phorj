@@ -6,8 +6,9 @@
 #   - CI runs the tests on every cloud branch pattern (otherwise a cloud branch gets NO gate: the PHP leg is CI-only
 #     until the toolchain hook installs PHP);
 #   - the two jobs that publish releases and move tags run in the `release` environment, whose deployment policy
-#     (a GitHub setting, master + v* tags) refuses them from a cloud branch. A job `if:` is not that guard: a pushed
-#     branch runs the workflow file as that branch has it.
+#     (a GitHub setting, master + v* tags) refuses them when the file runs unmodified from any other ref. Neither
+#     the environment nor a job `if:` stops a branch that edits its own copy of the workflow (KNOWN_ISSUES
+#     DEV-PRERELEASE-FROM-BRANCH).
 # Reads tracked files only; writes nothing outside its own temp dir; no network.
 set -uo pipefail
 
@@ -29,7 +30,13 @@ while IFS='|' read -r verdict msg; do
     *) bad "unexpected checker output: $verdict|$msg" ;;
   esac
 done < <(python3 - "$ROOT" <<'PY' 2>&1
-import sys, os, yaml
+import sys, os
+try:
+    import yaml
+except ImportError:
+    # fail closed, but name the cause: in a cloud session .claude/cloud-setup.sh installs python3-yaml (prereqs step)
+    print("FAIL|PyYAML is not installed: the workflow checks cannot run (apt-get install python3-yaml, or pip install pyyaml)")
+    sys.exit(0)
 root = sys.argv[1]
 def load(p):
     with open(os.path.join(root, p)) as f:

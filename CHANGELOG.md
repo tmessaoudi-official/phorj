@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — cloud sessions run the full gate (DEC-577, 2026-11-07)
+
+- `.claude/cloud-setup.sh`: the toolchain hook the developer's global kit `claude-code-setup` runs as root when a
+  claude.ai cloud environment is set up. It sets `core.hooksPath scripts/git-hooks`, installs gpg and PyYAML when
+  absent, PHP 8.5 + bcmath from packages.sury.org (the key is trusted only when it is exactly one key with the pinned
+  fingerprint), and a sha256-pinned cargo-nextest, and checks llvm-objcopy. A no-op off the cloud; never fails the
+  environment. Behaviour suite `scripts/test-cloud-setup.sh` (fake PATH, real gpg), run by pre-push.
+- CI runs on the cloud branch patterns `ccr-*`, `claude/**` and `cloud/**`; the two publish jobs run in the GitHub
+  environment `release` (branch `master`, tags `v*`), and `v*` tags have a ruleset. Contract test
+  `scripts/test-cloud-ready.sh` (workflows, CLAUDE.md scoping, pre-push wiring, the hook's tracked mode), run by pre-push.
+  Residual exposure: KNOWN_ISSUES DEV-PRERELEASE-FROM-BRANCH.
+- CLAUDE.md: the PC-only git rules (plain `git push`, `master` only) are scoped to the developer's machine; one
+  cloud-session paragraph states the cloud contract.
+
+### Removed — `tools/cloud-kit/` (DEC-570 retired by DEC-577, 2026-11-07)
+
+- The encrypted in-repo cloud kit is gone: the developer's global kit `claude-code-setup` installs the framework and
+  memories in every cloud session, and a cloud environment runs only one setup script.
+
 ### Fixed — plan row 4c: static and composition parity (2026-10-26/27)
 
 - **Close panel round 1**: an inherited static is found in the checker's order (depth-first), so a diamond whose arm

@@ -74,7 +74,10 @@ jobs:
   primary-and-publish:
     name: manifest + primary + publish
     needs: build-stubs
-    # DEC-577: the `release` environment allows branch master and tags v* only (a GitHub setting).
+    # DEC-577: the `release` environment allows branch master and tags v* only (a GitHub setting), so a
+    # workflow_dispatch run from any other ref stops here, before the manifest and the publish: intended, nothing
+    # publishes from a non-release ref. Not a boundary against a branch that edits this file (KNOWN_ISSUES
+    # DEV-PRERELEASE-FROM-BRANCH).
     environment: release
     runs-on: ubuntu-latest
     steps:

@@ -1,5 +1,10 @@
 # Cloud takeover audit (2026-10-25)
 
+> **Superseded in part, 2026-11-07 (DEC-577):** the `ppa:ondrej/php` setup script of §5.4 is rejected. The toolchain
+> now comes from `.claude/cloud-setup.sh` (PHP 8.5 + bcmath from packages.sury.org, fingerprint-pinned key), run by
+> the developer's global kit `claude-code-setup`; `tools/cloud-kit/` (DEC-570) is retired. The audit below is the
+> 2026-10-25 state.
+
 > Read-only audit of the repo at `d1e26e6` (= `origin/master`, last commit 2026-10-08), made at the start of the
 > first cloud session since the 2026-08-18 de-containerization. Question asked by the developer: *is everything
 > needed to continue at the same (or better) quality present here, or does the repo point at config that no longer

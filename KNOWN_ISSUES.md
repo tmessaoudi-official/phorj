@@ -2,6 +2,24 @@
 
 > Commit hashes cited below from the 2026-10-25..29 cloud branch (`216af26c` = `909a5045`, `3b61324c` = `098d72d9` on `master`, and any other) resolve through `docs/research/2026-10-29-ccr-resign-map.md`.
 
+## DEV-PRERELEASE-FROM-BRANCH — a pushed branch can move the `dev` tag and its prerelease (found 2026-11-07)
+
+Found by the DEC-577 6C panel (security lens). `release.yml` publish-dev and `stub-registry.yml` primary-and-publish
+run in the GitHub environment `release` (deployments from branch `master` and tags `v*` only), which refuses those
+jobs when the workflow file runs UNMODIFIED from another ref. It does not stop a branch that edits its own copy: a
+pushed branch runs the workflow file as that branch has it, so it can drop `environment:` and the `if:`. Nothing else
+then gates the job: the environment holds no secret (`gh api …/environments/release/secrets` → 0, repository secrets → 0),
+the only credential is the `GITHUB_TOKEN`, and a same-repo branch workflow may request `contents: write` even though the
+repository default is read (the `dev` prerelease itself is written that way). With it, a branch can force-move
+`refs/tags/dev` (outside the `v*` tag ruleset on purpose: publish-dev moves it) and recreate the `dev` prerelease with
+other binaries. The `v*` tags are protected by their ruleset (only a repository admin can create, move or delete them),
+and `master` by the `master-signed` ruleset.
+
+Pre-existing: any branch anyone with push access pushed could do this before DEC-577; the cloud branch patterns only add
+a session that pushes branches. Who can push a workflow change is the real boundary (GitHub refuses a push touching
+`.github/workflows/**` from a credential without the `workflows` permission) — whether the claude.ai cloud credential
+has it is [Unverified]. Closing it is the developer's call (asked 2026-11-07).
+
 ## SET-HOOK-DURING-CONSTRUCTION — PHP runs a subclass's set hook during construction and `with`; the native legs do not (found 2026-10-26)
 
 Found by row 4b's CI run (the PHP leg of `tests/differential.rs`). This predates the row: the transpiler output is

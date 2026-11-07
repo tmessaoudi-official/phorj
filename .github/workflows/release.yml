@@ -109,8 +109,12 @@ jobs:
     name: publish dev prerelease
     needs: build
     if: github.event_name == 'push'
-    # DEC-577: the `release` environment's deployment policy (branch master, tag v*) refuses this job
-    # from a cloud branch. The `if:` above is not that guard: a pushed branch runs its own copy of this file.
+    # DEC-577: the `release` environment's deployment policy (branch master, tag v*) refuses this job when
+    # this file, unmodified, runs from any other ref (a cloud branch, a manual dispatch). It is NOT a boundary
+    # against a branch that edits its own copy (a pushed branch runs the workflow file as that branch has it, so
+    # it can drop `environment:` with the `if:`): the environment holds no secret, and this job's only credential is
+    # the GITHUB_TOKEN with `contents: write` that any same-repo branch workflow can request. KNOWN_ISSUES
+    # DEV-PRERELEASE-FROM-BRANCH.
     environment: release
     runs-on: ubuntu-latest
     steps:
