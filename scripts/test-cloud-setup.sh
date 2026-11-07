@@ -4,9 +4,10 @@
 # wiring check. The hook trusts a third-party apt key and installs packages, so its guards are tested by EXECUTION:
 #   - off the cloud (no CLAUDE_CODE_REMOTE, a stray export with HOME not /root, or HOME=/root without the export) it
 #     does nothing at all;
-#   - the sury key is trusted only when it is exactly ONE key, public or secret, with the pinned fingerprint (a wrong
-#     key, an extra public or SECRET key riding along, a failed download, awk missing: ERROR, no keyring, no apt
-#     source, apt never runs);
+#   - the sury key is trusted only when gpg parses the file cleanly and it is exactly ONE key, public or secret, with
+#     the pinned fingerprint (a wrong key, an extra public or SECRET key riding along, a foreign key plus trailing
+#     junk, a failed download, awk missing: ERROR, no keyring, no apt source, apt never runs); the keyring installed
+#     is `gpg --export` of the pinned fingerprint;
 #   - prerequisites: gpg and PyYAML are installed only when absent, judged afterwards by what is there; gpg missing is
 #     reported as gpg missing, never as a bad key;
 #   - every other failure branch (apt fails, no VERSION_CODENAME, keyring unwritable, php8.5 without bcmath, not
@@ -42,6 +43,7 @@ gpg --homedir "$G" --batch --export >"$TMP/other.gpg"
 cat "$KEY" "$TMP/other.gpg" >"$TMP/both.gpg"
 gpg --homedir "$G" --batch --pinentry-mode loopback --passphrase '' --export-secret-keys >"$TMP/othersec.gpg" 2>/dev/null
 cat "$KEY" "$TMP/othersec.gpg" >"$TMP/withsec.gpg"   # a SECRET key prints `sec`, not `pub`: it must count as a second key
+{ cat "$KEY" "$TMP/other.gpg"; printf 'xyz'; } >"$TMP/junktail.gpg"   # gpg exits 2 yet lists only the pinned fingerprint
 [[ -s "$TMP/other.gpg" && -s "$TMP/othersec.gpg" ]] || bad "fixture: a throwaway key could be generated and exported"
 mkdir -p "$TMP/nx"; printf '#!/bin/sh\necho fake\n' >"$TMP/nx/cargo-nextest"; chmod +x "$TMP/nx/cargo-nextest"
 tar -czf "$TMP/nextest.tgz" -C "$TMP/nx" cargo-nextest   # NOT the pinned tarball: its sha must be refused
@@ -102,7 +104,7 @@ run() {   # $1 = HOME, $2 = CLAUDE_CODE_REMOTE ("" = unset)
          PHORJ_CLOUD_SETUP_PREFIX="$TMP/p" CS_CALLS="$TMP/calls" CS_FAKE="$FAKE" CS_KEY="${CS_KEY:-$KEY}" \
          CS_NEXTEST="$TMP/nextest.tgz" ${CS_FAIL:+CS_FAIL=1} ${CS_APT_FAIL:+CS_APT_FAIL=1} \
          ${CS_NO_BCMATH:+CS_NO_BCMATH=1} ${CS_NO_YAML:+CS_NO_YAML=1} ${CS_GPG:+CS_GPG="$CS_GPG"} bash "$HOOK" 2>&1)"; RC=$?
-  [[ -z "$(ls -A "$TMP/tmp" 2>/dev/null)" ]] || LEAKED+=" [${CASE:-?}]"   # fresh() empties it, so check every run
+  [[ -d "$TMP/tmp" && -z "$(ls -A "$TMP/tmp")" ]] || LEAKED+=" [${CASE:-?}]"   # fresh() empties it, so check every run
 }
 LEAKED=""
 php_installed() { grep -qE "^apt-get .*install .*php8\.5-cli" "$TMP/calls"; }
@@ -125,6 +127,9 @@ check "cloud: exit 0" '[[ $RC -eq 0 ]]'
 check "the keyring is installed, mode 0644" '[[ -f $KR && "$(stat -c %a "$KR")" == 644 ]]'
 check "the keyring holds exactly the pinned key" \
   '[[ "$(gpg --homedir "$G" --batch --show-keys --with-colons "$KR" 2>/dev/null | awk -F: '"'"'$1=="pub"{n++} $1=="fpr"&&!f{f=$10} END{print n" "f}'"'"')" == "1 15058500A0235D97F5D10063B188E2B695BD4743" ]]'
+G2="$TMP/gnupg2"; mkdir -m 700 "$G2"; gpg --homedir "$G2" --batch --import "$KEY" 2>/dev/null   # import noise only; the cmp decides
+gpg --homedir "$G2" --batch --export 15058500A0235D97F5D10063B188E2B695BD4743 >"$TMP/pinned-expected.gpg"
+check "the keyring is gpg --export of the pinned fingerprint (never the downloaded file itself)" 'cmp -s "$KR" "$TMP/pinned-expected.gpg"'
 check "the apt source names the real keyring path and the os-release codename" \
   '[[ "$(cat "$SRC" 2>/dev/null)" == "deb [signed-by=/usr/share/keyrings/debsuryorg-archive-keyring.gpg] https://packages.sury.org/php/ noble main" ]]'
 check "apt-get update runs, then the four php8.5 packages are installed" \
@@ -143,7 +148,8 @@ check "second run: exit 0, no apt-get, no key download" '[[ $RC -eq 0 ]] && ! gr
 
 # ── 4. The key is refused unless it is exactly the pinned one ───────────────────────────────────────────────
 for c in "other.gpg|a key with another fingerprint" "both.gpg|the pinned key with an extra key riding along" \
-         "withsec.gpg|the pinned key with a SECRET key riding along"; do
+         "withsec.gpg|the pinned key with a SECRET key riding along" \
+         "junktail.gpg|the pinned key, a foreign key and trailing junk (gpg fails, lists only the pin)"; do
   f="${c%%|*}"; what="${c#*|}"
   fresh; CS_KEY="$TMP/$f" run /root true
   check "$what: ERROR, no keyring, no apt source, apt never runs, exit 0" \
@@ -165,6 +171,8 @@ check "an install that leaves gpg missing is an ERROR naming it, not an INFO 'in
   'grep -qE "ERROR \| prereqs: .*gnupg" <<<"$OUT" && ! grep -qE "INFO \| prereqs: installed" <<<"$OUT"'
 fresh; CASE=prereqs-apt-fails CS_TOOLS="$NOGPG" CS_APT_FAIL=1 run /root true
 check "prereqs apt-get fails: ERROR, exit 0, no keyring" '[[ $RC -eq 0 && ! -e $KR ]] && grep -qE "ERROR \| prereqs: apt-get failed" <<<"$OUT"'
+check "prereqs apt-get fails: the re-check still runs and every later step still runs" \
+  'grep -qE "ERROR \| prereqs: still missing: gnupg" <<<"$OUT" && [[ $(grep -cE "INFO \| (hooksPath|prereqs|php|nextest|llvm-objcopy) took [0-9]+s" <<<"$OUT") -eq 5 ]]'
 fresh; CASE=no-yaml CS_NO_YAML=1 run /root true
 check "PyYAML absent: python3-yaml is installed (test-cloud-ready.sh needs it, pre-push runs it)" \
   'grep -qE "^apt-get .*install .*python3-yaml" $TMP/calls'
@@ -173,6 +181,7 @@ check "PyYAML still absent after the install: ERROR says pre-push will refuse ev
 fresh; CASE=no-awk CS_TOOLS="$NOAWK" CS_KEY="$TMP/other.gpg" run /root true
 check "awk absent: a key with another fingerprint is still refused (the pin fails closed), no keyring, no PHP install" \
   '[[ $RC -eq 0 && ! -e $KR && ! -e $SRC ]] && ! php_installed && grep -qE "ERROR \| php: " <<<"$OUT"'
+check "awk absent: the ERROR names awk, not gpg" 'grep -qE "ERROR \| php: awk" <<<"$OUT"'
 
 # ── 6. Every other failure branch: logged, nothing half-installed, exit 0 ───────────────────────────────────
 fresh; CS_APT_FAIL=1 run /root true

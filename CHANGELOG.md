@@ -10,8 +10,8 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 - `.claude/cloud-setup.sh`: the toolchain hook the developer's global kit `claude-code-setup` runs as root when a
   claude.ai cloud environment is set up. It sets `core.hooksPath scripts/git-hooks`, installs gpg and PyYAML when
-  absent, PHP 8.5 + bcmath from packages.sury.org (the key is trusted only when it is exactly one key with the pinned
-  fingerprint), and a sha256-pinned cargo-nextest, and checks llvm-objcopy. A no-op off the cloud; never fails the
+  absent, PHP 8.5 + bcmath from packages.sury.org (the key file must parse cleanly and hold exactly one key, public or
+  secret, with the pinned fingerprint; apt gets `gpg --export` of that fingerprint, never the downloaded file), and a sha256-pinned cargo-nextest, and checks llvm-objcopy. A no-op off the cloud; never fails the
   environment. Behaviour suite `scripts/test-cloud-setup.sh` (fake PATH, real gpg), run by pre-push.
 - CI runs on the cloud branch patterns `ccr-*`, `claude/**` and `cloud/**`; the two publish jobs run in the GitHub
   environment `release` (branch `master`, tags `v*`); `v*` tags have a ruleset, and `master-signed` restricts updates
