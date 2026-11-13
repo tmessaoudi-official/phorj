@@ -62,6 +62,6 @@ with no park left (DEC-493), built defects-first (DEC-578), with staged stable r
 - Whether DEC-416 (a retired form is changed outright, no deprecation window) still holds after the first stable
   release; `SEMVER.md` promises a `W-DEPRECATED` grace release.
 - The grades of the defect queue: an entry's grade is a proposal until the developer ratifies it.
-- Whether a perf row is a feature row under rule 1. The ruling paused one (readiness row 19), so until this is
-  ruled a perf row is not started ahead of a P0/P1 defect either.
+- Whether a perf row is a feature row under rule 1: the definition does not name perf work, yet the ruling paused
+  one (readiness row 19).
 - The budgets and ceilings of axes 7, 12 and 14.

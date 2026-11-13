@@ -481,6 +481,9 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 > step; a grade is a proposal until the developer ratifies it.
 > **Interim, 2026-11-13 — Claude's, NOT ruled:** until an entry is graded it is treated as P1 (it blocks feature
 > rows). Two entries are anchored by the ruling itself: `DECIMAL-ORDER` blocks, `TRACE-FRAME-NAMES` does not.
+> **Second interim, 2026-11-13 — Claude's, NOT ruled:** rule 1's definition of a feature row does not name perf
+> work, yet the ruling paused a perf row (readiness row 19); until the developer rules on it, a perf row is not
+> started ahead of a P0/P1 defect either.
 > **Upkeep.** An entry leaves this list in the change that fixes it or the ruling that excludes it; a new defect is
 > added here, with its grade and reason, in the change that records it.
 
@@ -503,9 +506,9 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 | DEEP-EQ-PHP-LIMIT | KNOWN_ISSUES | ungraded | |
 | DECIMAL-ORDER | KNOWN_ISSUES | blocks (anchor of DEC-578) | wrong output |
 | TRANSPILE-NS-REFLECT-TABLES | KNOWN_ISSUES | ungraded | |
-| VALIDATION regex trailing newline | KNOWN_ISSUES | ungraded | |
+| VALIDATION-regex-trailing-newline | KNOWN_ISSUES | ungraded | |
 | F-029 | KNOWN_ISSUES | ungraded | |
-| scout row 4l-b10 | scout plan | ungraded | |
+| row 4l-b10 (four pre-existing Invariant-1 breaks) | scout plan status block | ungraded | not in KNOWN_ISSUES |
 | TRACE-FRAME-NAMES | KNOWN_ISSUES | does not block (anchor of DEC-578) | frame names only |
 
 **B. Crash or hang (2)** — the no-crash contract of `docs/INVARIANTS.md`.
@@ -513,7 +516,7 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 | Entry | Where | Grade | Note |
 |---|---|---|---|
 | DEEP-INPUT-CRASHES | audit plan row 5 | ungraded | |
-| STACKDEPTH deep member chain | KNOWN_ISSUES | ungraded | |
+| STACKDEPTH-deep-member-chain | KNOWN_ISSUES | ungraded | |
 
 **C. Security (3)**
 
@@ -528,7 +531,7 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 | Entry | Where | Open point |
 |---|---|---|
 | DIAMOND-EXPONENTIAL | KNOWN_ISSUES | a hang, or a cost with a bound |
-| `Expr::New` reaches the transpiler | KNOWN_ISSUES | reachable from user code or not |
+| `Expr::New` REACHES the transpiler inside an attribute argument | KNOWN_ISSUES | reachable from user code or not |
 | LIBRARY-REACHES-MAIN | KNOWN_ISSUES | awaits a ruling |
 | Transpile P1s exposed by the FS de-quarantine | KNOWN_ISSUES | which are still open |
 | PLAYGROUND-PHP-WASM | KNOWN_ISSUES | defect or missing feature |
