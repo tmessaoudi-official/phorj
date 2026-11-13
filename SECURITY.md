@@ -41,9 +41,9 @@ Phorj is a language toolchain, so the relevant attack surface is **untrusted inp
   both crate roots; the audited first-party `unsafe` island is confined to `src/jit/` (the
   finalize→fn-ptr call plus the `extern "C"` trampolines' raw-pointer dereferences — ~48 audited
   sites) behind a scoped `#![allow]` and a CI `unsafe-island` gate.
-- **A small, vetted dependency surface.** The core is std-first; the default build links 9 vetted,
+- **A small, vetted dependency surface.** The core is std-first; the default build links 10 vetted,
   feature-gated crates (crypto, regex, signals, coroutines, JIT codegen, SQLite, Unicode
-  segmentation) out of 14 admitted — each can be compiled out (`--no-default-features` links
+  segmentation) out of 15 admitted — each can be compiled out (`--no-default-features` links
   zero). See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
   `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`.
 - **Package manager (supply chain).** `phg add` / `install` / `update` / `remove` (DEC-316) and

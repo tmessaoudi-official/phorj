@@ -1,7 +1,9 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ▶ CURRENT CURSOR (2026-09-07) — **scout is the forcing function. Plan: `docs/plans/2026-09-07-scout-forcing-function.plan.md`**
+## ▶ CURRENT CURSOR (2026-09-07) — **scout is the forcing function. Plan: `docs/plans/2026-09-07-scout-forcing-function.plan.md`** — **⚠ ORDER SUPERSEDED 2026-11-13 by DEC-578: defects first (see the first cursor line and § DEFECT QUEUE below); the scout plan stays queued**
 
+> **▶ 2026-11-13 — NORTH STAR (DEC-578, DEC-579, DEC-580): DEFECTS FIRST, severity-gated.** The goal, the fifteen axis bars and the session rules are `.claude/rules/north-star.md` (loaded every session); `VISION.md` is imported by CLAUDE.md. No new feature row starts while a P0/P1 defect is open; the list is § DEFECT QUEUE below (candidates, **grading pass OWED** — it is the next step). A defect awaiting a ruling does not block. **Paused feature rows** (state `deferred` in their own plans, resume point in the Step cell): readiness row 19 (`docs/plans/2026-09-02-php-parity-readiness.plan.md`), big-wave-2 row 7 (`docs/plans/2026-09-05-big-wave-2.plan.md`), scout row 4l (`docs/plans/2026-09-07-scout-forcing-function.plan.md`). The defect row in progress is unchanged: audit-plan row 4c. Not ruled, to raise with the developer: the interim "ungraded = P1" below; release numbering and the fate of DEC-416 after a first stable release (DEC-579).
+>
 > **▶ 2026-11-07 — CLOUD-READY (`/cloud-ready --apply`, DEC-577; plan `docs/plans/2026-10-26-cloud-kit.plan.md` rows 7-13).** A claude.ai cloud session now gets phorj's gates: CI runs on `ccr-*`, `claude/**` and `cloud/**`; the two publish jobs run in the GitHub environment `release`; `.claude/cloud-setup.sh` (run as root by the developer's global kit `claude-code-setup`) installs gpg and PyYAML when absent, PHP 8.5 + bcmath from packages.sury.org (fingerprint-pinned key), cargo-nextest (sha256-pinned) and `core.hooksPath scripts/git-hooks`. `tools/cloud-kit/` (DEC-570) is RETIRED and removed. DONE: the `release` environment (branch master, tag v*) and the v* tag ruleset exist (row 11, read back with `gh api`); pushed, CI and release green, the first `publish-dev` deployed from master into `release`. 6C closed (row 12): panel rounds 1-3 found 15, 12 and 4, all fixed, round 4 (advisor) clean; `master-signed` now also restricts updates to a repository admin. NEXT: one cloud proof session by the developer (row 13). Row 4c stays the language cursor.
 >
 > **▶ 2026-10-27 — ROW 4c: ALL FIVE ITEMS BUILT; CLOSE PANEL ROUNDS 1 AND 2 FIXED (`a8a874f7`, `216af26c`, CI #682 green under PHP 8.5); ROUND 2 ON FROZEN `216af26c` FOUND 2 MORE — KNOWN_ISSUES DECOMPOSED-PARENT-TRAITS (a multi-parent parent's own `use T` is dropped in PHP; its trait statics' visibility) — the row stays `doing` for close round 3 (cloud branch; LANDED on `master` in `b8f383ba` 2026-10-29 — hashes cited here are the cloud branch's, resolve them with `docs/research/2026-10-29-ccr-resign-map.md`).** `d2ed39a3` item 4 (`ast/field_inits.rs`: a class's initializers = its traits' then its own, owned by the class whose constructor plan runs, every parent's for a multi-parent class; PHP: no trait init-only `__construct`, a trait-constructor user with more initializers emits its constructor from the plan, `emit_synth_construct` in native order). Close panel round 1 on frozen `d2ed39a3`: correctness 8 findings (one P0 the row introduced — a diamond's static owner in BFS order vs the checker's depth-first typing), safety 6, completeness 10. The developer ruled DEC-574 (a) (a multi-parent parent's static is its one slot; PHP emits it public) and DEC-575 (a) (every class's field initializers run down the chain — queued as row 4h). The round-1 fix commit lands the P0 (`ast::class_lookup_order`, also used by the LSP), traits-first computed statics, scoped restricted-static inits, DEC-574's public emission, the multi-parent example and the doc surfaces; the pre-existing shapes are KNOWN_ISSUES INIT-CHAIN (row 4h), STATIC-REDECL-TYPE (row 4i), DIAMOND-EXPONENTIAL (row 9). Lift, LSP-beyond-statics and both editors are unchanged by design (no syntax; `phg lift` refuses a trait and lifts `B::$s` to `B::s`), and perf vs PHP is OWED from the PC. NEXT: the round-2 re-check, row 4c → `done`, then rows 4e–4i, then row 5.
@@ -467,6 +469,76 @@ contract for the fourth leg itself — `Rent/Core/Classification::toArray()` is 
 structure for the cross-language differential test"* and yields
 `{tenure, confidence_bp, outcome, reasons[]}`. The eleven-property spec the port must satisfy is
 scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation contract".
+
+## DEFECT QUEUE (DEC-578) — the ONE list; CANDIDATES, UNGRADED (seeded 2026-11-13)
+
+> **What this is.** Rule 1 of `.claude/rules/north-star.md` orders work by this list. It was seeded on 2026-11-13
+> from the headings and first lines of `KNOWN_ISSUES.md` and the open rows of
+> `docs/plans/2026-10-08-audit-remediation.plan.md`; **the entry bodies were not re-read and nothing was re-run**,
+> so membership and class are proposals. The count quoted to the developer when DEC-578 was ruled ("about 28") was
+> approximate; the list below is the record.
+> **Grades.** None is assigned yet. The grading pass (P0-P3 with the reason, per DEC-578) is OWED and is the next
+> step; a grade is a proposal until the developer ratifies it.
+> **Interim, 2026-11-13 — Claude's, NOT ruled:** until an entry is graded it is treated as P1 (it blocks feature
+> rows). Two entries are anchored by the ruling itself: `DECIMAL-ORDER` blocks, `TRACE-FRAME-NAMES` does not.
+> **Upkeep.** An entry leaves this list in the change that fixes it or the ruling that excludes it; a new defect is
+> added here, with its grade and reason, in the change that records it.
+
+**A. Wrong behaviour (19)** — the legs disagree, or agree on behaviour a ruling or the spec says is wrong.
+
+| Entry (id in `KNOWN_ISSUES.md` or plan row) | Where | Grade | Note |
+|---|---|---|---|
+| STATIC-COMPOSITION-PARITY | audit plan row 4c | ungraded | `doing` — the defect row in progress |
+| HOOK-INHERITANCE | audit plan row 4e | ungraded | |
+| SET-HOOK-DURING-CONSTRUCTION | audit plan row 4f | ungraded | |
+| BARE-NAME-SUBCLASS | audit plan row 4g | ungraded | |
+| INIT-CHAIN | audit plan row 4h | ungraded | all legs agree; ruled wrong (DEC-575) |
+| STATIC-REDECL-TYPE | audit plan row 4i | ungraded | awaits a ruling — does not block |
+| DECOMPOSED-PARENT-TRAITS | KNOWN_ISSUES | ungraded | |
+| NULL-SAFE-UNKNOWN-MEMBER | KNOWN_ISSUES | ungraded | |
+| STRING-EQ-DECIMAL-ERASED | KNOWN_ISSUES | ungraded | |
+| STRING-EQ-INT-STRING-UNION | KNOWN_ISSUES | ungraded | |
+| SET-EQ-ORDER | KNOWN_ISSUES | ungraded | |
+| LIST-CONTAINS-INSTANCES | KNOWN_ISSUES | ungraded | |
+| DEEP-EQ-PHP-LIMIT | KNOWN_ISSUES | ungraded | |
+| DECIMAL-ORDER | KNOWN_ISSUES | blocks (anchor of DEC-578) | wrong output |
+| TRANSPILE-NS-REFLECT-TABLES | KNOWN_ISSUES | ungraded | |
+| VALIDATION regex trailing newline | KNOWN_ISSUES | ungraded | |
+| F-029 | KNOWN_ISSUES | ungraded | |
+| scout row 4l-b10 | scout plan | ungraded | |
+| TRACE-FRAME-NAMES | KNOWN_ISSUES | does not block (anchor of DEC-578) | frame names only |
+
+**B. Crash or hang (2)** — the no-crash contract of `docs/INVARIANTS.md`.
+
+| Entry | Where | Grade | Note |
+|---|---|---|---|
+| DEEP-INPUT-CRASHES | audit plan row 5 | ungraded | |
+| STACKDEPTH deep member chain | KNOWN_ISSUES | ungraded | |
+
+**C. Security (3)**
+
+| Entry | Where | Grade | Note |
+|---|---|---|---|
+| `serve` raw header lines | KNOWN_ISSUES; PENDING DEC-568 | ungraded | awaits a ruling — does not block |
+| DEP-ADVISORIES | KNOWN_ISSUES | ungraded | |
+| DEV-PRERELEASE-FROM-BRANCH | KNOWN_ISSUES | ungraded | |
+
+**D. Membership unconfirmed (6)** — read the entry before grading; it may not be a defect under rule 1.
+
+| Entry | Where | Open point |
+|---|---|---|
+| DIAMOND-EXPONENTIAL | KNOWN_ISSUES | a hang, or a cost with a bound |
+| `Expr::New` reaches the transpiler | KNOWN_ISSUES | reachable from user code or not |
+| LIBRARY-REACHES-MAIN | KNOWN_ISSUES | awaits a ruling |
+| Transpile P1s exposed by the FS de-quarantine | KNOWN_ISSUES | which are still open |
+| PLAYGROUND-PHP-WASM | KNOWN_ISSUES | defect or missing feature |
+| cycle leak under `serve` (DEC-205) | KNOWN_ISSUES | ruled and queued as a build; a soak failure makes it a defect |
+
+**Excluded when seeding, with the reason** (challenge any of these at the grading pass): SERVE-TLS (ruled-deferred
+feature); CRAFT-2026-07-20 (craft flags, no behaviour); TEST-STDIN-INHERIT (test harness, not the product);
+"Native fault text differs" (recorded as not a divergence); PLAYGROUND-EQ-UNGUARDED (a missing check, no wrong
+output recorded).
+
 
 ## ▶ PREVIOUS CURSOR (2026-09-04 → 05) — **THE BIG WAVE**
 

@@ -393,3 +393,9 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
 - **History (chronological narrative):** `docs/HISTORY.md`.
 - **Known limitations / deferred work:** `KNOWN_ISSUES.md`.
 - **Session-level gotchas:** auto-memory index (`MEMORY.md` in the project memory dir).
+- **The goal (north star):** `.claude/rules/north-star.md` — loaded every session: the goal, the
+  defects-first rule, the release rule and the fifteen axis bars with their checkers (DEC-578,
+  DEC-579, DEC-580). The philosophy behind it is `VISION.md`, imported on the next line so that
+  every session — cloud sessions included — reads it. Neither is restated here.
+
+@VISION.md

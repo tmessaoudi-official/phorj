@@ -37,8 +37,12 @@ effort.**
 - **Familiarity is in what the language *does*** — the concepts and mental model an experienced PHP
   developer already carries — and only *lightly* in syntax. The goal is recognition, not replication.
 - **The PHP transpile is a migration bridge, both ways.** Phorj → PHP lets you deploy and adopt
-  incrementally; the planned PHP → Phorj importer lets existing codebases move onto a typed
-  foundation. The bridge lowers the on-ramp; it does not cap the language.
+  incrementally; the PHP → Phorj lifter (`phg lift`) lets existing codebases move onto a typed
+  foundation. The bridge lowers the on-ramp; it does not cap the language. It is never a runtime:
+  every feature runs natively on the Rust backends, and nothing is delegated to PHP at run time.
+- **Better is measured, not asserted.** Phorj aims to be better than PHP on every axis — speed,
+  memory, safety, robustness, clarity, ease of learning. Each axis has a bar and a checker; a bar
+  that is not yet met is listed as owed, never claimed.
 - **No ceiling.** The only limit on how good, how capable, how fast, and how easy-to-learn Phorj
   becomes is the effort invested. PHP is where it begins, not where it ends.
 - **Power is additive — coexistence, not replacement.** New capabilities are added *alongside*
@@ -50,14 +54,15 @@ effort.**
 
 1. **Correctness is the spine.** Every backend must produce byte-identical output to the reference
    interpreter, enforced by differential testing. A feature that can't be proven equivalent across
-   backends doesn't ship.
+   backends doesn't ship. A feature with no faithful PHP mapping ships native-only, behind a hard
+   transpile error and a written disclosure — never as a silent downgrade.
 2. **No silent failure.** The toolchain rejects bad input with a diagnostic, never a panic, hang, or
    out-of-bounds read — including when parsing untrusted binaries.
 3. **Earn complexity.** Abstractions (a pluggable backend trait, a tracing GC, an arena allocator)
    are added when a third use case demands them, not speculatively. The Rule of Three is a design
    tool, not a slogan.
 4. **Std-first core with a minimal, vetted dependency surface.** A small set of feature-gated
-   external crates (14 admitted, 9 in the default build — `Cargo.toml` is the SSOT), each admitted
+   external crates (15 admitted, 10 in the default build — `Cargo.toml` is the SSOT), each admitted
    only where rolling our own would be the anti-pattern (see
    `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`). The whole
    language fits in one head, builds in seconds, and keeps the supply-chain surface deliberately tiny.
@@ -69,7 +74,8 @@ effort.**
 The near-term arc is concrete and already underway (see [ROADMAP.md](ROADMAP.md)): a complete language
 core (✅), a fast VM (✅), single-binary distribution across operating systems (🔨), and language
 enrichment — indexing, collections, optionals, pipes, exceptions, and mutation (✅ — value/handle
-split + copy-on-write; a tracing GC stays deliberately deferred to v2).
+split + copy-on-write; a PHP-style cycle collector for shared instances is ruled and queued, and a
+tracing GC stays deliberately deferred to v2).
 
 The longer-term ambition is an **ecosystem**, not just a language — and much of it has already
 landed: a growing standard library, real modules and packages (✅), first-class concurrency
@@ -82,8 +88,8 @@ ownership model that removes the GC, and sized-integer performance.
 
 ## What Phorj is not
 
-- It is **not** a PHP runtime or a drop-in PHP replacement. It *transpiles to* PHP and aims to
-  eventually *import from* it, but Phorj is its own statically-typed language.
+- It is **not** a PHP runtime or a drop-in PHP replacement. It *transpiles to* PHP and *lifts
+  from* it (`phg lift`), but Phorj is its own statically-typed language.
 - It is **not** trying to be everything at once. The roadmap is deliberate and ordered; "planned"
   features are planned on purpose, not missing by accident.
 

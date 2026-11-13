@@ -68,7 +68,7 @@ place; refinement ongoing).
 
 Two further vetted dependencies power language-level surfaces rather than stdlib modules: `ctrlc`
 (signal handling) and `corosensei` (green-thread concurrency — `spawn`/channels). The full
-dependency set has since grown to **14 admitted, feature-gated crates (9 linked by default)** —
+dependency set has since grown to **15 admitted, feature-gated crates (10 linked by default)** —
 `Cargo.toml` and `docs/specs/UNIFIED-SPEC.md#external-dependency-policy` are the SSOT; never
 trust a restated count.
 

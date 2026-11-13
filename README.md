@@ -3,7 +3,7 @@
 [![CI](https://github.com/tmessaoudi-official/phorj/actions/workflows/ci.yml/badge.svg)](https://github.com/tmessaoudi-official/phorj/actions/workflows/ci.yml)
 
 **A statically-typed, PHP-inspired programming language — implemented in Rust with a std-first
-core and a small set of vetted, feature-gated dependencies (14 crates, 9 in the default build —
+core and a small set of vetted, feature-gated dependencies (15 crates, 10 in the default build —
 see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).**
 
 Phorj takes the ergonomics that make PHP pleasant to write (familiar syntax, string interpolation,

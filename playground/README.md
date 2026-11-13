@@ -23,7 +23,7 @@ It is auto-deployed to GitHub Pages on every push to `master`, so the live site 
 ## How it works
 
 - The Phorj pipeline is compiled to WebAssembly. The core `phorj` crate is unchanged (its
-  14 admitted dependencies are feature-gated; the wasm build compiles the std-only core, and its
+  15 admitted dependencies are feature-gated; the wasm build compiles the std-only core, and its
   roots are `#![deny(unsafe_code)]` with the audited JIT island compiled out); this `playground/`
   crate is a **separate workspace member** (itself `#![forbid(unsafe_code)]`) adding only
   `wasm-bindgen` (wasm32-only) and `serde_json`.
