@@ -133,6 +133,7 @@ check that proves the gate runs) and carries an Invariant-9 example where it cha
 | 15 | DEC-564 demote the three file-layout laws to W- lints | S | todo | - | src/loader/** src/cli/explain/** |
 | 16 | DEC-565 site attribute Allow(code, reason) plus DEC-360 strict flag and explain text | M | todo | - | src/checker/** src/cli/** |
 | 17 | DEC-566 opt-in in-source layer rules | M | todo | - | src/loader/** src/checker/** |
+| 18 | North star (DEC-578, DEC-579, DEC-580), outside the audit rows: the always-loaded goal page with fifteen axis bars, VISION imported by CLAUDE.md, defects-first ordering with the SLICE-STATE defect queue seeded ungraded (grading pass OWED), three feature rows deferred | M | done | 069514cd | .claude/rules/north-star.md VISION.md CLAUDE.md docs/plans/SLICE-STATE.md docs/plans/MASTER-PLAN.md docs/research/full-audit/raw/C-decisions.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
