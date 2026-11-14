@@ -13,6 +13,7 @@
 ## Decisions Log
 - [2026-11-14 11:19] AGREED: Plan approved (developer, via AskUserQuestion, 2026-11-14): ground-prep group 1 runs under ONE plan - a dedicated plan file; /rules-split as a dry run first, applied only on the developer's go, with a load probe before its commit; every skill pinned to project scope; the Claude-config batch closes audit-remediation row 6 in one commit; one push; the two multi-agent audits (/skill-audit, /audit) wait for a fresh session. Certification at the 3C gate: advisor() only (developer's choice at the tier question). Rejected: /rules-split alone under its own gate; the inline five only; proceeding fully autonomously.
 - [2026-11-14 11:25] AGREED: /rules-split outcome (developer, via AskUserQuestion, after the dry run of 2026-11-14): SMALL SPLIT + PRUNE - two path-scoped rules files (.claude/rules/php-oracle.md, .claude/rules/gate-mechanics.md, about 31 lines moved out of 'Toolchain & quality gate'), an index line left for each, three drifted figures corrected (the oracle's patch number dropped, 9 test files to 12, the size-gate warns figure re-stamped), the intake rule added, the php-bridge pack header repointed. Every other section stays in CLAUDE.md: gates and never-do rules must be loaded before any file is read. Rejected: prune and intake rule only; also moving invariants 2-8 behind src paths (whether a reviewer subagent loads a path-scoped rule is unverified). Noted, no edit: var/phorj-app is absent on this machine.
+- [2026-11-14 11:57] AGREED: /repair plan (developer, via AskUserQuestion, 2026-11-14): APPLY S1-S4, M1 and O1 - the three reviewer agents' opening paragraph reworded to what DEC-518 ratified (diff shown first); phg-lenses names the global framework for the anti-bandaid gate; nine Status rows made parseable; one Routing sentence about the parent /stack repo's path-scoped rules; src/lift/** added to php-oracle.md; .claude/RESUME.md removed after a backup copy outside the repo. Manual, outside this repo: the banner wording, /stack's rule globs. Moved to row 5: phg-qa-sweep's panel line. Rejected: keeping RESUME.md; leaving the agents untouched.
 
 ## Formal Plan
 
@@ -66,7 +67,7 @@ snapshotted outside the repo before row 2 writes anything.
 |---|------|------|-------|----------|-------|
 | 1 | Plan file, active-plan pointer, SLICE-STATE cursor line, MASTER-PLAN mirror line - commit `docs(ground prep): the plan for the four tool groups and the expert opinion; cursors say ground preparation runs first` | S | done | 97503aba | docs/plans/** |
 | 2 | Group 1: `/rules-split` - dry run, the developer's go, apply, quoted anchors, intake rule, load probe before the commit - commit `docs(claude): split the oracle and hook detail out of CLAUDE.md into two path-scoped rules; intake rule; three drifted figures` | M | done | 48fe8127 | CLAUDE.md .claude/rules/** .claude/skills/** docs/** |
-| 3 | Group 1: row 6 batch in one commit (closes audit-remediation row 6) - `/repair`, `/agent-def --audit` on the three reviewer agents (stale DEC-268 sentence, diff first), Status-block parse check, leftover files, `/memory-promote` at project scope | M | todo | - | .claude/** CLAUDE.md docs/plans/** |
+| 3 | Group 1: row 6 batch in one commit (closes audit-remediation row 6) - `/repair`, `/agent-def --audit` on the three reviewer agents (stale DEC-268 sentence, diff first), Status-block parse check, leftover files, `/memory-promote` at project scope - commit `docs(claude): the Claude-config sync - reviewer agents say what DEC-518 ratified; nine Status rows parse again`; the agent audit was by section heading (no generic framework section found), and the memory promotions are proposals under Needs input, not applied | M | done | 72437f60 | .claude/** CLAUDE.md docs/plans/** |
 | 4 | Group 1: one push, CI watch, then `/discover-expertise --write` (global store, nothing in the repo) | S | todo | - | - |
 | 5 | Group 1: `/skill-audit --scope=project` (fresh session, model question first) | M | todo | - | .claude/skills/** |
 | 6 | Group 1: `/audit --scope=project` (fresh session, model question first) | M | todo | - | .claude/** CLAUDE.md |
@@ -80,6 +81,18 @@ snapshotted outside the repo before row 2 writes anything.
 - Where the defect-queue grading pass (SLICE-STATE, section DEFECT QUEUE; owed under DEC-578) falls: after row 9
   inside this plan, or as its own task. Not ruled. Row 9's hunters may add entries, which argues for after.
 - The order of groups 2-4 is a recommendation; the developer may reorder rows 7-9.
+- Memory promotions PROPOSED by row 3's dry run (28 feedback memories checked against CLAUDE.md, the rules, the
+  packs and the agents; 24 already covered), none applied: (P1) always report two completion percentages, GA and
+  global - no home in the repo config; (P2) on a crate bump, run the repo's existing tests for that surface before
+  writing changelog-driven probes - proposed for the tooling pack; (P3) never batch a commit with the edits or the
+  guard run it depends on: a refused edit or a red guard must stop the commit (it happened twice, 2026-11-13 and
+  2026-11-14) - proposed for the tooling pack; (P4) the 2026-07-16 "speed levers" note (worktree agents, batch
+  gates, codemods) - possibly superseded by the token-economy rulings: confirm or retire.
+- Manual, outside this repo (from row 3's `/repair`): the session banner names `.claude/EXPERTISE-REFERENCE.md`
+  even when only `expertise-core.md` exists (the developer's global banner hook); the parent `/stack` repo's rule
+  globs match files under this folder; `wasm-pack` is in the allow list and not installed; four older plans carry
+  no Status block (post-slice3-consolidation, claude-bundle-cross-repo-audit, json-adt-jit,
+  product-driven-gap-programme) - archive or keep is the developer's call.
 - [x] W1. Run the rules load probe, `bash /tmp/probe-rules-load-20261114.sh` - denied to Claude by the permission
   engine (walkthrough rules-split) — DONE 2026-11-14: run by the developer in the session; seven headless calls in a
   scratch copy; a Read of `tests/x.rs` or `.github/workflows/ci.yml` loaded only `php-oracle.md`; a Read of
@@ -90,14 +103,16 @@ snapshotted outside the repo before row 2 writes anything.
 - Row 2 changes the one file every session and every reviewer agent reads. A moved heading can break a consumer
   without an error; the consumer inventory and the load probe are the guard, and both run before the commit.
 ### Known issues
-- The session banner names `.claude/EXPERTISE-REFERENCE.md`; no such file exists in the repo (checked 2026-11-14).
-  Row 3's `/repair` settles whether the banner or the repo is wrong.
-- A path-scoped rules file of the parent `/stack` repo (`/stack/.claude/rules/claude-config.md`) loaded into a phorj
+- RESOLVED 2026-11-14 — the session banner names `.claude/EXPERTISE-REFERENCE.md`; no such file exists in the repo.
+  Row 3's `/repair`: the banner prints that name whenever `expertise-core.md` exists; the repo is right and needs
+  no such file. The wording fix is in the developer's global hook (Needs input, manual).
+- RESOLVED 2026-11-14 (row 3: `CLAUDE.md` "Routing" now says those rules do not govern phorj; anchoring the globs
+  is a `/stack` change) — a path-scoped rules file of the parent `/stack` repo (`/stack/.claude/rules/claude-config.md`) loaded into a phorj
   session when phorj's `CLAUDE.md` was read (observed 2026-11-14). `claudeMdExcludes` keeps `/stack`'s `CLAUDE.md`
   files out; it does not cover that repo's rules. Row 3's `/repair` records whether this needs a fix or a sentence
   in "Routing".
 - No guard checks the rules files yet (frontmatter on line 1, every glob live, the `CLAUDE.md` index matching each
   file's `paths:`, every quoted anchor on ONE line - one anchor broke on a line wrap on 2026-11-14 and was caught
   by hand). Every failure of a path-scoped rule is silent, so the check is owed: it belongs to row 7.
-- `.claude/rules/php-oracle.md` does not list `src/lift/**`, and the paused scout row lifts `preg_*` calls. The index
+- RESOLVED 2026-11-14 (row 3 added the glob; 14 lifter files name `preg_`) — `.claude/rules/php-oracle.md` does not list `src/lift/**`, and the paused scout row lifts `preg_*` calls. The index
   line in `CLAUDE.md` keeps the kernel loaded; row 3 checks where `preg_` pins are written and widens the globs.
