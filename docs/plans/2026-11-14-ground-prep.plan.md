@@ -14,6 +14,9 @@
 - [2026-11-14 11:19] AGREED: Plan approved (developer, via AskUserQuestion, 2026-11-14): ground-prep group 1 runs under ONE plan - a dedicated plan file; /rules-split as a dry run first, applied only on the developer's go, with a load probe before its commit; every skill pinned to project scope; the Claude-config batch closes audit-remediation row 6 in one commit; one push; the two multi-agent audits (/skill-audit, /audit) wait for a fresh session. Certification at the 3C gate: advisor() only (developer's choice at the tier question). Rejected: /rules-split alone under its own gate; the inline five only; proceeding fully autonomously.
 - [2026-11-14 11:25] AGREED: /rules-split outcome (developer, via AskUserQuestion, after the dry run of 2026-11-14): SMALL SPLIT + PRUNE - two path-scoped rules files (.claude/rules/php-oracle.md, .claude/rules/gate-mechanics.md, about 31 lines moved out of 'Toolchain & quality gate'), an index line left for each, three drifted figures corrected (the oracle's patch number dropped, 9 test files to 12, the size-gate warns figure re-stamped), the intake rule added, the php-bridge pack header repointed. Every other section stays in CLAUDE.md: gates and never-do rules must be loaded before any file is read. Rejected: prune and intake rule only; also moving invariants 2-8 behind src paths (whether a reviewer subagent loads a path-scoped rule is unverified). Noted, no edit: var/phorj-app is absent on this machine.
 - [2026-11-14 11:57] AGREED: /repair plan (developer, via AskUserQuestion, 2026-11-14): APPLY S1-S4, M1 and O1 - the three reviewer agents' opening paragraph reworded to what DEC-518 ratified (diff shown first); phg-lenses names the global framework for the anti-bandaid gate; nine Status rows made parseable; one Routing sentence about the parent /stack repo's path-scoped rules; src/lift/** added to php-oracle.md; .claude/RESUME.md removed after a backup copy outside the repo. Manual, outside this repo: the banner wording, /stack's rule globs. Moved to row 5: phg-qa-sweep's panel line. Rejected: keeping RESUME.md; leaving the agents untouched.
+- [2026-11-14 13:33] AGREED: row 3b agent edits: Tier A only (7 stale-fact fixes in the three reviewer agents, diff shown in the question); Tier B trims not applied. The nine drifted agents/<file>.md:NN cites in the domain packs become quoted anchors in the same commit. Developer via AskUserQuestion.
+- [2026-11-14 13:33] AGREED: row 3b memory promotions: P1 P2 P5 P6 into the tooling pack, P7 P8 into the engine-parity pack (P8's format-test line into the tooling pack); P6 = the trap and its check only; P3 is global and stays listed for the developer. Developer via AskUserQuestion.
+- [2026-11-14 13:33] AGREED: P4: memory note speed-levers-authorized is amended - item 10 superseded by the 2026-09-27 mode ruling, items 1-9 stand, including never dynamic workflows nor team agents. Developer via AskUserQuestion.
 
 ## Formal Plan
 
@@ -68,11 +71,11 @@ snapshotted outside the repo before row 2 writes anything.
 | 1 | Plan file, active-plan pointer, SLICE-STATE cursor line, MASTER-PLAN mirror line - commit `docs(ground prep): the plan for the four tool groups and the expert opinion; cursors say ground preparation runs first` | S | done | 97503aba | docs/plans/** |
 | 2 | Group 1: `/rules-split` - dry run, the developer's go, apply, quoted anchors, intake rule, load probe before the commit - commit `docs(claude): split the oracle and hook detail out of CLAUDE.md into two path-scoped rules; intake rule; three drifted figures` | M | done | 48fe8127 | CLAUDE.md .claude/rules/** .claude/skills/** docs/** |
 | 3 | Group 1: row 6 batch in one commit (closes audit-remediation row 6) - `/repair`, `/agent-def --audit` on the three reviewer agents (stale DEC-268 sentence, diff first), Status-block parse check, leftover files, `/memory-promote` at project scope - commit `docs(claude): the Claude-config sync - reviewer agents say what DEC-518 ratified; nine Status rows parse again`; `/agent-def --audit` and `/memory-promote` were NOT run as skills in this row (a skim of the agents' headings and a keyword check of the feedback memories only) - they are row 3b | M | done | 72437f60 | .claude/** CLAUDE.md docs/plans/** |
-| 3b | Group 1: `/agent-def --audit` on each of the three reviewer agents (a full read: the completeness reviewer has sections named for Rule 6's four dimensions, executed tests and visual evidence, and whether they restate the global rules is what the audit decides) and `/memory-promote --source=project` over all 176 notes (fresh session; any agent edit as a diff first) | M | todo | - | .claude/agents/** .claude/rules/** .claude/skills/** |
+| 3b | Group 1: `/agent-def --audit` on each of the three reviewer agents (a full read: the completeness reviewer has sections named for Rule 6's four dimensions, executed tests and visual evidence, and whether they restate the global rules is what the audit decides) and `/memory-promote --source=project` over all 176 notes (fresh session; any agent edit as a diff first) - both run as skills; audit: completeness-reviewer FAILS Rule 5 on one reproduced table (kept by ruling, Tier B declined), the other two pass, seven stale facts fixed (Tier A); memory: 183 notes examined (29 feedback + 154 project; "176" was the top-level file count) by description and by a citation check, 9 read in full, six promoted into the tooling and engine-parity packs; the nine line cites into the agents became quoted anchors - commit `docs(claude): reviewer agents - seven stale facts corrected; pack cites into them are quoted anchors; six lessons promoted from memory` | M | done | ee942fdf | .claude/agents/** .claude/skills/** |
 | 4 | Group 1: one push, CI watch, then `/discover-expertise --write` (global store, nothing in the repo) - pushed at `docs: the cursor says rows 1-3 of the ground preparation are done; one more stale oracle stamp; a pack cite repointed`; pre-push gate green (3752 passed, 2 skipped); CI and release green on that commit; the store rebuilt from it (its judging step, practices.md, was not run) | S | done | 06c16bc8 | - |
 | 5 | Group 1: `/skill-audit --scope=project` (fresh session, model question first) | M | todo | - | .claude/skills/** |
 | 6 | Group 1: `/audit --scope=project` (fresh session, model question first) | M | todo | - | .claude/** CLAUDE.md |
-| 7 | Group 2: standing guards - `/new-hook` docs-drift and PHP forward-compat (warn-only, exit 0), `/usage-report` baseline | M | todo | - | .claude/hooks/** scripts/** |
+| 7 | Group 2: standing guards - `/new-hook` docs-drift and PHP forward-compat (warn-only, exit 0), `/usage-report` baseline, and the rules-file guard (frontmatter closes, every `paths:` glob matches a file, every quoted anchor resolves on one line - packs and rules files both) | M | todo | - | .claude/hooks/** scripts/** |
 | 8 | Group 3: shipped-product checks - `/phg-qa-sweep` on the release binary, `/cross-check` on UNIFIED-SPEC | L | todo | - | - |
 | 9 | Group 4: hunters sweep on a frozen commit - `/inspect`, `/sleuth`, `/gaps`, `/forge` with phg-lenses, then `/aggregate-findings` | L | todo | - | - |
 | 10 | Expert opinion: the phorj-versus-PHP verdict with its flaws across every domain, from rows 8 and 9 and the north-star checkers | M | todo | - | docs/** |
@@ -82,14 +85,13 @@ snapshotted outside the repo before row 2 writes anything.
 - Where the defect-queue grading pass (SLICE-STATE, section DEFECT QUEUE; owed under DEC-578) falls: after row 9
   inside this plan, or as its own task. Not ruled. Row 9's hunters may add entries, which argues for after.
 - The order of groups 2-4 is a recommendation; the developer may reorder rows 7-9.
-- Memory promotions PROPOSED by row 3's keyword check (the 28 feedback memories against CLAUDE.md, the rules, the
-  packs, the agents and the global framework: 25 covered; the 133 project and 12 reference notes were NOT
-  examined - row 3b), none applied: (P1) always report two completion percentages, GA and
-  global - no home in the repo config; (P2) on a crate bump, run the repo's existing tests for that surface before
-  writing changelog-driven probes - proposed for the tooling pack; (P3) never batch a commit with the edits or the
-  guard run it depends on: a refused edit or a red guard must stop the commit (it happened twice, 2026-11-13 and
-  2026-11-14) - proposed for the tooling pack; (P4) the 2026-07-16 "speed levers" note (worktree agents, batch
-  gates, codemods) - possibly superseded by the token-economy rulings: confirm or retire.
+- Memory promotions - row 3b applied P1, P2, P5, P6, P7 and P8 (ruled 2026-11-14) and amended the "speed levers"
+  note (P4: item 10 superseded, items 1-9 stand). Still open for the developer: (P3) never batch a commit with the
+  edits or the guard run it depends on - it is a universal rule, so its home is the global `/pre-commit` skill, which
+  this repo never writes; (P1) the completion pair "GA and global" has NO in-repo definition - the promoted line
+  names today's stand-ins (PHP-parity, raw floor and Vision from the gap matrix; the readiness plan as the GA proxy)
+  and labels that mapping Speculative: define the pair, or confirm the stand-ins. The uncited project notes other than
+  the nine read in full (69 notes: milestone state, build maps, session records) were kept on their description alone.
 - Manual, outside this repo (from row 3's `/repair`): the session banner names `.claude/EXPERTISE-REFERENCE.md`
   even when only `expertise-core.md` exists (the developer's global banner hook); the parent `/stack` repo's rule
   globs match files under this folder; `wasm-pack` is in the allow list and not installed; four older plans carry
@@ -103,7 +105,15 @@ snapshotted outside the repo before row 2 writes anything.
   a non-matching read loaded no scoped rule; the never-load control rule never loaded.
 ### Needs research
 - Row 5 leads: `phg-ask-human`, `phg-lenses` and `phg-qa-sweep` declare their description as a folded block, and the
-  expertise index prints it as `>`; `phg-qa-sweep` tells its panel to run "DEC-268 MAXIMAL".
+  expertise index prints it as `>`; `phg-qa-sweep` tells its panel to run "DEC-268 MAXIMAL". From row 3b: neither
+  the tooling pack's description nor the routing row in `expertise-core.md` carries a cloud keyword, so the promoted
+  key-pin line loads only when that pack is pulled in for another reason; two pack cites do not support their
+  sentence (language-design "Reviewer lenses" cites the safety reviewer's ladder bullet; tooling "Reviewer lenses"
+  cites its sections 5 and 6 for "`unsafe` outside `src/jit/`", which is its section 1) - targets kept, mismatch logged.
+- Row 6 lead, so the audit does not reopen it: `completeness-reviewer` reproduces the global Rule 6 table (the
+  `/agent-def` audit's one Rule 5 finding). The developer chose Tier A only on 2026-11-14, so the trim (Tier B) is not applied; its stated risk
+  was that whether a project subagent loads `~/.claude/CLAUDE.md` was not measured. Measure that before proposing
+  the trim again.
 - The agents' closing "TWO consecutive fully-clean rounds" and `phg-lenses`' `/converge` line were left as written
   on the reading that `CLAUDE.md` keeps that rule for when a panel does run. That reading is inferred from the
   "MAXIMAL tier" paragraph, not ruled.
