@@ -65,7 +65,7 @@ snapshotted outside the repo before row 2 writes anything.
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 1 | Plan file, active-plan pointer, SLICE-STATE cursor line, MASTER-PLAN mirror line - commit `docs(ground prep): the plan for the four tool groups and the expert opinion; cursors say ground preparation runs first` | S | done | 97503aba | docs/plans/** |
-| 2 | Group 1: `/rules-split` - dry run, the developer's go, apply, quoted anchors, intake rule, load probe before the commit | M | todo | - | CLAUDE.md .claude/rules/** .claude/skills/** docs/** |
+| 2 | Group 1: `/rules-split` - dry run, the developer's go, apply, quoted anchors, intake rule, load probe before the commit - commit `docs(claude): split the oracle and hook detail out of CLAUDE.md into two path-scoped rules; intake rule; three drifted figures` | M | done | 48fe8127 | CLAUDE.md .claude/rules/** .claude/skills/** docs/** |
 | 3 | Group 1: row 6 batch in one commit (closes audit-remediation row 6) - `/repair`, `/agent-def --audit` on the three reviewer agents (stale DEC-268 sentence, diff first), Status-block parse check, leftover files, `/memory-promote` at project scope | M | todo | - | .claude/** CLAUDE.md docs/plans/** |
 | 4 | Group 1: one push, CI watch, then `/discover-expertise --write` (global store, nothing in the repo) | S | todo | - | - |
 | 5 | Group 1: `/skill-audit --scope=project` (fresh session, model question first) | M | todo | - | .claude/skills/** |
@@ -80,6 +80,11 @@ snapshotted outside the repo before row 2 writes anything.
 - Where the defect-queue grading pass (SLICE-STATE, section DEFECT QUEUE; owed under DEC-578) falls: after row 9
   inside this plan, or as its own task. Not ruled. Row 9's hunters may add entries, which argues for after.
 - The order of groups 2-4 is a recommendation; the developer may reorder rows 7-9.
+- [x] W1. Run the rules load probe, `bash /tmp/probe-rules-load-20261114.sh` - denied to Claude by the permission
+  engine (walkthrough rules-split) — DONE 2026-11-14: run by the developer in the session; seven headless calls in a
+  scratch copy; a Read of `tests/x.rs` or `.github/workflows/ci.yml` loaded only `php-oracle.md`; a Read of
+  `scripts/git-hooks/pre-commit`, `.config/nextest.toml` or `Cargo.toml` loaded only `gate-mechanics.md`; no read and
+  a non-matching read loaded no scoped rule; the never-load control rule never loaded.
 ### Needs research
 ### Fragile
 - Row 2 changes the one file every session and every reviewer agent reads. A moved heading can break a consumer
@@ -87,3 +92,12 @@ snapshotted outside the repo before row 2 writes anything.
 ### Known issues
 - The session banner names `.claude/EXPERTISE-REFERENCE.md`; no such file exists in the repo (checked 2026-11-14).
   Row 3's `/repair` settles whether the banner or the repo is wrong.
+- A path-scoped rules file of the parent `/stack` repo (`/stack/.claude/rules/claude-config.md`) loaded into a phorj
+  session when phorj's `CLAUDE.md` was read (observed 2026-11-14). `claudeMdExcludes` keeps `/stack`'s `CLAUDE.md`
+  files out; it does not cover that repo's rules. Row 3's `/repair` records whether this needs a fix or a sentence
+  in "Routing".
+- No guard checks the rules files yet (frontmatter on line 1, every glob live, the `CLAUDE.md` index matching each
+  file's `paths:`, every quoted anchor on ONE line - one anchor broke on a line wrap on 2026-11-14 and was caught
+  by hand). Every failure of a path-scoped rule is silent, so the check is owed: it belongs to row 7.
+- `.claude/rules/php-oracle.md` does not list `src/lift/**`, and the paused scout row lifts `preg_*` calls. The index
+  line in `CLAUDE.md` keeps the kernel loaded; row 3 checks where `preg_` pins are written and widens the globs.
