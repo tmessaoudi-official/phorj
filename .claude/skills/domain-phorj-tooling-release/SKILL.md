@@ -48,7 +48,7 @@ Delta over CLAUDE.md: the green definition, the all-features gate, git autonomy,
 - **Stale stub** embeds the source into an OLD VM and breaks the spine at the distribution layer; the cache key includes the `phg` binary hash. PE section embedding with `llvm-objcopy --add-section` needs `--set-section-flags NAME=noload,readonly`.  [Source: docs/specs/UNIFIED-SPEC.md:2623-2625; memory/pe-objcopy-section-flags.md]
 
 ## Evidence surfaces (what counts as proof here)
-- `tests/format.rs::every_repo_phg_formats_idempotently_and_safely`; LSP unit tests drive `Server::handle` (`src/lsp/tests.rs`); `tests/serve.rs`; the playground build with CI's RUSTFLAGS; `bash scripts/size-gate.sh` and `bash scripts/doc-guards.sh` before a push (CLAUDE.md § Toolchain & quality gate).  [Source: tests/format.rs:117; src/lsp/tests.rs:166; .github/workflows/playground.yml:66]
+- `tests/format.rs::every_repo_phg_formats_idempotently_and_safely`; LSP unit tests drive `Server::handle` (`src/lsp/tests.rs`); `tests/serve.rs`; the playground build with CI's RUSTFLAGS; `bash scripts/size-gate.sh` and `bash scripts/doc-guards.sh` before a push (both are steps of `scripts/git-hooks/pre-push`; the hook tiers are described in `.claude/rules/gate-mechanics.md`).  [Source: tests/format.rs:117; src/lsp/tests.rs:166; .github/workflows/playground.yml:66]
 - A push is proven by the remote line in the push output plus `git rev-list --count origin/master..master` returning 0 (global /long-run and /ci-watch apply).  [Source: memory/resume-2026-09-09-push-pending.md]
 
 ## Reviewer lenses
