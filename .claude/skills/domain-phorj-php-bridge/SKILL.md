@@ -33,7 +33,7 @@ Delta over CLAUDE.md: the PHP 8.5 floor (CLAUDE.md § Toolchain & quality gate),
 ## What "good" looks like
 - A native lands with `src/native/<m>.rs`, a registry row, `<m>_tests.rs` pinned to real `php -n` output, a gated example and a README row; only a byte-identical PHP CORE function earns a faithful twin.  [Source: memory/native-stdlib-wave.md]
 - A lifted draft passes `phg check`, runs, and transpiles back (`lift` then `check` then `transpile` is the QA "lift" journey).  [Source: .claude/skills/phg-qa-sweep/SKILL.md:89]
-- Every byte-identity claim (README, CHANGELOG, doc comment, test name) carries the exclusion caveat.  [Source: .claude/agents/safety-promises-reviewer.md:74-75]
+- Every byte-identity claim (README, CHANGELOG, doc comment, test name) carries the exclusion caveat.  [Source: .claude/agents/safety-promises-reviewer.md ("Does anything in the diff claim byte-identity")]
 
 ## Classic failure modes (with detection)
 - **OPEN SECURITY ITEM (DEC-568, PENDING)**: neither the builder guard nor the `serialize()` line scan rejects (a) a raw header line starting with a space or tab, which an obsolete line-folding parser joins to the previous header; (b) a raw line with no `:`; (c) a handler-supplied `Content-Length` or `Transfer-Encoding` line, which `serialize()` emits after its own `Content-Length`, so a proxy may frame the body differently from the client (request-smuggling class). None needs CR/LF; widening the rejected set is a language/API decision for the developer. Report it at once if a task touches serve; do not widen it alone.  [Source: docs/specs/UNIFIED-SPEC.md:2522-2527; KNOWN_ISSUES.md:1436-1442]
@@ -50,7 +50,7 @@ Delta over CLAUDE.md: the PHP 8.5 floor (CLAUDE.md § Toolchain & quality gate),
 - Transpile snapshot tests per ruled spec, and lift round-trip cases (lift, run, transpile).  [Source: docs/specs/2026-07-23-typed-lsb.md:50-53; docs/specs/2026-07-23-labeled-break-continue.md:54-59]
 
 ## Reviewer lenses
-1. **Ladder case** - which case does each new native take, is `pure: false` set, does the emission use only tier-1 functions, is there a disclosure?  2. **Downgrade** - does a hard error become a warning, fallback or best-effort emit (a P0)?  3. **Stock oracle** - does `php -n` 8.5 print identical bytes, faults included?  4. **Security asymmetry** - is a guard on one deployment path (native serve vs `phg build --php`) missing on the other?  [Source: .claude/agents/safety-promises-reviewer.md:65-77; docs/specs/UNIFIED-SPEC.md:2495-2499]
+1. **Ladder case** - which case does each new native take, is `pure: false` set, does the emission use only tier-1 functions, is there a disclosure?  2. **Downgrade** - does a hard error become a warning, fallback or best-effort emit (a P0)?  3. **Stock oracle** - does `php -n` 8.5 print identical bytes, faults included?  4. **Security asymmetry** - is a guard on one deployment path (native serve vs `phg build --php`) missing on the other?  [Source: .claude/agents/safety-promises-reviewer.md (§ "2. Invariant 14 — the LADDER, and the disclosure that must travel with it"); docs/specs/UNIFIED-SPEC.md:2495-2499]
 
 ## Vocabulary
 | Term | Meaning |

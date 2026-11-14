@@ -51,7 +51,7 @@ Delta over CLAUDE.md: Invariants 5, 12, 15 and 16 and the SSOT quartet are NOT r
 - A design question is evidenced by the register row it creates (DEC-n, or PENDING) in the same change.  [Source: CLAUDE.md § Delivery invariants, Invariant 19 ("kept mutually consistent in the SAME change")]
 
 ## Reviewer lenses
-1. **Self-ruling** - did the change decide a user-visible language question alone, or re-open a rejected idea?  2. **Wind** - can any new symbol be used without an import?  3. **PHP semantics drift** - do shadowing, `==`, array `<=>`, by-value capture or reserved names differ on the PHP leg?  4. **Every access surface** - is the rule enforced at all sites of its class (visibility's six, UFCS receivers, both packages)?  [Source: .claude/agents/safety-promises-reviewer.md:70-72; memory/member-visibility-six-access-sites.md]
+1. **Self-ruling** - did the change decide a user-visible language question alone, or re-open a rejected idea?  2. **Wind** - can any new symbol be used without an import?  3. **PHP semantics drift** - do shadowing, `==`, array `<=>`, by-value capture or reserved names differ on the PHP leg?  4. **Every access surface** - is the rule enforced at all sites of its class (visibility's six, UFCS receivers, both packages)?  [Source: .claude/agents/safety-promises-reviewer.md ("Does the diff add a native-only capability?"); memory/member-visibility-six-access-sites.md]
 
 ## Vocabulary
 | Term | Meaning |

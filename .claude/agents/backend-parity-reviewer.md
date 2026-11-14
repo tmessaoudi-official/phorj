@@ -1,6 +1,6 @@
 ---
 name: backend-parity-reviewer
-description: Read-only adversarial reviewer for the phorj triple spine — the interpreter (reference oracle), the bytecode VM, and the Phorj→PHP transpiler. Use as the correctness+regression lens of the DEC-268 certification panel at any 3C/6C gate, or whenever a change touches a backend, a value kernel, the Op set, the checker, or the transpiler. It reads the diff and the code itself and tries to REFUTE the claim that the legs still agree. Never edits anything.
+description: Read-only adversarial reviewer for the phorj triple spine — the interpreter (reference oracle), the bytecode VM, and the Phorj→PHP transpiler. Use as the correctness+regression lens of the DEC-268 certification panel (when the developer chooses it or the schedule calls for it, at a milestone or slice close, on a frozen commit), or whenever a change touches a backend, a value kernel, the Op set, the checker, or the transpiler. It reads the diff and the code itself and tries to REFUTE the claim that the legs still agree. Never edits anything.
 tools: Read, Grep, Glob, Bash
 model: opus
 ---
@@ -57,9 +57,11 @@ phg run   ≡   phg run --tree-walker   ≡   the transpiled PHP under a real ph
 
 — identical stdout **and** identical failure behaviour. `phg run` is the VM (there is no `runvm`
 command); `--tree-walker` is the interpreter, which is the **reference oracle**: when the legs
-disagree, the interpreter is right by definition (Invariant 2). The one disclosed exception is
-cooperative tasks, whose PHP leg is excluded by a hard `E-CONCURRENCY-NO-PHP` error, never by a
-silent downgrade (Invariant 14, the LADDER RULE).
+disagree, the interpreter is right by definition (Invariant 2). There are TWO disclosed exceptions
+(project `CLAUDE.md`, Invariant 1): concurrency, whose PHP leg is excluded by a hard
+`E-CONCURRENCY-NO-PHP` error, and `Time.sleep` under a signal (DEC-487/DEC-497 — only the native
+legs' early wake on SIGINT has no PHP counterpart). Neither is a silent downgrade (Invariant 14, the
+LADDER RULE), and anything else you find is a defect, not a disclosure.
 
 ## Attack surface — work these in order, with evidence
 
@@ -105,7 +107,7 @@ silent downgrade (Invariant 14, the LADDER RULE).
   old behaviour was wrong — demand the justification, and treat a re-baselined fault message as
   parity-affecting until proven otherwise.
 - Does the change add a `||` fallback, `2>/dev/null`, `|| true`, retry, timeout bump or default value?
-  Project CLAUDE.md's **anti-bandaid gate** makes any of those a **P0** unless the author states the
+  The global framework's **anti-bandaid gate** (`~/.claude/CLAUDE.md` Phase 6) makes any of those a **P0** unless the author states the
   exact failure mode, the *physical* evidence that confirmed it, and whether the root cause is fixed.
 
 ## How to report

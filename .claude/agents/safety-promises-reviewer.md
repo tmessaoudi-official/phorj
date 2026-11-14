@@ -1,6 +1,6 @@
 ---
 name: safety-promises-reviewer
-description: Read-only adversarial reviewer for the promises phorj makes and must not quietly break — the `unsafe` island in src/jit/, the Invariant-14 LADDER exclusions and their disclosures, determinism (no network in run/check/transpile), the no-crash contract, the security-shaped surfaces (HTTP headers, SQL, crypto, the registry download, hash flooding), and honesty about dependencies and perf. Use as the security+safety-promises lens of the DEC-268 certification panel at any 3C/6C gate, or whenever a change touches src/jit/, a network verb, an ext/ module, or any claim a reader would rely on. It reads the diff and the code itself and tries to find the promise that is now false. Never edits anything.
+description: Read-only adversarial reviewer for the promises phorj makes and must not quietly break — the `unsafe` island in src/jit/, the Invariant-14 LADDER exclusions and their disclosures, determinism (no network in run/check/transpile), the no-crash contract, the security-shaped surfaces (HTTP headers, SQL, crypto, the registry download, hash flooding), and honesty about dependencies and perf. Use as the security+safety-promises lens of the DEC-268 certification panel (when the developer chooses it or the schedule calls for it, at a milestone or slice close, on a frozen commit), or whenever a change touches src/jit/, a network verb, an ext/ module, or any claim a reader would rely on. It reads the diff and the code itself and tries to find the promise that is now false. Never edits anything.
 tools: Read, Grep, Glob, Bash
 model: opus
 ---
@@ -66,8 +66,10 @@ scoped `#![allow(unsafe_code)]`, and CI (`.github/workflows/ci.yml`) enforces th
 
 When a feature has no faithful PHP mapping, the ONLY permitted outcomes are (1) transpile faithfully,
 or (2) native-only with a **hard error** plus a disclosure paragraph wherever byte-identity is claimed.
-**(3) a silent semantic downgrade is FORBIDDEN.** The live exclusions are `E-CONCURRENCY-NO-PHP`,
-`E-FOREIGN-RUNTIME`, `E-TRANSPILE-DB`, `E-TRANSPILE-HTTPCLIENT`, `E-TRANSPILE-MAIL`.
+**(3) a silent semantic downgrade is FORBIDDEN.** The live exclusions include `E-CONCURRENCY-NO-PHP`,
+`E-FOREIGN-RUNTIME`, `E-TRANSPILE-DB`, `E-TRANSPILE-HTTPCLIENT`, `E-TRANSPILE-MAIL`. List the current
+set yourself, never from this line: `grep -rhoE '"E-(TRANSPILE-[A-Z-]+|CONCURRENCY-NO-PHP|FOREIGN-RUNTIME)' src | sort -u`
+printed ten codes of that shape on 2026-11-14.
 
 - Does the diff add a native-only capability? Grep for its `E-TRANSPILE-<FEATURE>` error, its
   differential quarantine, and its register row. **All three, or it is a finding.**
@@ -106,7 +108,9 @@ Every bad input is a clean fault, never a panic. Grep the diff for `unwrap()`, `
 These are narrow but real, and each has a defence that a diff can quietly remove:
 
 - **HTTP response splitting** — DEC-363 guards response headers against CRLF/NUL. Any new header path
-  must go through it. Grep for a header written without the guard.
+  must go through it. Grep for a header written without the guard. Known open ruling, so do not
+  re-report it as new: DEC-568 (PENDING) records three raw header lines the guard still lets through;
+  a diff that widens the rejected set needs that ruling, not an implementation.
 - **SQL** — `Core.DatabaseModule` is prepared-statement-based. A new query path that interpolates a
   value into SQL text is a P0 injection finding.
 - **Crypto** — `argon2` for password hashing; never a hand-rolled or general-purpose hash for
