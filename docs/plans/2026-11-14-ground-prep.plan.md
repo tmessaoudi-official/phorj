@@ -67,8 +67,9 @@ snapshotted outside the repo before row 2 writes anything.
 |---|------|------|-------|----------|-------|
 | 1 | Plan file, active-plan pointer, SLICE-STATE cursor line, MASTER-PLAN mirror line - commit `docs(ground prep): the plan for the four tool groups and the expert opinion; cursors say ground preparation runs first` | S | done | 97503aba | docs/plans/** |
 | 2 | Group 1: `/rules-split` - dry run, the developer's go, apply, quoted anchors, intake rule, load probe before the commit - commit `docs(claude): split the oracle and hook detail out of CLAUDE.md into two path-scoped rules; intake rule; three drifted figures` | M | done | 48fe8127 | CLAUDE.md .claude/rules/** .claude/skills/** docs/** |
-| 3 | Group 1: row 6 batch in one commit (closes audit-remediation row 6) - `/repair`, `/agent-def --audit` on the three reviewer agents (stale DEC-268 sentence, diff first), Status-block parse check, leftover files, `/memory-promote` at project scope - commit `docs(claude): the Claude-config sync - reviewer agents say what DEC-518 ratified; nine Status rows parse again`; the agent audit was by section heading (no generic framework section found), and the memory promotions are proposals under Needs input, not applied | M | done | 72437f60 | .claude/** CLAUDE.md docs/plans/** |
-| 4 | Group 1: one push, CI watch, then `/discover-expertise --write` (global store, nothing in the repo) | S | todo | - | - |
+| 3 | Group 1: row 6 batch in one commit (closes audit-remediation row 6) - `/repair`, `/agent-def --audit` on the three reviewer agents (stale DEC-268 sentence, diff first), Status-block parse check, leftover files, `/memory-promote` at project scope - commit `docs(claude): the Claude-config sync - reviewer agents say what DEC-518 ratified; nine Status rows parse again`; `/agent-def --audit` and `/memory-promote` were NOT run as skills in this row (a skim of the agents' headings and a keyword check of the feedback memories only) - they are row 3b | M | done | 72437f60 | .claude/** CLAUDE.md docs/plans/** |
+| 3b | Group 1: `/agent-def --audit` on each of the three reviewer agents (a full read: the completeness reviewer has sections named for Rule 6's four dimensions, executed tests and visual evidence, and whether they restate the global rules is what the audit decides) and `/memory-promote --source=project` over all 176 notes (fresh session; any agent edit as a diff first) | M | todo | - | .claude/agents/** .claude/rules/** .claude/skills/** |
+| 4 | Group 1: one push, CI watch, then `/discover-expertise --write` (global store, nothing in the repo) - pushed at `docs: the cursor says rows 1-3 of the ground preparation are done; one more stale oracle stamp; a pack cite repointed`; pre-push gate green (3752 passed, 2 skipped); CI and release green on that commit; the store rebuilt from it (its judging step, practices.md, was not run) | S | done | 06c16bc8 | - |
 | 5 | Group 1: `/skill-audit --scope=project` (fresh session, model question first) | M | todo | - | .claude/skills/** |
 | 6 | Group 1: `/audit --scope=project` (fresh session, model question first) | M | todo | - | .claude/** CLAUDE.md |
 | 7 | Group 2: standing guards - `/new-hook` docs-drift and PHP forward-compat (warn-only, exit 0), `/usage-report` baseline | M | todo | - | .claude/hooks/** scripts/** |
@@ -81,8 +82,9 @@ snapshotted outside the repo before row 2 writes anything.
 - Where the defect-queue grading pass (SLICE-STATE, section DEFECT QUEUE; owed under DEC-578) falls: after row 9
   inside this plan, or as its own task. Not ruled. Row 9's hunters may add entries, which argues for after.
 - The order of groups 2-4 is a recommendation; the developer may reorder rows 7-9.
-- Memory promotions PROPOSED by row 3's dry run (28 feedback memories checked against CLAUDE.md, the rules, the
-  packs and the agents; 24 already covered), none applied: (P1) always report two completion percentages, GA and
+- Memory promotions PROPOSED by row 3's keyword check (the 28 feedback memories against CLAUDE.md, the rules, the
+  packs, the agents and the global framework: 25 covered; the 133 project and 12 reference notes were NOT
+  examined - row 3b), none applied: (P1) always report two completion percentages, GA and
   global - no home in the repo config; (P2) on a crate bump, run the repo's existing tests for that surface before
   writing changelog-driven probes - proposed for the tooling pack; (P3) never batch a commit with the edits or the
   guard run it depends on: a refused edit or a red guard must stop the commit (it happened twice, 2026-11-13 and
@@ -92,13 +94,23 @@ snapshotted outside the repo before row 2 writes anything.
   even when only `expertise-core.md` exists (the developer's global banner hook); the parent `/stack` repo's rule
   globs match files under this folder; `wasm-pack` is in the allow list and not installed; four older plans carry
   no Status block (post-slice3-consolidation, claude-bundle-cross-repo-audit, json-adt-jit,
-  product-driven-gap-programme) - archive or keep is the developer's call.
+  product-driven-gap-programme) - archive or keep is the developer's call; the developer's global end-of-life
+  snapshot is 42 days old (`bin/eol-refresh.sh` in the global config, reported by the expertise index).
 - [x] W1. Run the rules load probe, `bash /tmp/probe-rules-load-20261114.sh` - denied to Claude by the permission
   engine (walkthrough rules-split) — DONE 2026-11-14: run by the developer in the session; seven headless calls in a
   scratch copy; a Read of `tests/x.rs` or `.github/workflows/ci.yml` loaded only `php-oracle.md`; a Read of
   `scripts/git-hooks/pre-commit`, `.config/nextest.toml` or `Cargo.toml` loaded only `gate-mechanics.md`; no read and
   a non-matching read loaded no scoped rule; the never-load control rule never loaded.
 ### Needs research
+- Row 5 leads: `phg-ask-human`, `phg-lenses` and `phg-qa-sweep` declare their description as a folded block, and the
+  expertise index prints it as `>`; `phg-qa-sweep` tells its panel to run "DEC-268 MAXIMAL".
+- The agents' closing "TWO consecutive fully-clean rounds" and `phg-lenses`' `/converge` line were left as written
+  on the reading that `CLAUDE.md` keeps that rule for when a panel does run. That reading is inferred from the
+  "MAXIMAL tier" paragraph, not ruled.
+- Whether a reviewer SUBAGENT loads a path-scoped rule is unverified (the probe covered the main session only).
+- The 2026-11-13 local gate note says 3765 tests and the 2026-11-14 push log says 3752 run, 2 skipped. The CI gate
+  job reports the same total on both commits (55 result lines, 3704 passed), so no test left between them; the
+  local difference is a counting basis that was not traced.
 ### Fragile
 - Row 2 changes the one file every session and every reviewer agent reads. A moved heading can break a consumer
   without an error; the consumer inventory and the load probe are the guard, and both run before the commit.
