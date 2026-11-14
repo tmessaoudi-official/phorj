@@ -35,7 +35,7 @@ Run these **in addition to** the global skill's own dimensions, on every review:
   the transpiled PHP under a real `php`? A change to one backend, one value kernel, or the transpiler
   that has no differential case shaped like the new behaviour is a **P0** — the differential harness's
   coverage IS `examples/**/*.phg`, so an unexampled feature has ZERO byte-identity coverage.
-- **Anti-bandaid gate (project CLAUDE.md Phase 6).** For every `||` fallback, `2>/dev/null`,
+- **Anti-bandaid gate (the global framework, `~/.claude/CLAUDE.md` Phase 6).** For every `||` fallback, `2>/dev/null`,
   `|| true`, error trap, retry loop, timeout bump or default-value assignment introduced: state the
   exact failure mode, the *physical* evidence that confirmed it (log, measurement, trace, test
   output), and whether the root cause is fixed. No evidence ⇒ **P0**, replace it with a root-cause fix.

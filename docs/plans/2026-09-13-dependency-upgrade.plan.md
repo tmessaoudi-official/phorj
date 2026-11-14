@@ -73,7 +73,7 @@ individually certified; the full gate runs once, on the final tree, before the p
 | 1 | argon2 0.5.3 hash fixture pinned before the bump (7/7 crypto tests on 0.5.3, then green on 0.6) — `chore(deps): DEC-521` | S | done | 40d17417 | src/ext/cryptography/tests.rs |
 | 2 | Toolchain 1.98.1 + lockfile (87 packages) + mysql 28.0.2 — check build clean — `chore(deps): DEC-521` | M | done | 40d17417 | rust-toolchain.toml Cargo.toml Cargo.lock playground/Cargo.toml |
 | 3 | argon2 0.6.0 (`phc::PasswordHash`, crate-drawn salt) — 19/19 crypto+regex tests | M | done | 40d17417 | Cargo.toml src/ext/cryptography/* |
-| 4 | fancy-regex 0.19.2 (compiled unchanged); 23-pattern probe vs PHP 8.5.10/PCRE2 10.44: 19 agree (10 pinned in `tests/differential.rs`; the eleventh, `x{,2}y`, dropped by DEC-522), 2 NEW divergences `\O` + `(?~…)` now refused on every leg (`reject.rs` + PHP twin); pre-commit caught `^(?=a)(a|a)+$` resolving natively while PCRE faults — disclosed PHP-leg limitation widened, pinned | M | done | 40d17417 | Cargo.toml src/ext/regex/* |
+| 4 | fancy-regex 0.19.2 (compiled unchanged); 23-pattern probe vs PHP 8.5.10/PCRE2 10.44: 19 agree (10 pinned in `tests/differential.rs`; the eleventh, `x{,2}y`, dropped by DEC-522), 2 NEW divergences `\O` + `(?~…)` now refused on every leg (`reject.rs` + PHP twin); pre-commit caught `^(?=a)(a¦a)+$` resolving natively while PCRE faults — disclosed PHP-leg limitation widened, pinned | M | done | 40d17417 | Cargo.toml src/ext/regex/* |
 | 5 | cranelift 0.135.2 — `chore(deps): DEC-521 — cranelift` — no source change; JIT suite + three-leg differential 400/400; no perf claim (quiet-box before/after OWED) | L | done | 424feff0 | Cargo.toml src/jit/* |
 | 6 | CI wasm-pack 0.15.0, sha256-verified pinned asset — `chore(deps): DEC-521` | S | done | 40d17417 | .github/workflows/playground.yml |
 | 7 | VS Code client ^10.1.1 + engines ^1.91.0 (lockfile is untracked) — `chore(deps): DEC-521` | S | done | 40d17417 | editors/vscode/package.json editors/vscode/package-lock.json |
@@ -83,6 +83,7 @@ individually certified; the full gate runs once, on the final tree, before the p
 | 12 | DEC-522 — CI's PCRE2 10.42 redded master on the `x{,2}y` pin: `{,n}` and spaced `{n,m}` refused on both constructors on every leg (`reject.rs` + PHP twin, sabotage-checked), pin removed | S | done | 325a4833 | src/ext/regex/reject.rs src/transpile/runtime_php_regex.rs tests/differential.rs |
 | 11 | Edition 2024 slice (language + formatting), after the push | L | todo | - | Cargo.toml playground/Cargo.toml src/bundle/cross.rs src/bundle/manifest.rs tests/registry.rs CLAUDE.md |
 <!-- /progress-block -->
+> In the Status table `¦` stands for the pipe character: the collector splits a row on every pipe, escaped ones included.
 ### Blocked
 ### Needs input
 - Rust edition 2021 → 2024 (asked 2026-09-13, answer pending).

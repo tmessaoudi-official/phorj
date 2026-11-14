@@ -40,7 +40,10 @@ NOT `/stack` infrastructure, and there is **no orchestrator agent to route to** 
 and never route work here (or in `/stack`) to it. Work is done directly in this conversation; the
 read-only reviewer agents in `.claude/agents/` are unaffected. No `/stack`-level
 CLAUDE.md loads here: this repo's `.claude/settings.local.json` excludes them (`claudeMdExcludes`,
-written by `~/.claude/bin/stack-claude-md-scope.sh`).
+written by `~/.claude/bin/stack-claude-md-scope.sh`). `/stack`'s own path-scoped rules
+(`/stack/.claude/rules/`) can still load on a matching read — some of their globs match `CLAUDE.md`,
+`.claude/**` and a few root filenames under this folder (observed 2026-11-14); they describe `/stack`
+and do not govern phorj.
 
 Besides the `domain-*` expertise packs (see `expertise-core`), the repo carries exactly FOUR skills, all repo-specific by name and content (global-is-reference
 ruling, 2026-08-18 — a repo may not duplicate anything that exists in `~/.claude/`):
@@ -84,7 +87,7 @@ stay in `.claude/agents/`.
 - **PHP oracle resolution** — how the local resolver picks the oracle, CI's SECOND resolution path, the PCRE2 split
   between them (a `preg_*` pin must hold on both) and the no-pin check → `.claude/rules/php-oracle.md` (loads when
   you read `scripts/toolchain.env`, `scripts/validate-infra.sh`, `scripts/test-validate-infra.sh`, `tests/**`,
-  `src/transpile/**`, `src/native/**` or `.github/workflows/**`).
+  `src/transpile/**`, `src/lift/**`, `src/native/**` or `.github/workflows/**`).
 - **Perf:** `phg benchmark <file>` (median-of-N, output-identity gated) for before/after numbers;
   CI regression gate: `scripts/perf-gate.sh`.
 - **After each shipped feature:** `cargo build --release` and report the binary path

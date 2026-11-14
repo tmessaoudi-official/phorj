@@ -5,6 +5,7 @@ paths:
   - "scripts/test-validate-infra.sh"
   - "tests/**"
   - "src/transpile/**"
+  - "src/lift/**"
   - "src/native/**"
   - ".github/workflows/**"
 ---
