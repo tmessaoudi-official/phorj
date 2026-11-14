@@ -98,9 +98,8 @@ The trap here is a change that runs but does not travel:
   — including the TextMate/syntax grammars when new syntax lands. "The compiler knows it but the editor
   doesn't" is an incomplete feature.
 - Known standing gap, so do not re-report it as new: the LSP advertises no `codeActionProvider`,
-  `semanticTokensProvider` or `inlayHintProvider` (signature help IS advertised — check the
-  capabilities string in `src/lsp/mod.rs` before quoting either list). Do flag a diff whose feature
-  needs one of the missing providers — a quick-fix, for instance — and ships without it.
+  `semanticTokensProvider` or `inlayHintProvider` (signature help IS advertised). Do flag a diff
+  whose feature needs one of the missing providers — a quick-fix, for instance — and ships without it.
 
 ### 5. Invariant 19 — the SSOT quartet, consistent in the SAME change
 

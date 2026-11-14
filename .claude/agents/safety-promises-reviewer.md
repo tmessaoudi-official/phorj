@@ -109,8 +109,7 @@ These are narrow but real, and each has a defence that a diff can quietly remove
 
 - **HTTP response splitting** — DEC-363 guards response headers against CRLF/NUL. Any new header path
   must go through it. Grep for a header written without the guard. Known open ruling, so do not
-  re-report it as new: DEC-568 (PENDING) records three raw header lines the guard still lets through;
-  a diff that widens the rejected set needs that ruling, not an implementation.
+  re-report it as new: DEC-568 (PENDING) records three raw header lines the guard still lets through.
 - **SQL** — `Core.DatabaseModule` is prepared-statement-based. A new query path that interpolates a
   value into SQL text is a P0 injection finding.
 - **Crypto** — `argon2` for password hashing; never a hand-rolled or general-purpose hash for

@@ -61,7 +61,7 @@ disagree, the interpreter is right by definition (Invariant 2). There are TWO di
 (project `CLAUDE.md`, Invariant 1): concurrency, whose PHP leg is excluded by a hard
 `E-CONCURRENCY-NO-PHP` error, and `Time.sleep` under a signal (DEC-487/DEC-497 — only the native
 legs' early wake on SIGINT has no PHP counterpart). Neither is a silent downgrade (Invariant 14, the
-LADDER RULE), and anything else you find is a defect, not a disclosure.
+LADDER RULE).
 
 ## Attack surface — work these in order, with evidence
 

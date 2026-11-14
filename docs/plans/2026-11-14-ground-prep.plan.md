@@ -17,6 +17,7 @@
 - [2026-11-14 13:33] AGREED: row 3b agent edits: Tier A only (7 stale-fact fixes in the three reviewer agents, diff shown in the question); Tier B trims not applied. The nine drifted agents/<file>.md:NN cites in the domain packs become quoted anchors in the same commit. Developer via AskUserQuestion.
 - [2026-11-14 13:33] AGREED: row 3b memory promotions: P1 P2 P5 P6 into the tooling pack, P7 P8 into the engine-parity pack (P8's format-test line into the tooling pack); P6 = the trap and its check only; P3 is global and stays listed for the developer. Developer via AskUserQuestion.
 - [2026-11-14 13:33] AGREED: P4: memory note speed-levers-authorized is amended - item 10 superseded by the 2026-09-27 mode ruling, items 1-9 stand, including never dynamic workflows nor team agents. Developer via AskUserQuestion.
+- [2026-11-14 20:21] AGREED: row 3b follow-up: commit ee942fdf (`docs(claude): reviewer agents - seven stale facts corrected; pack cites into them are quoted anchors; six lessons promoted from memory`) carried three instruction clauses that were not in the approved diff (backend-parity 'anything else you find is a defect, not a disclosure'; safety-promises 'a diff that widens the rejected set needs that ruling, not an implementation'; completeness 'check the capabilities string in src/lsp/mod.rs before quoting either list'); found by the 6C review; the developer ruled: trim all three, in a follow-up commit. Developer via AskUserQuestion.
 
 ## Formal Plan
 
@@ -110,6 +111,11 @@ snapshotted outside the repo before row 2 writes anything.
   key-pin line loads only when that pack is pulled in for another reason; two pack cites do not support their
   sentence (language-design "Reviewer lenses" cites the safety reviewer's ladder bullet; tooling "Reviewer lenses"
   cites its sections 5 and 6 for "`unsafe` outside `src/jit/`", which is its section 1) - targets kept, mismatch logged.
+- Row 6 lead: project `CLAUDE.md` Invariant 1 counts TWO disclosed exceptions to the spine, and one of them
+  (concurrency) is a hard-error exclusion; the safety reviewer lists four more exclusions of the same kind
+  (`E-FOREIGN-RUNTIME`, `E-TRANSPILE-DB`, `-HTTPCLIENT`, `-MAIL`). Whether those count as exceptions to the spine is
+  not stated in any file read on 2026-11-14. Not ruled here; it is why the "anything else is a defect" clause was
+  trimmed from the parity reviewer.
 - Row 6 lead, so the audit does not reopen it: `completeness-reviewer` reproduces the global Rule 6 table (the
   `/agent-def` audit's one Rule 5 finding). The developer chose Tier A only on 2026-11-14, so the trim (Tier B) is not applied; its stated risk
   was that whether a project subagent loads `~/.claude/CLAUDE.md` was not measured. Measure that before proposing
