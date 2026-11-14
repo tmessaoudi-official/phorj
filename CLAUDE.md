@@ -65,18 +65,10 @@ stay in `.claude/agents/`.
   (byte-identical VM fallback, no rebuild). Warnings fail the build (`[lints] warnings = "deny"`);
   `#![deny(unsafe_code)]` on both crate roots — the JIT's audited `unsafe` (confined to `src/jit/`) is the
   sole island; toolchain pinned by `rust-toolchain.toml`.
-- **Tiered git hooks** (speed, 2026-07-08 — `scripts/git-hooks/{pre-commit,pre-push}`): **pre-commit**
-  runs the fast Rust-only tier (`fmt` + `nextest --features jit`, EXCLUDING the two heavy sweeps
-  `every_repo_phg_formats_idempotently_and_safely` + `shipped_manual_example_runs_on_both_backends`) —
-  ~12s vs ~126s (pre-commit also runs `phg format --check examples selftest` + doc-tests;
-  pre-push also runs `fmt --check`, the size-gate, `validate-infra.sh` (DEC-388.4), doc-tests and
-  `cargo build --release` — the hooks are the SSOT of their own steps). **pre-push** runs the FULL
-  suite (those two included) + `clippy` (`--no-default-features`
-  AND `--all-features`) + the PHP-oracle spine check + `microbench-gate`. Test-speed rests on
-  `Cargo.toml [profile.dev]` (deps opt-2, workspace opt-1, **deps `debug = false`** — that last one cut
-  `target/debug` from 24 GB to 7.4 GB, which is what keeps `target/` warm instead of being cleared for
-  disk; phorj's own debuginfo is untouched); `cargo-nextest` is the parallel runner (fallback:
-  `cargo test`) and IS installed — a warm full-suite cycle is ~43 s.
+- **Tiered git hooks** — pre-commit runs the fast tier, pre-push the FULL gate; the hooks
+  (`scripts/git-hooks/{pre-commit,pre-push}`) are the SSOT of their own steps. What each one runs, the timings and
+  the `[profile.dev]` settings behind them → `.claude/rules/gate-mechanics.md` (loads when you read
+  `scripts/git-hooks/**`, `Cargo.toml` or `.config/nextest.toml`).
 - **Full correctness gate — ALL-FEATURES (developer-ruled 2026-07-16)** (before claiming any feature
   done, and always before a push):
   `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo nextest run --workspace --all-features`
@@ -85,23 +77,14 @@ stay in `.claude/agents/`.
   features (`http-client`, `mail`, `database-postgres`, `database-mysql`) are otherwise NEVER compiled/linted/tested
   by the gate — the `--features jit`-only gate hid real clippy lints in those files (DEC-264 build).
   The live DB/mail/http round-trips self-skip when their `PHORJ_*_TEST_DSN`/server env is absent
-  (skip-loud). **Locally** the oracle is resolved by `scripts/toolchain.env` and nothing else — it globs
-  `php-8.5.*` newest-first, requires `bcmath` (probing with a DRAINING pipe: `grep -q` closes the pipe
-  early, php dies with SIGPIPE, and under `pipefail` a valid oracle is rejected ~13% of the time —
-  measured, DEC-456), and capability-checks even an inherited `PHORJ_PHP`, so a stale export from a
-  long-lived shell is announced and ignored rather than trusted. **CI does NOT source it** — the
-  workflows set only `PHORJ_REQUIRE_PHP=1` and rely on the test-side `PHORJ_PHP`-or-`php` fallback
-  present in 9 test files, with `setup-php` supplying an 8.5+bcmath build; that is correct today but
-  is a SECOND resolution path, so a change here is not automatically a change there. The two paths also
-  resolve DIFFERENT PCRE2 builds — PHP 8.5's bundled 10.44 here, ubuntu-24.04's system 10.42 on CI (inferred from CI's behaviour; `php:8.3-cli` in Docker reproduces it) — so a
-  `preg_*` behaviour PCRE2 changed between them passes locally and reds CI (DEC-522: `{,n}`); a pin on
-  such a behaviour must hold on both, or the construct is refused on every leg. No script may pin
-  a patch version — `scripts/validate-infra.sh` enforces that over every tracked shell script and
-  workflow (a variable-built path is a resolver, not a pin, and is deliberately not flagged), and
-  `scripts/test-validate-infra.sh` (run by pre-push) keeps the check itself from going dark.
-  With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
-  Transpile floor = **PHP 8.5** (`php-8.5.11` on this box today — resolved, not pinned); the bare `php` on PATH is a dev build (8.7.0-dev on 2026-09-29) and too
+  (skip-loud). With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
+  Transpile floor = **PHP 8.5** (resolved by `scripts/toolchain.env`, never pinned — no script may pin a patch
+  version); the bare `php` on PATH is a dev build (8.7.0-dev on 2026-09-29) and too
   permissive — never gate against it (CI runs it only as a non-gating canary).
+- **PHP oracle resolution** — how the local resolver picks the oracle, CI's SECOND resolution path, the PCRE2 split
+  between them (a `preg_*` pin must hold on both) and the no-pin check → `.claude/rules/php-oracle.md` (loads when
+  you read `scripts/toolchain.env`, `scripts/validate-infra.sh`, `scripts/test-validate-infra.sh`, `tests/**`,
+  `src/transpile/**`, `src/native/**` or `.github/workflows/**`).
 - **Perf:** `phg benchmark <file>` (median-of-N, output-identity gated) for before/after numbers;
   CI regression gate: `scripts/perf-gate.sh`.
 - **After each shipped feature:** `cargo build --release` and report the binary path
@@ -303,7 +286,7 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
     it fails only on a NEW or GROWING hard-cap breach (or a malformed `size-baseline.txt` row), and on 2026-09-09 reported
     `grandfathered=56 fails=0 warns=168` [Verified 2026-09-09] — i.e. **56 files are permanently
     over the 500 hard cap and 168 over the 300 soft cap**, and the gate is green (re-measured
-    2026-09-28: `grandfathered=54 fails=0 warns=173`). So the caps bind
+    2026-11-14: `grandfathered=54 fails=0 warns=176`). So the caps bind
     every file you TOUCH and every file you ADD; they do not describe the tree as it stands. Do not
     cite "hard cap 500" as a property of this repo, and do not add a grandfathered entry — the
     ratchet only ever tightens.
@@ -376,6 +359,11 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
 
 ## Where things live (pointers — read these instead of duplicating them here)
 
+- **Path-scoped rules** (`.claude/rules/`, each loads only when a file matching its `paths:` is READ):
+  `php-oracle.md` and `gate-mechanics.md`, both indexed under "Toolchain & quality gate" above. **Intake rule:** a
+  new lesson goes to the matching rules file or `domain-*` pack, not into this file — this file takes only what must
+  be known BEFORE any file is opened (a gate, a never-do, an invariant). A rules file is pruned or split again past
+  ~300 lines when path-scoped, ~150 when unscoped (an unscoped rule loads every session, like this file).
 - **THE ROADMAP (single source of truth):** `docs/plans/MASTER-PLAN.md` — waves 0–6, stdlib
   charter, percentage ledger, rejected-with-reasons appendix. Read it before starting any work.
 - **Correctness invariants (detail):** `docs/INVARIANTS.md` — read before touching backends,

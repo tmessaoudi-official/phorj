@@ -12,6 +12,7 @@
 
 ## Decisions Log
 - [2026-11-14 11:19] AGREED: Plan approved (developer, via AskUserQuestion, 2026-11-14): ground-prep group 1 runs under ONE plan - a dedicated plan file; /rules-split as a dry run first, applied only on the developer's go, with a load probe before its commit; every skill pinned to project scope; the Claude-config batch closes audit-remediation row 6 in one commit; one push; the two multi-agent audits (/skill-audit, /audit) wait for a fresh session. Certification at the 3C gate: advisor() only (developer's choice at the tier question). Rejected: /rules-split alone under its own gate; the inline five only; proceeding fully autonomously.
+- [2026-11-14 11:25] AGREED: /rules-split outcome (developer, via AskUserQuestion, after the dry run of 2026-11-14): SMALL SPLIT + PRUNE - two path-scoped rules files (.claude/rules/php-oracle.md, .claude/rules/gate-mechanics.md, about 31 lines moved out of 'Toolchain & quality gate'), an index line left for each, three drifted figures corrected (the oracle's patch number dropped, 9 test files to 12, the size-gate warns figure re-stamped), the intake rule added, the php-bridge pack header repointed. Every other section stays in CLAUDE.md: gates and never-do rules must be loaded before any file is read. Rejected: prune and intake rule only; also moving invariants 2-8 behind src paths (whether a reviewer subagent loads a path-scoped rule is unverified). Noted, no edit: var/phorj-app is absent on this machine.
 
 ## Formal Plan
 
@@ -63,7 +64,7 @@ snapshotted outside the repo before row 2 writes anything.
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | Plan file, active-plan pointer, SLICE-STATE cursor line, MASTER-PLAN mirror line | S | doing | - | docs/plans/** |
+| 1 | Plan file, active-plan pointer, SLICE-STATE cursor line, MASTER-PLAN mirror line - commit `docs(ground prep): the plan for the four tool groups and the expert opinion; cursors say ground preparation runs first` | S | done | 97503aba | docs/plans/** |
 | 2 | Group 1: `/rules-split` - dry run, the developer's go, apply, quoted anchors, intake rule, load probe before the commit | M | todo | - | CLAUDE.md .claude/rules/** .claude/skills/** docs/** |
 | 3 | Group 1: row 6 batch in one commit (closes audit-remediation row 6) - `/repair`, `/agent-def --audit` on the three reviewer agents (stale DEC-268 sentence, diff first), Status-block parse check, leftover files, `/memory-promote` at project scope | M | todo | - | .claude/** CLAUDE.md docs/plans/** |
 | 4 | Group 1: one push, CI watch, then `/discover-expertise --write` (global store, nothing in the repo) | S | todo | - | - |

@@ -4,7 +4,7 @@ description: Use when a phorj task touches developer tooling or delivery - phg l
 ---
 
 Review date: 2026-10-08 22:41   Validation mode: advisory   Core: .claude/rules/expertise-core.md
-Delta over CLAUDE.md: the green definition, the tiered hooks, the all-features gate, git autonomy, the certification ladder, Invariants 9, 13, 17, 18 and 19 are NOT repeated (CLAUDE.md § Toolchain & quality gate; § Git autonomy; § Delivery invariants). The global framework's long-run, sabotage-check and CI-watch procedures apply as written.
+Delta over CLAUDE.md: the green definition, the all-features gate, git autonomy, the certification ladder, Invariants 9, 13, 17, 18 and 19 are NOT repeated (CLAUDE.md § Toolchain & quality gate; § Git autonomy; § Delivery invariants); nor is what each tiered hook runs (`.claude/rules/gate-mechanics.md`, which loads when you read `scripts/git-hooks/**`, `Cargo.toml` or `.config/nextest.toml`). The global framework's long-run, sabotage-check and CI-watch procedures apply as written.
 
 ## Roles and mental models
 - **Tooling owner under the 100% rule**: "done" means the RUNNING server answers (hover, definition, references, symbols, signature help), not that the compiler knows; drive the server rather than reading the code.  [Source: memory/l4-named-tuples-gate-lessons.md; memory/editors-same-change-checklist.md]
@@ -62,7 +62,7 @@ Delta over CLAUDE.md: the green definition, the tiered hooks, the all-features g
 | OWED verdict | an unmeasurable bench, never reported as passed |
 | LSP4IJ | the JetBrains path that runs `phg lsp` |
 | slice / SLICE-STATE | the unit of delivery / its live cursor file |
-[Source: .claude/skills/phg-qa-sweep/SKILL.md:82; CLAUDE.md:276-284; CLAUDE.md:325-331; docs/MILESTONES.md:7-12]
+[Source: .claude/skills/phg-qa-sweep/SKILL.md:82; CLAUDE.md § Delivery invariants, Invariant 13 ("a RATCHET, not a cap") and Invariant 18 ("NO-HIDDEN-LOSS (DEC-365)"); docs/MILESTONES.md:7-12]
 
 ## Canonical sources
 - docs/specs/UNIFIED-SPEC.md (dependency policy, build and distribution), docs/EXTENSIONS-AUTHORING.md, docs/adr/README.md, docs/GA-CHECKLIST.md (its 57 % total is a stale lower bound by its own log line), .claude/skills/phg-qa-sweep/SKILL.md, .claude/skills/phg-ship-slice/SKILL.md, scripts/git-hooks/pre-commit, scripts/git-hooks/pre-push. Read 2026-10-08.

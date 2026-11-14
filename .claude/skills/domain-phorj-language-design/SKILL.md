@@ -48,7 +48,7 @@ Delta over CLAUDE.md: Invariants 5, 12, 15 and 16 and the SSOT quartet are NOT r
 
 ## Evidence surfaces (what counts as proof here)
 - A checker negative test per new code plus `phg explain <CODE>`; a differential example under `examples/` (single-file glob or a project with a manifest); `conformance/` goldens pin the VALUE, which is stronger than agreement alone.  [Source: memory/rock3-conformance-stability.md; tests/differential.rs:2226]
-- A design question is evidenced by the register row it creates (DEC-n, or PENDING) in the same change.  [Source: CLAUDE.md:363-365]
+- A design question is evidenced by the register row it creates (DEC-n, or PENDING) in the same change.  [Source: CLAUDE.md § Delivery invariants, Invariant 19 ("kept mutually consistent in the SAME change")]
 
 ## Reviewer lenses
 1. **Self-ruling** - did the change decide a user-visible language question alone, or re-open a rejected idea?  2. **Wind** - can any new symbol be used without an import?  3. **PHP semantics drift** - do shadowing, `==`, array `<=>`, by-value capture or reserved names differ on the PHP leg?  4. **Every access surface** - is the rule enforced at all sites of its class (visibility's six, UFCS receivers, both packages)?  [Source: .claude/agents/safety-promises-reviewer.md:70-72; memory/member-visibility-six-access-sites.md]
@@ -64,7 +64,7 @@ Delta over CLAUDE.md: Invariants 5, 12, 15 and 16 and the SSOT quartet are NOT r
 | EV-6 / EV-7 | float display rule / no crash on input |
 | D-L2, D-L9 | no `any` escape hatch; "Phorj : PHP :: TypeScript : JavaScript" |
 | UFCS | method-first call sugar `s.trim()` over free functions |
-[Source: CLAUDE.md:356-365; docs/specs/UNIFIED-SPEC.md:13-18; docs/INVARIANTS.md:102-110; docs/adr/0002-erasure-not-monomorphization.md:6-12]
+[Source: CLAUDE.md § Delivery invariants, Invariant 19 ("The SSOT quartet"); docs/specs/UNIFIED-SPEC.md:13-18; docs/INVARIANTS.md:102-110; docs/adr/0002-erasure-not-monomorphization.md:6-12]
 
 ## Canonical sources
 - docs/specs/UNIFIED-SPEC.md (language SSOT; pending banners at the top), docs/INVARIANTS.md (T-12), docs/DEPRECATION.md, docs/adr/README.md (ADR process: immutable once Accepted, reversal = a new superseding ADR), docs/research/full-audit/raw/C-decisions.md (register), FEATURES.md, KNOWN_ISSUES.md. Read 2026-10-08.

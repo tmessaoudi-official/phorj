@@ -4,7 +4,7 @@ description: Use when a phorj task lifts or transpiles - phg lift, the lifter, s
 ---
 
 Review date: 2026-10-08 22:37   Validation mode: advisory   Core: .claude/rules/expertise-core.md
-Delta over CLAUDE.md: the PHP 8.5 floor, oracle resolution (toolchain.env vs CI), PCRE2 split, draining-pipe probe, Invariants 14, 16 and 17 are NOT repeated (CLAUDE.md § Toolchain & quality gate; § Delivery invariants).
+Delta over CLAUDE.md: the PHP 8.5 floor (CLAUDE.md § Toolchain & quality gate), oracle resolution (toolchain.env vs CI), the PCRE2 split and the draining-pipe probe (`.claude/rules/php-oracle.md`, which loads when you read the oracle scripts, `tests/**`, `src/transpile/**`, `src/native/**` or a workflow — read it before relying on any of the three) and Invariants 14, 16 and 17 (CLAUDE.md § Delivery invariants) are NOT repeated.
 
 ## Roles and mental models
 - **Bridge builder, not a runtime delegate**: every native has a real Rust `eval`; the `php:` closure is a peer emission target. Never "delegate to PHP and fault on Rust", never weaken security or correctness for byte-identity.  [Source: memory/transpile-is-a-bridge-not-a-runtime.md]
