@@ -529,7 +529,7 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 | DEP-ADVISORIES | KNOWN_ISSUES | ungraded | its own heading says neither advisory has a reachable path — likely not a blocker; confirm at grading |
 | DEV-PRERELEASE-FROM-BRANCH | KNOWN_ISSUES | ungraded | |
 
-**D. Membership unconfirmed (6)** — read the entry before grading; it may not be a defect under rule 1.
+**D. Membership unconfirmed (7)** — read the entry before grading; it may not be a defect under rule 1.
 
 | Entry | Where | Open point |
 |---|---|---|
@@ -539,6 +539,7 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 | Transpile P1s exposed by the FS de-quarantine | KNOWN_ISSUES | which are still open |
 | PLAYGROUND-PHP-WASM | KNOWN_ISSUES | defect or missing feature |
 | cycle leak under `serve` (DEC-205) | KNOWN_ISSUES | ruled and queued as a build; a soak failure makes it a defect |
+| PHP86-DEPRECATED-NAMES | this row (recorded 2026-11-15, ground-prep row 7; not in KNOWN_ISSUES); probe: `scripts/php-forward-probe.sh` | on the 8.5 oracle every leg agrees; on PHP 8.6.0RC7 (`php -n -l`, a debug build, 2026-11-15) the transpiled output of a user function named `let`, `is` or `readonly`, of a class named `Let` or `Is`, and of a `return` inside `finally` prints a `Deprecated:` line, which would land in the program's output. A defect now, or only once 8.6 is the floor or a gating leg. Same class as `clamp`, which `tests/php_86_compat.rs` guards. No shipped example trips it: 329 examples probed, 22 not transpilable alone, 0 findings (2026-11-15). Record only: no fix, no test, no grade |
 
 **Excluded when seeding, with the reason** (challenge any of these at the grading pass): SERVE-TLS (ruled-deferred
 feature); CRAFT-2026-07-20 (craft flags, no behaviour); TEST-STDIN-INHERIT (test harness, not the product);

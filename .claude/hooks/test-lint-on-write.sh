@@ -327,6 +327,98 @@ else
   printf '  skip — observability: no global ~/.claude/hooks/log-helpers.sh on this machine\n'; SKIP=$((SKIP+1))
 fi
 
+# ── 10. Dispatch to the config guard and the PHP forward probe (ground-prep row 7) ──
+# The two scripts have their own suites; what is asserted HERE is the relay: which writes call them,
+# with what arguments, what reaches stderr and the JSON document, and that nothing they print can
+# break "one JSON document, exit 0". Stub collaborators in the sandbox stand in for them.
+cat > "$TMP/scripts/claude-config-guard.py" <<'EOF'
+import os, sys
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+open(os.path.join(root, "guard-argv"), "w").write(" ".join(sys.argv[1:]))
+if os.path.exists(os.path.join(root, "guard-crash")):
+    sys.exit(int(open(os.path.join(root, "guard-crash")).read()))
+says = os.path.join(root, "guard-says")
+if os.path.exists(says):
+    sys.stdout.write(open(says).read())
+    sys.exit(1)
+print("claude-config-guard: rules=0 anchors=0 skipped=0 linecites=0 claims=0 fails=0")
+EOF
+cat > "$TMP/scripts/php-forward-probe.sh" <<'EOF'
+#!/usr/bin/env bash
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+printf '%s' "$*" > "$root/probe-argv"
+[[ -f "$root/probe-says" ]] && { cat "$root/probe-says"; exit 1; }
+exit 0
+EOF
+mkdir -p "$TMP/.claude/skills/x" "$TMP/docs" "$TMP/examples"
+printf 'see docs/cited.md ("a phrase") and examples/cited.phg ("x")\n' > "$TMP/.claude/skills/x/SKILL.md"
+printf '# c\n' > "$TMP/CLAUDE.md"; printf 'x\n' > "$TMP/docs/cited.md"; printf 'x\n' > "$TMP/docs/other.md"
+printf 'x\n' > "$TMP/examples/cited.phg"; printf 'x\n' > "$TMP/examples/plain.phg"
+clear_stubs() { rm -f "$TMP"/guard-argv "$TMP"/guard-says "$TMP"/guard-crash "$TMP"/probe-argv "$TMP"/probe-says; }
+one_json() { python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d["hookSpecificOutput"]["additionalContext"])' 2>/dev/null; }
+
+clear_stubs; printf 'FAIL C2 CLAUDE.md:3: stub anchor finding\n' > "$TMP/guard-says"
+r="$(run "$TMP/CLAUDE.md")"
+[[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" == *"FAIL C2 CLAUDE.md:3: stub anchor finding"* ]] \
+  && ok "a config-guard finding on a config file is relayed, exit 0" || bad "guard finding not relayed: $r"
+[[ "$(cat "$TMP/guard-argv" 2>/dev/null)" == "--root $TMP --only CLAUDE.md" ]] \
+  && ok "the guard is asked about THIS file only (--root <project> --only <rel path>)" || bad "guard argv: $(cat "$TMP/guard-argv" 2>/dev/null)"
+[[ "$(sout_of "$TMP/CLAUDE.md" | one_json)" == *"stub anchor finding"* ]] \
+  && ok "the finding reaches the model: stdout is ONE JSON document carrying it" || bad "guard finding not in the JSON document: $(sout_of "$TMP/CLAUDE.md")"
+
+clear_stubs; for i in 1 2 3 4 5 6 7 8; do printf 'FAIL C3 f:%s: n%s\n' "$i" "$i"; done > "$TMP/guard-says"
+r="$(run "$TMP/CLAUDE.md")"
+[[ "$(err_of "$r")" == *": n5"* && "$(err_of "$r")" != *": n6"* && "$(err_of "$r")" == *"3 more line(s)"* ]] \
+  && ok "eight findings: five relayed and the other three counted" || bad "cap of five: $(err_of "$r")"
+
+clear_stubs; printf 'claude-config-guard: some summary\nnoise\n' > "$TMP/guard-says"
+r="$(run "$TMP/CLAUDE.md")"
+[[ "$(err_of "$r")" != *"some summary"* && "$(err_of "$r")" != *"noise"* ]] \
+  && ok "guard output that is not a FAIL line is never relayed" || bad "non-finding output relayed: $(err_of "$r")"
+[[ "$(err_of "$r")" == *"exited 1 without a finding line"* ]] \
+  && ok "…and exit 1 with no FAIL line is reported as the guard failing, not read as clean" || bad "silent on a guard that failed: $(err_of "$r")"
+clear_stubs; printf '2' > "$TMP/guard-crash"
+r="$(run "$TMP/CLAUDE.md")"
+[[ "$(rc_of "$r")" == 0 && -z "$(err_of "$r")" ]] && ok "guard exit 2 (not a repository) is silent, exit 0" || bad "guard exit 2: $r"
+clear_stubs; printf '3' > "$TMP/guard-crash"
+r="$(run "$TMP/CLAUDE.md")"
+[[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" == *"exited 3 without a finding line"* ]] \
+  && ok "any other guard exit with no finding is reported, exit 0" || bad "guard exit 3: $r"
+
+clear_stubs; r="$(run "$TMP/docs/other.md")"
+[[ ! -e "$TMP/guard-argv" && -z "$(err_of "$r")" ]] && ok "a file no config file names does not run the guard" || bad "guard ran for an uninvolved file: $(cat "$TMP/guard-argv" 2>/dev/null)"
+clear_stubs; r="$(run "$TMP/docs/cited.md")"
+[[ "$(cat "$TMP/guard-argv" 2>/dev/null)" == *"--only docs/cited.md" ]] && ok "a file a config file CITES runs the guard (drift starts at the target)" || bad "guard skipped a cited target"
+clear_stubs; r="$(run "$TMP/src/small.rs")"
+[[ ! -e "$TMP/probe-argv" ]] && ok "the PHP probe is not run for a .rs file" || bad "probe ran for a .rs file"
+
+clear_stubs; printf 'php-forward: examples/plain.phg: PHP 9.9 reports what the 8.5 oracle does not: Deprecated: stub\nnot a finding line\n' > "$TMP/probe-says"
+r="$(run "$TMP/examples/plain.phg")"
+[[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" == *"Deprecated: stub"* && "$(err_of "$r")" != *"not a finding line"* ]] \
+  && ok "a probe finding on a .phg file is relayed, exit 0" || bad "probe finding: $r"
+[[ "$(cat "$TMP/probe-argv" 2>/dev/null)" == "--quiet $TMP/examples/plain.phg" ]] && ok "the probe is called --quiet with the file" || bad "probe argv: $(cat "$TMP/probe-argv" 2>/dev/null)"
+printf 'FAIL C2 x:1: guard line for a cited phg\n' > "$TMP/guard-says"
+ctx="$(sout_of "$TMP/examples/cited.phg" | one_json)"
+[[ "$ctx" == *"guard line for a cited phg"* && "$ctx" == *"Deprecated: stub"* ]] \
+  && ok "guard AND probe findings for one file: still ONE JSON document, carrying both" || bad "two dispatched checks: '$(sout_of "$TMP/examples/cited.phg")'"
+clear_stubs
+rm -f "$TMP/scripts/claude-config-guard.py" "$TMP/scripts/php-forward-probe.sh"
+
+# ── 11. No jq: say so once per session instead of checking nothing in silence ───────
+# PATH holds only what the hook needs before the jq check; HOME has no log-helpers, so log_obs is the stub.
+NOJQ="$TMP/nojq"; mkdir -p "$NOJQ/bin" "$NOJQ/home" "$NOJQ/tmp"
+ln -s "$(command -v cat)" "$NOJQ/bin/cat"
+BASH_BIN="$(command -v bash)"; PY_BIN="$(command -v python3)"
+nojq() { printf '{"session_id":"%s","tool_input":{"file_path":"%s"}}' "$1" "$TMP/src/huge.rs" \
+         | PATH="$NOJQ/bin" HOME="$NOJQ/home" TMPDIR="$NOJQ/tmp" CLAUDE_PROJECT_DIR="$TMP" "$BASH_BIN" "$SCRIPT" 2>/dev/null; }
+first="$(nojq sess-a)"; rc=$?
+[[ $rc -eq 0 && "$(printf '%s' "$first" | "$PY_BIN" -c 'import json,sys; print(json.loads(sys.stdin.read())["hookSpecificOutput"]["additionalContext"])' 2>/dev/null)" == *"jq is not installed"* ]] \
+  && ok "without jq the first write of a session gets ONE JSON notice, exit 0" || bad "no-jq notice: rc=$rc '$first'"
+second="$(nojq sess-a)"; rc=$?
+[[ $rc -eq 0 && -z "$second" ]] && ok "…and the same session is not told twice" || bad "no-jq notice repeated: '$second'"
+third="$(nojq sess-b)"
+[[ "$third" == *"jq is not installed"* ]] && ok "…while another session is told" || bad "no-jq notice missing for a second session: '$third'"
+
 echo
 echo "$PASS passed, $FAIL failed, $SKIP skipped"
 [[ "$FAIL" -eq 0 ]]

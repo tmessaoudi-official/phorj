@@ -24,3 +24,18 @@ not in `CLAUDE.md`.
   `target/debug` from 24 GB to 7.4 GB, which is what keeps `target/` warm instead of being cleared for
   disk; phorj's own debuginfo is untouched); `cargo-nextest` is the parallel runner (fallback:
   `cargo test`) and IS installed — a warm full-suite cycle is ~43 s.
+
+- **Claude-config guard and PHP forward probe** (ground-prep row 7, 2026-11-15). `scripts/claude-config-guard.py`
+  runs in pre-commit (every commit, under 1 s) and in pre-push, and BLOCKS: C1 the rules files (a scoped file keeps
+  valid frontmatter, live globs and its line in `CLAUDE.md`; the always-loaded ones are listed by name in the
+  script), C2 every quoted anchor resolves on exactly one line of a tracked file, C3 the line-cite ratchet
+  (`scripts/claude-config-baseline.txt`: a count may shrink, never grow — write a new citation as a quoted anchor,
+  and lower a row with `--emit-baseline`, which refuses to raise one), C4 the crate and skill counts stated in
+  `CLAUDE.md`, `VISION.md`, `README.md` and `SECURITY.md` equal what `Cargo.toml` and `.claude/skills/` give. It
+  reads the git index, so a NEW file must be `git add`-ed before the guard sees it. pre-push also runs the two
+  suites (`scripts/test-claude-config-guard.sh`, `scripts/test-php-forward-probe.sh`).
+  `scripts/php-forward-probe.sh FILE.phg...` is NOT a gate step: it transpiles each file and lints the PHP on
+  every installed build newer than the oracle (found by glob beside it, never named), printing what only the newer
+  build reports; lint only, so compile-time deprecations and nothing at run time. A sweep of all examples took
+  about 6 minutes under load on 2026-11-15 (329 probed, 0 findings).
+  At write time `.claude/hooks/lint-on-write.sh` relays both, warn-only, for the file just written.

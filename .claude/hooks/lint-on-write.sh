@@ -8,10 +8,15 @@
 # of the way. The tiered git hooks (`scripts/git-hooks/{pre-commit,pre-push}`) remain the enforcement
 # tier; this one only shortens the feedback loop from "at commit" to "at write".
 #
-# Three checks, dispatched by extension:
+# Five checks, dispatched by extension or by what the file is:
 #   *.rs   -> rustfmt --check     (the fmt tier of the gate, one file early)
 #   *.phg  -> phg format --check  (the `phg format --check examples selftest` tier, one file early)
-#   any    -> Invariant 13 size advisory (soft 300 / hard 500, and grandfathered-must-not-GROW)
+#   *.phg  -> scripts/php-forward-probe.sh   (what a PHP newer than the oracle says of the output)
+#   a Claude-config file, a file one of them cites, a file a derived claim lives in
+#          -> scripts/claude-config-guard.py --only <file>   (the pre-push guard, one file early)
+#   src/**.rs -> Invariant 13 size advisory (soft 300 / hard 500, and grandfathered-must-not-GROW)
+# The two scripts carry the logic and have their own suites; this hook only relays their lines
+# (ground-prep row 7, 2026-11-15 — ruled to go through this hook, so no settings.json entry).
 #
 # The size advisory is the one with real teeth, and it is here because of a specific failure: on
 # 2026-08-06 a file was pushed back under its baseline three times by SHAVING COMMENTS before the
@@ -42,6 +47,25 @@ root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 . "$HOME/.claude/hooks/log-helpers.sh" 2>/dev/null || log_obs() { :; }
 
 payload="$(cat 2>/dev/null || true)"
+
+# jq reads the payload and writes the one JSON document below; without it this hook can check
+# nothing, and until 2026-11-15 it did that SILENTLY (an empty `file`, then `exit 0`). Say so once per
+# session, in the only shape that reaches the model: a constant JSON document, which needs no
+# escaping and therefore no jq. The session id is cut out of the payload by pattern for the same
+# reason; "once" is a marker file, so a marker that cannot be written repeats the notice (loud, not
+# silent).
+if ! command -v jq >/dev/null 2>&1; then
+  sid="nosession"
+  [[ "$payload" =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9_-]+)\" ]] && sid="${BASH_REMATCH[1]}"
+  mark="${TMPDIR:-/tmp}/phorj-lint-on-write-nojq-$sid"
+  if [[ ! -e "$mark" ]]; then
+    : > "$mark"
+    printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"lint-on-write: jq is not installed, so this hook checks NOTHING (formatting, file size, the Claude-config guard, the PHP forward probe). Install jq to re-arm it; scripts/git-hooks/pre-push still enforces the same rules at push time."}}'
+    log_obs INFO lint-on-write "jq absent: notice emitted, marker $mark"
+  fi
+  exit 0
+fi
+
 file="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
 
 # Nothing to say about a non-file tool call, an unreadable payload, or a file already gone.
@@ -86,6 +110,57 @@ case "$file" in
     fi
     ;;
 esac
+
+# ── Claude-config guard and PHP forward probe, one file early (ground-prep row 7) ──────────────
+# relay <label> <rc> <text> [<prefix>] — warn with the lines of <text> that start with <prefix>, at
+# most 5 (a warning nobody reads to the end is worth less than its first lines). The scripts' stdout
+# arrives here as a captured string, so it can never reach this hook's stdout, which must stay ONE
+# JSON document; their stderr is left alone (it is the transcript's, as this hook's own is).
+relay() {
+  local label="$1" rc="$2" prefix="${4:-}" n=0 line
+  while IFS= read -r line; do
+    [[ -n "$line" && "$line" == "$prefix"* ]] || continue
+    n=$((n + 1))
+    if ((n <= 5)); then warn "$line"; fi
+  done <<<"$3"
+  if ((n > 5)); then warn "$label: $((n - 5)) more line(s) for this file — run it to see them"; fi
+  if ((n > 0)); then
+    log_obs INFO lint-on-write "$label: $n line(s) for $file"
+  elif [[ "$rc" != 0 && "$rc" != 2 ]]; then
+    # Exit 1 means findings and exit 2 means "not a git repository / usage" (nothing to say about a
+    # file). Any other outcome with no finding line is the script failing, which must not read as clean.
+    warn "$label exited $rc without a finding line — it did not check ${file#"$root"/}; run it by hand"
+    log_obs ERROR lint-on-write "$label exited $rc without a finding for $file"
+  fi
+}
+if [[ "$file" == "$root"/* ]]; then
+  rel="${file#"$root"/}"
+  guard="$root/scripts/claude-config-guard.py"
+  if [[ -f "$guard" ]] && command -v python3 >/dev/null 2>&1; then
+    # The guard reads ~10 files (about 0.6 s under load): run it only when this file can be part of a
+    # finding — it is a config file, a file a derived claim lives in, or a file a config file names.
+    involved=0
+    case "$rel" in
+      CLAUDE.md | .claude/rules/* | .claude/skills/* | .claude/agents/* | Cargo.toml | VISION.md | README.md | SECURITY.md | scripts/claude-config-baseline.txt)
+        involved=1
+        ;;
+      *)
+        for cfg in "$root/CLAUDE.md" "$root/.claude/rules" "$root/.claude/skills" "$root/.claude/agents"; do
+          [[ -e "$cfg" ]] && grep -rqF -e "$rel" "$cfg" && { involved=1; break; }
+        done
+        ;;
+    esac
+    if ((involved)); then
+      out="$(python3 "$guard" --root "$root" --only "$rel")"
+      relay "claude-config-guard" "$?" "$out" "FAIL "
+    fi
+  fi
+  probe="$root/scripts/php-forward-probe.sh"
+  if [[ "$file" == *.phg && -f "$probe" ]]; then
+    out="$(bash "$probe" --quiet "$file")"
+    relay "php-forward-probe" "$?" "$out" "php-forward: "
+  fi
+fi
 
 # ── Invariant 13 size advisory ─────────────────────────────────────────────────────────────────
 # Scope must MATCH THE AUTHORITY EXACTLY. `scripts/size-gate.sh` scans `find src -name '*.rs'` and

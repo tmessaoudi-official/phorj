@@ -91,6 +91,16 @@ bash "$_gate_root/scripts/wasm-check.sh"
 echo "[pre-push] doc-guards (DEC-362 documentation ratchet)"
 bash "$_gate_root/scripts/doc-guards.sh"
 
+# Claude-config guard (ground-prep row 7, 2026-11-15). The same defect class one layer up: the files
+# that steer every session. A path-scoped rules file with a dead glob never loads, a quoted anchor
+# whose phrase moved still reads as a citation, a crate count in an always-loaded file stays wrong
+# until someone counts by hand (2026-11-13: 14 and 9 in three files against Cargo.toml's 15 and 10) -
+# and none of it errors anywhere. Four checks (rules files / anchors / the line-cite ratchet against
+# scripts/claude-config-baseline.txt / derived claims), read from the git index so the verdict is the
+# same in a cloud session. Under 1s, no builds. Detail: scripts/claude-config-guard.py.
+echo "[pre-push] claude-config-guard (rules files, quoted anchors, line-cite ratchet, derived claims)"
+python3 "$_gate_root/scripts/claude-config-guard.py"
+
 # The G-8 ratchet's OWN behaviour tests (DEC-423). The gate below is the only thing between a perf
 # regression and master, and it had no tests — which is how it stayed DARK for weeks without anyone
 # noticing. These drive it through its JSON seam: no docker, no php, no timing, ~1s, fully
@@ -137,6 +147,14 @@ bash "$_gate_root/scripts/test-perf-gate.sh"
 # on a machine without the global install. ~2s, no builds.
 echo "[pre-push] test-lint-on-write (the size/format advisory hook's own behaviour tests)"
 bash "$_gate_root/.claude/hooks/test-lint-on-write.sh"
+# Seventh and eighth: the Claude-config guard above and the PHP forward-compat probe the write-time
+# hook relays (what a PHP build newer than the oracle says of the transpiled output). Both suites use
+# fixtures and stub binaries, so they need no newer PHP, no release binary and no network; the probe's
+# one real-machine case SKIPs loudly where those are absent. ~3s together, no builds.
+echo "[pre-push] test-claude-config-guard (the config guard's own behaviour tests)"
+bash "$_gate_root/scripts/test-claude-config-guard.sh"
+echo "[pre-push] test-php-forward-probe (the forward-compat probe's own behaviour tests)"
+bash "$_gate_root/scripts/test-php-forward-probe.sh"
 
 # Lint the two ends of the feature spectrum (developer-ruled 2026-07-16 — the standing gate is
 # ALL-FEATURES). `--all-features` compiles + lints EVERY shipped surface (jit, database, database-postgres,

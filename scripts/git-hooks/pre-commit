@@ -41,6 +41,13 @@ if command -v flock >/dev/null 2>&1; then
   fi
 fi
 
+# ── Claude-config guard (ground-prep row 7, 2026-11-15) ─────────────────────────────────────────
+# Runs on every commit, before either path below: it is under 1s, needs no build, and the commits it
+# matters for (CLAUDE.md, .claude/**, a file one of them cites) are exactly the ones the fast path
+# takes. pre-push runs it again with its behaviour suite. Detail: scripts/claude-config-guard.py.
+echo "[pre-commit] claude-config-guard"
+python3 "$(git rev-parse --show-toplevel)/scripts/claude-config-guard.py"
+
 # ── DEC-378 part 1: DOCS-ONLY FAST PATH ──────────────────────────────────────────────────────────
 # Measured cost of getting this wrong: the 2026-07-26 session spent ~45 min waiting on twelve
 # docs-only ruling commits, and the 2026-07-29 session paid the full 1999-test tier on eight more.

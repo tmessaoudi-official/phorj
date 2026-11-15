@@ -53,7 +53,7 @@ with no park left (DEC-493), built defects-first (DEC-578), with staged stable r
 | 10 | Diagnostics | every checker and parser error has a code and a `phg explain` entry | armed for coded errors: `src/cli/tests/explain_ratchet.rs`. Owed: coding the uncoded ones (prerequisite of DEC-565) |
 | 11 | Stability | every construct `STABILITY.md` lists as stable has a conformance fixture | armed as regression: `tests/conformance.rs`. Owed: the coverage map |
 | 12 | Deployment | release binary under a size ceiling; the four platform builds green; build reproducible from the lockfile | armed: CI job `cross-build`. Owed: size ceiling (not ruled), reproducibility check |
-| 13 | Supply chain and docs truth | crates within the dependency policy; no reachable advisory; no stale fact in an always-loaded file | armed: `tests/dependency_claims.rs`, `scripts/doc-guards.sh`. Owed: advisory check, drift check for always-loaded files |
+| 13 | Supply chain and docs truth | crates within the dependency policy; no reachable advisory; no stale fact in an always-loaded file | armed: `tests/dependency_claims.rs`, `scripts/doc-guards.sh`, `scripts/claude-config-guard.py` (rules files, quoted anchors, the crate and skill counts stated in always-loaded files). Owed: advisory check, drift check for every other fact in an always-loaded file |
 | 14 | Web throughput | requests per second and tail latency of `phg serve` at or above php-fpm on the same routes | owed |
 | 15 | Real application | at least one real application runs on Phorj with its own CI (Invariant 18's `var/phorj-app`; MASTER-PLAN W6-1) | owed |
 
