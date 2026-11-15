@@ -67,7 +67,8 @@ args: "[--only <substr>] [--skip-build] [--journey <name>] [--no-playground] [--
    creates is removed at the end unless `--keep-scratch`.
 3. **No network.** Invariant 10: `run`/`check`/`transpile` never touch the network. The
    package-manager journey therefore exercises only the *local* paths and asserts the network verbs
-   fail cleanly offline rather than hanging — it does not reach a registry.
+   fail cleanly offline rather than hanging — it does not reach a registry. The `serve` journey's
+   loopback socket is local, not network.
 4. **A journey that cannot run is reported as SKIPPED with the reason.** Never silently drop one, and
    never report a sweep as clean while a journey was skipped — that is the DEC-365 NO-HIDDEN-LOSS
    discipline applied to QA.
@@ -149,7 +150,7 @@ Set by the model-assignment audit (decision D5, 2026-09-29; source table `projec
 
 | Agent | model | why |
 |---|---|---|
-| the three reviewers by name (backend-parity, safety-promises, completeness) | the reviewer model — `opus` by default (their agent files also pin `opus`) | certification is judgment work |
+| the three reviewers, only when `/certify` runs a panel (backend-parity, safety-promises, completeness) | the reviewer model — `opus` by default (their agent files also pin `opus`) | certification is judgment work |
 | the general-purpose journey agents (up to 5) | sonnet | they exercise flows and report; they do not certify |
 
 Reviewer model: take the pre-selected value exactly as `/certify` § 3 step 1b resolves it (stored value or `opus`) and ask it as this skill's Model ask above — one question, not two — then pass the answer as `model:` on each reviewer Agent call.
