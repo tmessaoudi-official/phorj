@@ -16,25 +16,25 @@ Delta over CLAUDE.md: Invariants 5, 12, 15 and 16 and the SSOT quartet are NOT r
 |---|---|---|---|
 | Pre-1.0 no deprecation lifecycle (DEC-416): change outright, only the new form parses; the post-1.0 lifecycle in the same file is dormant | retiring or renaming anything | [Source: docs/DEPRECATION.md:3-13] | 2026-10-08 |
 | Keyword-vs-import 3 tiers (T-12): built-in types never imported (single list `is_builtin_type_name`), user/library types via `import Pkg.Path.Name [as Alias];` (no wildcard there), stdlib functions `import Core.X;` then `X.fn()` | any new type name, attribute or verb | [Source: docs/INVARIANTS.md:179-199; src/checker/common.rs:195] | 2026-10-08 |
-| One `import` keyword (`import type` removed); the resolver classifies by what the PATH resolves to (module, type, else `E-IMPORT-UNKNOWN`); injected Core types are leaf-qualified unless member-imported | import resolution | [Source: docs/specs/UNIFIED-SPEC.md:455-491] | 2026-10-08 |
-| Functions are NOT bare-importable; no associated functions; UFCS reaches the CURRENT package's free functions only (DEC-527) | call resolution, UFCS | [Source: docs/specs/UNIFIED-SPEC.md:493-506] | 2026-10-08 |
-| Visibility: `private` = this file (top level) or this class (member); `internal` = package plus DESCENDANT packages; `protected internal`/`private protected` rejected | visibility changes | [Source: docs/specs/UNIFIED-SPEC.md:883-897] | 2026-10-08 |
-| Block-scope rule (DEC-339): a name already bound by a live local or parameter in the same function is `E-SHADOW-LOCAL`; fields never conflict; a lambda starts a new function | any new declaration form | [Source: docs/specs/UNIFIED-SPEC.md:974-1000; src/checker/plumbing.rs:235] | 2026-10-08 |
-| `using (T h = expr) { }` is the only scope guard (`Closable`), contextual keyword, lowers to try/finally (no new Op); `defer` stays rejected | resource cleanup | [Source: docs/specs/UNIFIED-SPEC.md:1305-1342] | 2026-10-08 |
-| Ordering (DEC-512): tuples of int/float order lexicographically; `List<T>` is NOT orderable because PHP array `<=>` is count-first | comparison operators | [Source: docs/specs/UNIFIED-SPEC.md:1169-1190] | 2026-10-08 |
+| One `import` keyword (`import type` removed); the resolver classifies by what the PATH resolves to (module, type, else `E-IMPORT-UNKNOWN`); injected Core types are leaf-qualified unless member-imported | import resolution | [Source: docs/specs/UNIFIED-SPEC.md ("`import type` is REMOVED (no back-compat)")] | 2026-10-08 |
+| Functions are NOT bare-importable; no associated functions; UFCS reaches the CURRENT package's free functions only (DEC-527) | call resolution, UFCS | [Source: docs/specs/UNIFIED-SPEC.md ("Functions are NOT bare-importable; no associated functions.")] | 2026-10-08 |
+| Visibility: `private` = this file (top level) or this class (member); `internal` = package plus DESCENDANT packages; `protected internal`/`private protected` rejected | visibility changes | [Source: docs/specs/UNIFIED-SPEC.md ("### The ruled matrix")] | 2026-10-08 |
+| Block-scope rule (DEC-339): a name already bound by a live local or parameter in the same function is `E-SHADOW-LOCAL`; fields never conflict; a lambda starts a new function | any new declaration form | [Source: docs/specs/UNIFIED-SPEC.md ("## Block-scope shadowing — the redeclaration rule"); src/checker/plumbing.rs:235] | 2026-10-08 |
+| `using (T h = expr) { }` is the only scope guard (`Closable`), contextual keyword, lowers to try/finally (no new Op); `defer` stays rejected | resource cleanup | [Source: docs/specs/UNIFIED-SPEC.md ("closes `h` at **every** exit path from the block")] | 2026-10-08 |
+| Ordering (DEC-512): tuples of int/float order lexicographically; `List<T>` is NOT orderable because PHP array `<=>` is count-first | comparison operators | [Source: docs/specs/UNIFIED-SPEC.md ("### DEC-512 — ordering is a TUPLE capability")] | 2026-10-08 |
 | Generics erased, not monomorphized; type safety is a front-end guarantee | generic features | [Source: docs/adr/0002-erasure-not-monomorphization.md:16-22] | 2026-10-08 |
 | Language config and feature flags are COMPILE-TIME and baked identically into every backend and the emitted PHP; a runtime knob (env, ini) is rejected because transpiled PHP has no Phorj runtime | any "make it configurable" idea | [Source: memory/config-must-be-compile-time.md] | not re-run |
 | Whole-project validation: the loader merges every project file into one AST before checking, so a broken class in an unreferenced sibling fails `phg check` | diagnosing "unrelated" errors | [Source: memory/error-handling-and-whole-project-validation.md] | not re-run |
 | Ruled, NOT built: DEC-357 rejects a write to a captured enclosing local (today it silently does nothing on all three legs); DEC-335 `Any`/`Object` tops | before citing them as behaviour | [Source: docs/specs/2026-07-26-capture-write-rejection.md:3; docs/research/full-audit/raw/C-decisions.md:3199-3201; Observed: no DEC-357 in src, 2026-10-08] | 2026-10-08 |
 
 ## Tools of the trade
-- `phg check <file>` (type errors), `phg explain <CODE>` (every emitted code has an entry; ratchet `every_emitted_diagnostic_code_has_an_explanation`), `phg format --check`.  [Source: README.md:138; src/cli/tests/explain_ratchet.rs:48]
-- The decision register (DEC rows with supersession chains) and the rejection catalogue are the search targets BEFORE any design question.  [Source: docs/research/full-audit/raw/C-decisions.md; docs/specs/UNIFIED-SPEC.md:1894-1921]
+- `phg check <file>` (type errors), `phg explain <CODE>` (every emitted code has an entry; ratchet `every_emitted_diagnostic_code_has_an_explanation`), `phg format --check`.  [Source: README.md ("type-check only, report success"); src/cli/tests/explain_ratchet.rs:48]
+- The decision register (DEC rows with supersession chains) and the rejection catalogue are the search targets BEFORE any design question.  [Source: docs/research/full-audit/raw/C-decisions.md; docs/specs/UNIFIED-SPEC.md ("### The rejection catalogue")]
 - Leaf sets as or-pattern macros keep `rustc` exhaustiveness on AST walks (CLAUDE.md § Delivery invariants, Invariant 3).  [Source: src/ast/leaves.rs]
 
 ## What "good" looks like
 - A new rule ships with a checker negative per rule (its own `E-` code plus an explain entry), a positive differential example, and the formatter printing it back idempotently; the transpile, lift and LSP surfaces follow (CLAUDE.md § Delivery invariants, Invariant 17).  [Source: docs/MILESTONES.md:128-129]
-- A question to the developer embeds the failing current-syntax program in the question text and the after-state inside each option; in autonomous mode it becomes a `PENDING (Invariant 15)` register row.  [Source: .claude/skills/phg-ask-human/SKILL.md:54-62]
+- A question to the developer embeds the failing current-syntax program in the question text and the after-state inside each option; in autonomous mode it becomes a `PENDING (Invariant 15)` register row.  [Source: .claude/skills/phg-ask-human/SKILL.md ("Any **user-visible language or design decision**")]
 
 ## Classic failure modes (with detection)
 - **Member visibility enforced on some access sites only**: there are six external access surfaces (field read, field write, clone-with, let-destructuring, match struct-pattern, method call); three were found only by a blast-radius pass. All must route through `enforce_member_vis`, or private access runs on the VM and throws in real PHP. Detect: a private-access differential program per surface.  [Source: memory/member-visibility-six-access-sites.md; src/checker/calls/visibility.rs:75]
@@ -44,7 +44,7 @@ Delta over CLAUDE.md: Invariants 5, 12, 15 and 16 and the SSOT quartet are NOT r
 - **Smart-cast narrowing drops the binding's facts**: narrowing is a shadow declaration in a child scope and must inherit the outer binding's mutability and declared type (DEC-537).  [Source: memory/wrapper-variants-and-scoped-registries.md]
 - **Name-keyed checker lookups outside `Main`**: function tables are keyed by loader-mangled names (`Pkg\name`), so a bare-name lookup works in `Main` and misses elsewhere. Detect: a two-package decoy test.  [Source: memory/mangled-key-lookups-and-functiondecl-fields.md]
 - **Formatter-hostile examples**: `phg format` expands grouped imports one per line and strips a redundant `public` on free functions, so a committed example holding `import X.{a,b};` fails the idempotency sweep. Run `phg format` on every new `.phg`.  [Source: memory/dec-196-cleanup-complete.md; memory/formatter-idempotency-new-phg.md]
-- **Reading a section literally under a pending banner** (core section 0 item 4): e.g. DEC-207 `::` for class-level access and DEC-214 `new List<T>()` supersede older prose.  [Source: docs/specs/UNIFIED-SPEC.md:28-34]
+- **Reading a section literally under a pending banner** (core section 0 item 4): e.g. DEC-207 `::` for class-level access and DEC-214 `new List<T>()` supersede older prose.  [Source: docs/specs/UNIFIED-SPEC.md ("PENDING SURFACE CHANGES — 2026-07-13 language-reconsideration batch")]
 
 ## Evidence surfaces (what counts as proof here)
 - A checker negative test per new code plus `phg explain <CODE>`; a differential example under `examples/` (single-file glob or a project with a manifest); `conformance/` goldens pin the VALUE, which is stronger than agreement alone.  [Source: memory/rock3-conformance-stability.md; tests/differential.rs:2226]
@@ -64,7 +64,7 @@ Delta over CLAUDE.md: Invariants 5, 12, 15 and 16 and the SSOT quartet are NOT r
 | EV-6 / EV-7 | float display rule / no crash on input |
 | D-L2, D-L9 | no `any` escape hatch; "Phorj : PHP :: TypeScript : JavaScript" |
 | UFCS | method-first call sugar `s.trim()` over free functions |
-[Source: CLAUDE.md § Delivery invariants, Invariant 19 ("The SSOT quartet"); docs/specs/UNIFIED-SPEC.md:13-18; docs/INVARIANTS.md:102-110; docs/adr/0002-erasure-not-monomorphization.md:6-12]
+[Source: CLAUDE.md § Delivery invariants, Invariant 19 ("The SSOT quartet"); docs/specs/UNIFIED-SPEC.md ("Every section opens with a **Status** line"); docs/INVARIANTS.md:102-110; docs/adr/0002-erasure-not-monomorphization.md:6-12]
 
 ## Canonical sources
 - docs/specs/UNIFIED-SPEC.md (language SSOT; pending banners at the top), docs/INVARIANTS.md (T-12), docs/DEPRECATION.md, docs/adr/README.md (ADR process: immutable once Accepted, reversal = a new superseding ADR), docs/research/full-audit/raw/C-decisions.md (register), FEATURES.md, KNOWN_ISSUES.md. Read 2026-10-08.

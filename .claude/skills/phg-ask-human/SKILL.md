@@ -72,6 +72,8 @@ The global cases (two readings leading to materially different work, …) apply 
 
 The block shows the CONTENT at full quality — deliver it through `AskUserQuestion` (the question text and the options),
 never as the prose below. It is a spec-mode delivery; in autonomous mode the same content is the PENDING record.
+The question it uses was ruled on 2026-07-26 (DEC-359: reject at check time; the build is queued), so it is kept
+for its SHAPE, not as an open question.
 
 ```
 ## Question — should `10 / 0` be a compile error?

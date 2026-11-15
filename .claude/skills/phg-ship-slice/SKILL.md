@@ -53,8 +53,11 @@ Load `/phg-lenses` first if a review round follows; this skill does not replace 
 7. **VM compile paths** — invariant 6: anything compiled for the VM goes through
    `check_and_expand_reified` + `compile_with`. Invariants 7 (CTy operand: a differential case shaped
    `expr + 1`) and 8 (scratch slots: TWO such constructs in one expression) when the slice touches them.
-8. **Perf, WIN-OR-FLAG** — invariants 11 and 18: anything with a PHP equivalent gets
-   `phg benchmark --vs-php <file>` (needs `php` on PATH; output-identity-gated). A win is recorded; a
+8. **Perf, WIN-OR-FLAG** — invariants 11 and 18: anything with a PHP equivalent gets its
+   verdict from `scripts/microbench.sh` (a `bench/micro/<name>.phg` with its hand-written `.php`,
+   against docker `php:8.5-cli` with JIT; protocol and pinning in `domain-phorj-engine-parity`).
+   `phg benchmark --vs-php <file>` runs the bare `php` on PATH with no JIT flags, so it is a smoke check
+   and an output-identity check, never the verdict. A win is recorded; a
    loss is FLAGGED and fixed, never suppressed; an unmeasurable bench is an OWED verdict, never
    "passed", never re-baselined via `--emit`. No perf claim above [Inferred] without a measured
    before/after.
@@ -63,8 +66,10 @@ Load `/phg-lenses` first if a review round follows; this skill does not replace 
    full-tree build is heavy on this machine — see `/long-run`.
 10. **Sabotage** — `/sabotage-check` on the slice's guarantee (the differential case, the LSP test),
     through the same harness as the baseline; for cargo, mind the mtime trap in that skill's stack notes.
-11. **Status row** — the plan's `## Status` row gets `done` + the evidence sha (by pathspec commit;
-    never `--amend` a commit whose sha is already recorded as evidence).
+11. **Status row and the SSOT quartet** — invariant 19: the plan's `## Status` row gets `done` + the
+    evidence sha (by pathspec commit; never `--amend` a commit whose sha is already recorded as
+    evidence), and `docs/plans/SLICE-STATE.md` moves in the SAME change; `docs/plans/MASTER-PLAN.md` and
+    the decision register move with it whenever the slice changes roadmap state or applies a ruling.
 
 ## Recipes (reference — re-read the code before following; a stale recipe is worse than none)
 

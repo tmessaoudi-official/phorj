@@ -16,8 +16,8 @@ skills: run the global skill for its machinery, with everything below folded int
 ## Repo conventions (apply to every review skill)
 
 - **Reports live in the repo**: `var/claude/<skill>/` (gitignored). Never `~/.claude/projects/…`.
-- **Non-blocking closes — no interrupts.** End with the findings and a plainly-stated offer
-  (`N findings (P0:a P1:b P2:c) — say which to fix`), never a blocking question.
+- **Closes.** End with the findings count (`N findings (P0:a P1:b P2:c)`); the closing which-to-fix
+  choice follows the global rule (`AskUserQuestion`, recommended option first).
 - **`/converge` runs the DEC-268 MAXIMAL ladder** — the three lenses are the repo agents:
   `backend-parity-reviewer`, `safety-promises-reviewer`, `completeness-reviewer`
   (`.claude/agents/`). Two consecutive fully-clean rounds, cap 5.
@@ -59,6 +59,11 @@ Run these **in addition to** the global skill's own dimensions, on every review:
   of a fact the quartet owns.
 - **File-size caps (Invariant 13).** Soft 300 / hard 500 lines per source file; a feature that pushes
   a file past the soft cap should have STARTED by splitting it.
+- **Nothing in the wind, the ladder, determinism (Invariants 14 and 10).** Can any symbol the change
+  adds be used with no import? Does a construct with no faithful PHP mapping emit best-effort PHP
+  instead of an `E-TRANSPILE-*` hard error with its quarantine and disclosure (a silent downgrade is a
+  **P0**)? Is a user-facing list built from `HashMap`/`HashSet` iteration rendered unsorted, or does
+  `run`/`check`/`transpile` reach the network?
 
 ## Sleuth lens K — MANDATORY additional agent for /sleuth
 
@@ -75,4 +80,6 @@ as category **K** alongside A–J:
 > `locals.len() - 1` instead of `self.height - 1` (Invariant 8); compile-time sugar that reaches a
 > backend un-expanded (Invariant 5). For each: file + line, which two legs diverge, the smallest
 > program that would show it, and whether an `examples/**/*.phg` case covers it (if not, that is the
-> finding). Research only, no writes.
+> finding). No source edits. Write the findings to `raw/K.md` in the sleuth run's report folder
+> before returning, run K as its own batch after A–J, and add `raw/K.md — Backend divergence` to the
+> list of files the synthesis step reads.

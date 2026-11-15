@@ -82,8 +82,9 @@ stay in `.claude/agents/`.
   The live DB/mail/http round-trips self-skip when their `PHORJ_*_TEST_DSN`/server env is absent
   (skip-loud). With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
   Transpile floor = **PHP 8.5** (resolved by `scripts/toolchain.env`, never pinned — no script may pin a patch
-  version); the bare `php` on PATH is a dev build (8.7.0-dev on 2026-09-29) and too
-  permissive — never gate against it (CI runs it only as a non-gating canary).
+  version); the bare `php` on PATH is whatever the machine carries (a dev build, 8.7.0-dev, on 2026-09-29;
+  8.5.4 with JIT off on 2026-11-15) and is never the oracle — never gate against it (CI runs it only as a
+  non-gating canary).
 - **PHP oracle resolution** — how the local resolver picks the oracle, CI's SECOND resolution path, the PCRE2 split
   between them (a `preg_*` pin must hold on both) and the no-pin check → `.claude/rules/php-oracle.md` (loads when
   you read `scripts/toolchain.env`, `scripts/validate-infra.sh`, `scripts/test-validate-infra.sh`, `tests/**`,
