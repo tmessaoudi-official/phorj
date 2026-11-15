@@ -80,6 +80,10 @@ mk; run; rm "$R/docs/t.md"
 out="$(python3 "$TOOL" --root "$R" 2>&1)"; rc=$?
 fails "a tracked file missing from the working tree is a finding, not a traceback" "docs/t.md: tracked but not readable"
 if [[ "$out" != *"Traceback"* ]]; then ok "…and the guard still prints its summary"; else bad "traceback: ${out:0:300}"; fi
+mk; printf 'alpha unique phrase here \377\376 broken bytes\n' >> "$R/docs/t.md"; run
+fails "a cited file that is not valid UTF-8 is a finding, not a silent replacement" "docs/t.md: not valid UTF-8"
+mk; printf 'C3\t2\t%s\n\377\tbad\n' "$PACK" > "$R/$BASE"; run
+fails "a baseline row with a stray byte fails closed as malformed" "malformed row"
 
 # ── C1. Rules files ──────────────────────────────────────────────────────────────────────────────
 mk; printf -- '---\npaths:\n  - "nope/**"\n---\n# scoped\n' > "$R/.claude/rules/scoped.md"; run

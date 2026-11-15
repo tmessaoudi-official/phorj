@@ -6,6 +6,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — standing guards for the Claude configuration and PHP forward-compat (2026-11-15)
+
+- `scripts/claude-config-guard.py`, blocking in pre-commit and pre-push: path-scoped rules files keep valid
+  frontmatter, live globs and their line in `CLAUDE.md`; every quoted anchor in `CLAUDE.md`, the rules files, the
+  skills and the agents resolves on exactly one line of a tracked file; line cites are a ratchet that only tightens
+  (`scripts/claude-config-baseline.txt`); the crate and skill counts stated in `CLAUDE.md`, `VISION.md`, `README.md`
+  and `SECURITY.md` equal what `Cargo.toml` and `.claude/skills/` give. Behaviour suite
+  `scripts/test-claude-config-guard.sh`, run by pre-push.
+- `scripts/php-forward-probe.sh` (not a gate step): lints the transpiled output of a `.phg` file on every installed
+  PHP build newer than the oracle and prints what only the newer build reports. Behaviour suite
+  `scripts/test-php-forward-probe.sh` (stub binaries; one real-machine case), run by pre-push. First finding,
+  recorded in the defect queue as PHP86-DEPRECATED-NAMES and not fixed here: on PHP 8.6.0RC7 the output for a user
+  function named `let`, `is` or `readonly`, a class named `Let` or `Is`, and a `return` inside `finally` prints a
+  `Deprecated:` line. No shipped example that transpiles trips it.
+- `.claude/hooks/lint-on-write.sh` relays both for the file just written (warn-only), and says once per session that
+  `jq` is missing instead of checking nothing in silence.
+
 ### Added — cloud sessions run the full gate (DEC-577, 2026-11-07)
 
 - `.claude/cloud-setup.sh`: the toolchain hook the developer's global kit `claude-code-setup` runs as root when a

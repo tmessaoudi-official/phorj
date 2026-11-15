@@ -37,5 +37,7 @@ not in `CLAUDE.md`.
   `scripts/php-forward-probe.sh FILE.phg...` is NOT a gate step: it transpiles each file and lints the PHP on
   every installed build newer than the oracle (found by glob beside it, never named), printing what only the newer
   build reports; lint only, so compile-time deprecations and nothing at run time. A sweep of all examples took
-  about 6 minutes under load on 2026-11-15 (329 probed, 0 findings).
+  about 6 minutes under load on 2026-11-15: 0 findings in the 329 that transpile; the other 22 are refused by
+  `phg transpile` and were not probed. Section 5 of the probe's suite asserts that `function let` IS reported on a
+  machine with a newer PHP, so it turns red in the commit that fixes PHP86-DEPRECATED-NAMES and changes there.
   At write time `.claude/hooks/lint-on-write.sh` relays both, warn-only, for the file just written.

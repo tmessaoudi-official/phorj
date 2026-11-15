@@ -76,11 +76,14 @@ class Guard:
     def text(self, path):
         if path not in self.cache:
             try:
-                with open(os.path.join(self.root, path), encoding="utf-8", errors="replace") as fh:
+                with open(os.path.join(self.root, path), encoding="utf-8") as fh:
                     self.cache[path] = fh.read()
             except OSError as exc:  # tracked in the index, gone or unreadable in the working tree
                 self.cache[path] = ""
                 self.fail("C0", path, "tracked but not readable in the working tree (%s)" % exc.strerror, path)
+            except UnicodeDecodeError as exc:  # a finding, never a silent replacement: an anchor into
+                self.cache[path] = ""          # a file read with holes could resolve by accident
+                self.fail("C0", path, "not valid UTF-8 at byte %d, so nothing in it can be checked" % exc.start, path)
         return self.cache[path]
 
     def fail(self, check, where, message, *involved):
@@ -226,8 +229,8 @@ class Guard:
         path = os.path.join(self.root, BASELINE)
         if not os.path.isfile(path):
             return rows, head, ok
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            for n, raw in enumerate(fh.read().split("\n"), 1):
+        with open(path, "rb") as fh:
+            for n, raw in enumerate(fh.read().decode("utf-8", "backslashreplace").split("\n"), 1):
                 if raw.startswith("#") and not rows:
                     head.append(raw)
                     continue

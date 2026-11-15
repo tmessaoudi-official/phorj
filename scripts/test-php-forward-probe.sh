@@ -94,7 +94,7 @@ if [[ $rc -eq 1 && "$out" == *"sp ace.phg"* ]]; then ok "a path with spaces work
 
 # ── 2. Nothing to probe is never a failure, and never a silent success outside --quiet ───────────
 probe --quiet "$TMP/project.phg"
-if [[ $rc -eq 0 && -z "$out" && -z "$err" ]]; then ok "a file that does not transpile alone is silent under --quiet"; else bad "refused file: rc=$rc out=$out err=$err"; fi
+if [[ $rc -eq 0 && -z "$out" && -z "$err" ]]; then ok "a file phg transpile refuses is silent under --quiet"; else bad "refused file: rc=$rc out=$out err=$err"; fi
 probe "$TMP/project.phg" "$TMP/hit.phg"
 if [[ $rc -eq 1 && "$err" == *"probed 1 file(s), skipped 1"* && "$err" == *"findings 1"* ]]; then
   ok "without --quiet the summary counts probed, skipped and findings"
@@ -137,6 +137,11 @@ else
 fi
 
 # ── 5. The real thing, when this machine has it ─────────────────────────────────────────────────
+# This case holds the defect-queue entry PHP86-DEPRECATED-NAMES in place: it asserts that the output
+# for `function let` IS reported today. The change that fixes that defect (the transpiler mangling the
+# name, as it does `clamp`) turns this case red on a machine with a newer PHP - by design. That change
+# swaps `let` here for a shape that is still deprecated, or drops the case; it is the only end-to-end
+# proof that the probe sees a real deprecation, not a gate on the defect.
 ROOT="$(cd "$HERE/.." && pwd)"
 real="$TMP/real.phg"
 printf 'package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\nfunction %s(int x): int { return x; }\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void { Output.printLine("x"); }\n' let > "$real"

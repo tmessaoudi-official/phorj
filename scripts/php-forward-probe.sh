@@ -13,8 +13,10 @@
 #
 # What it does NOT do: it never runs the program (lint only - no side effects, no hang on a program
 # that reads stdin or serves), so it sees compile-time deprecations and nothing that only shows at
-# run time. A file that does not transpile on its own (a project file, a concurrency example with its
-# E-CONCURRENCY-NO-PHP error, a file mid-edit) is counted as skipped, not as clean.
+# run time. A file `phg transpile` refuses is counted as skipped, not as clean: a native-only example
+# behind its hard transpile error (21 of the 22 skipped on 2026-11-15: Core.Database, E-TRANSPILE-SERVE,
+# E-CONCURRENCY-NO-PHP, ...), a project file that is no program on its own (1 of the 22: a declaration
+# file), or a file mid-edit.
 #
 # Newer builds are FOUND, never named: the folders beside the resolved oracle (`php-*/bin/php`), kept
 # when the build's OWN version is a later minor. No PHP patch version is written here -
@@ -119,9 +121,9 @@ lint() {
 
 probed=0 skipped=0 findings=0
 for file in "${files[@]}"; do
-  # Not transpilable alone is a skip, counted and reported in the summary: the refusal text belongs to
-  # `phg transpile`, which the author runs to see it (measured: examples/guide/concurrency.phg exits 1
-  # with E-CONCURRENCY-NO-PHP).
+  # A refusal by `phg transpile` is a skip, counted and reported in the summary: the refusal text
+  # belongs to `phg transpile`, which the author runs to see it (measured 2026-11-15: all 22 refusals
+  # in examples/ exit 1 with a transpile or type error on the first line).
   if [[ ! -f "$file" ]] || ! "$phg" transpile "$file" >"$php_out" 2>/dev/null; then
     skipped=$((skipped + 1))
     continue
@@ -143,5 +145,5 @@ for file in "${files[@]}"; do
   done
 done
 
-note "probed $probed file(s), skipped $skipped (not transpilable alone), findings $findings; newer builds: ${labels[*]}; oracle $floor_ver"
+note "probed $probed file(s), skipped $skipped (phg transpile refused them), findings $findings; newer builds: ${labels[*]}; oracle $floor_ver"
 ((findings == 0))
