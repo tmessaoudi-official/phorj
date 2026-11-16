@@ -37,14 +37,14 @@
   (`docs/specs/2026-07-23-any-object-top-types.md`, ruled 2026-07-23, BUILD-READY). DEC-335 already defined the
   same semantics; the spelling `unknown` is withdrawn and nothing is superseded. Lesson: search the specs index
   (`MASTER-PLAN.md` §0.07) BEFORE asking a design question.
-- [2026-09-27 17:12] ASSUMED (review): **T2 refuses a HYPHENATED docblock atom by name** (`numeric-string`,
+- [2026-09-27 17:12] AGREED (ratified ASSUMED, developer 2026-11-16, row 9b V50): **T2 refuses a HYPHENATED docblock atom by name** (`numeric-string`,
   `array-key`, `non-empty-string`, `class-string`, …) instead of emitting it verbatim — because the lifter's contract is
   never to emit a draft that does not parse, a PHP class name can never contain `-`, and a refusal needs no ruling.
   Correction at build (2026-09-27): `non-empty-list<T>` / `non-empty-array<…>` ALREADY lifted as their base generic and
   keep doing so, and `int<0, max>` was already refused as a Tier-2 generic. MAPPING the remaining pseudo-types
   (`numeric-string` → `string`, …) is a docblock-type decision like DEC-543/544 and goes to the developer in a later
   ask. Alternatives: map now; keep emitting them.
-- [2026-09-27 17:12] ASSUMED (review): **T5 lifts `sprintf('%d', $x)` to interpolation ONLY when `$x`'s
+- [2026-09-27 17:12] AGREED (ratified ASSUMED, developer 2026-11-16, row 9b V51): **T5 lifts `sprintf('%d', $x)` to interpolation ONLY when `$x`'s
   DECLARED type is `int`** (a parameter, a `@var` local, an int literal) — because `%d` equals `%s` exactly for
   an int, and DEC-166/DEC-515 already make declarations the lifter's only source of types. Anything else keeps
   its refusal. Alternatives: keep refusing every `%d`; map `%d` to an `(int)` cast (changes floats and numeric

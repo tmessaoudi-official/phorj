@@ -38,8 +38,9 @@
 - [2026-11-16 20:45] AGREED: Row 8 N-9 publication (developer, via AskUserQuestion, 2026-11-16): PUBLISH WITHOUT THE PAYLOAD - the public SLICE-STATE entry names the class (a ';' in Cookie value or cookiePath injects attributes on all four legs; PHP refuses or encodes it) with no literal exploit string; the full reproduction stays in var/claude/. Rejected: as written; keep out of the repo.
 - [2026-11-16 20:45] AGREED: Row 8 N-9 guard (developer, via AskUserQuestion, 2026-11-16, Invariant 15): RECORD AS PENDING now - a PENDING (Invariant 15) row in the decision register beside DEC-568 plus the SLICE-STATE cursor line, no build; decided at the grading pass. Options recorded with it: reject like setrawcookie; encode like setcookie. Rejected: ruling either now.
 - [2026-11-16 20:48] AGREED: Row 8 history (developer, via AskUserQuestion, 2026-11-16): REWRITE THE TWO NEVER-PUSHED LOCAL COMMITS that followed `d79d8e31` (the first queue commit and the first row-8 evidence commit; neither exists any more) by a soft reset to `d79d8e31` and two fresh commits, so the N-9 payload never reaches the public history; backup = the local reflog (no branch: master is the only branch). Rejected: push as-is plus a fix commit; not pushing yet.
-- [2026-11-16 22:25] ASSUMED (review): Row 9 /forge gate: full analysis, all nine lenses A-I, run as FIVE Sonnet agents (A · B+D · C+G · E+F · H+I) plus main-session synthesis - because the 2026-11-16 model-split ruling caps row 9 at Sonnet subagents 3-5 and global Rule 4 groups adjacent lenses; the same grouping ran /inspect, /sleuth and /gaps. Alternatives: --quick (A, B, D only); nine separate agents on opus (the skill's own table).
-- [2026-11-16 22:41] ASSUMED (review): Row 9 /aggregate-findings: inputs are exactly the four row-9 reports var/claude/{inspect,sleuth,gaps,forge}/2026-11-16/report.md (not the global meta-reports run the skill's Step 0 looks for, which this run never produced); its three agents (dedup, ranker, quick wins) run on Sonnet - because the 2026-11-16 model split caps row 9 at Sonnet subagents, overriding the skill table's opus for the first two. Alternatives: opus per the skill table; main-session synthesis only.
+- [2026-11-16 22:25] AGREED (ratified ASSUMED, developer 2026-11-16, row 9b V04): Row 9 /forge gate: full analysis, all nine lenses A-I, run as FIVE Sonnet agents (A · B+D · C+G · E+F · H+I) plus main-session synthesis - because the 2026-11-16 model-split ruling caps row 9 at Sonnet subagents 3-5 and global Rule 4 groups adjacent lenses; the same grouping ran /inspect, /sleuth and /gaps. Alternatives: --quick (A, B, D only); nine separate agents on opus (the skill's own table).
+- [2026-11-16 22:41] AGREED (ratified ASSUMED, developer 2026-11-16, row 9b V05): Row 9 /aggregate-findings: inputs are exactly the four row-9 reports var/claude/{inspect,sleuth,gaps,forge}/2026-11-16/report.md (not the global meta-reports run the skill's Step 0 looks for, which this run never produced); its three agents (dedup, ranker, quick wins) run on Sonnet - because the 2026-11-16 model split caps row 9 at Sonnet subagents, overriding the skill table's opus for the first two. Alternatives: opus per the skill table; main-session synthesis only.
+- [2026-11-16 23:47] AGREED: Row 9b (developer, via AskUserQuestion, 2026-11-16): ratify all 51 open ASSUMED entries as recommended in var/claude/ratify-assumed/2026-11-16/verdicts.md - 48 ratified (three by DEC-574/576, four as amended by a later correction, one as the interim PHP emission until row 4h), V11 and V42 withdrawn as superseded, V18 held pending its three-leg probe; follow-ups to their existing owners. Rejected: ratify mechanics and walk through the 14 semantics entries; mark the file first.
 
 ## Formal Plan
 
@@ -166,6 +167,18 @@ snapshotted outside the repo before row 2 writes anything.
     raise it, quarantine deep recursion, or disclose it.
   - Conflicting grades for the grading pass: the broken-pipe panic (agent P2, a crash by rule 1's letter) and the
     `serve` symlink leak (agent P2, proposed P1 as a security exposure).
+- From row 9b (2026-11-16), the developer ratified all 51 verdicts as recommended (48 ratified, 2 withdrawn as
+  superseded, 1 held); the verdict file is the gitignored `var/claude/ratify-assumed/2026-11-16/verdicts.md`. Left open,
+  each with its existing owner (no queue row or register row written):
+  - (V50) An Invariant-15 question, never asked: whether the lifter MAPS the docblock pseudo-types (`numeric-string`
+    to `string`, `array-key`, `non-empty-string`, `class-string`) instead of refusing them by name - promised "in a
+    later ask" by the twes-in plan on 2026-09-27.
+  - (V18) The held entry: three-leg probe of `**` and `|>` as arithmetic and interpolated operands, then an exemption
+    record for `transpile/kinds.rs`'s `_ => OpKind::Other` - audit row 9.
+  - (V14) NULL-SAFE-UNKNOWN-MEMBER is an exit-behaviour split (tree-walker prints, VM exit 1): a P1 candidate by
+    north-star rule 1, for the grading pass. (V10) DISASSEMBLE-OVERLOAD-ORDER has no defect-queue row.
+  - (V08) DEEP-INPUT-CRASHES' Content-Length abort is still open at `a79623e2` - audit row 5. (V29) The two native-only
+    hook tests can pin their PHP leg now that PHP 8.5 runs locally - audit row 4e.
 ### Needs research
 - Row 5 leads, closed 2026-11-15: the "DEC-268 MAXIMAL" paragraph of `phg-qa-sweep` and the missing cloud keyword
   are fixed. Left as they are: three descriptions declared as a folded block (they parse; only the developer's global
