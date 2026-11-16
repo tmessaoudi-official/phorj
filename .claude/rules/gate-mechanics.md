@@ -32,7 +32,9 @@ not in `CLAUDE.md`.
   (`scripts/claude-config-baseline.txt`: a count may shrink, never grow — write a new citation as a quoted anchor,
   and lower a row with `--emit-baseline`, which refuses to raise one), C4 the crate and skill counts stated in
   `CLAUDE.md`, `VISION.md`, `README.md` and `SECURITY.md` equal what `Cargo.toml` and `.claude/skills/` give. It
-  reads the git index, so a NEW file must be `git add`-ed before the guard sees it. pre-push also runs the two
+  reads the git index for WHICH files exist and the working tree for their content, so a NEW file must be
+  `git add`-ed before the guard sees it, and an unrelated config file left dirty and broken blocks any commit until
+  it is fixed or stashed. pre-push also runs the two
   suites (`scripts/test-claude-config-guard.sh`, `scripts/test-php-forward-probe.sh`).
   `scripts/php-forward-probe.sh FILE.phg...` is NOT a gate step: it transpiles each file and lints the PHP on
   every installed build newer than the oracle (found by glob beside it, never named), printing what only the newer

@@ -11,6 +11,9 @@
 # The fixture is a real git repository: the guard decides "tracked" from the index, never from the
 # disk, so its verdict is the same on the developer's machine, on CI and in a cloud session.
 set -uo pipefail
+# The fixture is its own repository. Never let a GIT_* variable inherited from the hook that runs this
+# suite redirect its git commands to the real one (see the isolation case below).
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOL="$HERE/claude-config-guard.py"
@@ -84,6 +87,22 @@ mk; printf 'alpha unique phrase here \377\376 broken bytes\n' >> "$R/docs/t.md";
 fails "a cited file that is not valid UTF-8 is a finding, not a silent replacement" "docs/t.md: not valid UTF-8"
 mk; printf 'C3\t2\t%s\n\377\tbad\n' "$PACK" > "$R/$BASE"; run
 fails "a baseline row with a stray byte fails closed as malformed" "malformed row"
+
+# ── Isolation: an inherited GIT_DIR must never reach the fixture's git commands ───────────────────
+# git exports GIT_DIR (and friends) to a hook in some invocations - a push from a subdirectory or a
+# linked worktree. Without the `unset` at the top of this file, `git -C <fixture> add -A` then acts on
+# THAT repository: measured 2026-11-16 on a scratch one, whose index lost its own file and gained the
+# fixture's. A child run under an exported GIT_DIR must leave that repository's index alone.
+if [[ -z "${CCG_NESTED:-}" ]]; then
+  git -c init.defaultBranch=main init -q "$TMP/outer"
+  printf 'canary\n' > "$TMP/outer/canary.txt"; git -C "$TMP/outer" add canary.txt
+  child="$(GIT_DIR="$TMP/outer/.git" CCG_NESTED=1 bash "${BASH_SOURCE[0]}" 2>&1 | tail -1)"
+  index="$(git --git-dir="$TMP/outer/.git" ls-files | tr '\n' ' ')"
+  if [[ "$index" == "canary.txt " ]]; then ok "a run under an exported GIT_DIR leaves that repository's index untouched"; else bad "the suite wrote into the exported GIT_DIR's index: ${index:0:160}"; fi
+  if [[ "$child" == *" passed, 0 failed" ]]; then ok "…and still passes there ($child)"; else bad "child run under GIT_DIR: $child"; fi
+else
+  echo; echo "$PASS passed, $FAIL failed"; [[ "$FAIL" -eq 0 ]]; exit
+fi
 
 # ── C1. Rules files ──────────────────────────────────────────────────────────────────────────────
 mk; printf -- '---\npaths:\n  - "nope/**"\n---\n# scoped\n' > "$R/.claude/rules/scoped.md"; run
