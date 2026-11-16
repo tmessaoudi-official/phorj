@@ -145,6 +145,14 @@ snapshotted outside the repo before row 2 writes anything.
   scratch copy; a Read of `tests/x.rs` or `.github/workflows/ci.yml` loaded only `php-oracle.md`; a Read of
   `scripts/git-hooks/pre-commit`, `.config/nextest.toml` or `Cargo.toml` loaded only `gate-mechanics.md`; no read and
   a non-matching read loaded no scoped rule; the never-load control rule never loaded.
+- From row 8 (2026-11-16), each the developer's to rule or to do:
+  - DEC-581 (PENDING, Invariant 15): whether the `Cookie` guard widens to the cookie syntax (QA-N9) - to decide at the
+    defect-queue grading pass, by the developer's choice.
+  - The 84 UNIFIED-SPEC findings (five proposed P1) live only in the gitignored `var/claude/cross-check/2026-11-16/`:
+    fix them in a docs row, or queue them as rows, or let row 10 cite them as they are.
+  - `KNOWN_ISSUES.md` still says `phg serve` is `Connection: close` (the server keeps connections alive) - not fixed in
+    a record-only row.
+  - PKG-VERBS-HELP carries a P1 grade from the old scale; under north-star rule 1 a help listing is not wrong output.
 ### Needs research
 - Row 5 leads, closed 2026-11-15: the "DEC-268 MAXIMAL" paragraph of `phg-qa-sweep` and the missing cloud keyword
   are fixed. Left as they are: three descriptions declared as a folded block (they parse; only the developer's global
