@@ -554,7 +554,7 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 | DISASSEMBLE-OVERLOAD-ORDER | KNOWN_ISSUES (row 9b V10: no queue row until now) | P2 | `phg disassemble` permutes overload-set indices from run to run (Invariant 10); program output is stable. |
 | SERVE-REASON-PHRASE | KNOWN_ISSUES (inside the `serve` response-header entry, DEC-363 / DEC-568) | P1 | by rule 1's letter: `Response.reason()` names only 200, 400 and 404, so every other status goes out as `Internal Server Error` (`HTTP/1.1 302 Internal Server Error`) on every leg, wrong program output (Conflicts, item 10). |
 | R9-CJ-3 MATH-POW-DEPRECATION | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth CJ-3 (its P3 tail) | P1; re-probe owed | by rule 1's letter: on the PHP leg a PHP 8.5 deprecation line lands in stdout for a zero base and a negative exponent, which native does not print. Row 9 graded it P3. |
-| HINT-FOO-ERROR-NAME | found fixing R9-K2 (2026-11-17), `grep 'class Foo implements Error' src/` | P2 (proposed) | the hints of `E-THROW-TYPE` (two sites) and `E-CATCH-TYPE`, and `phg explain E-THROW-TYPE`, tell the user to write `class Foo implements Error`, a name `E-ERROR-NAME` (DEC-275) rejects; a diagnostic only, no program's output or exit changes. |
+| HINT-FOO-ERROR-NAME | found fixing R9-K2 (2026-11-17), `grep 'class Foo implements Error' src/` | P2 (ratified 2026-11-17) | the hints of `E-THROW-TYPE` (two sites) and `E-CATCH-TYPE`, and `phg explain E-THROW-TYPE`, tell the user to write `class Foo implements Error`, a name `E-ERROR-NAME` (DEC-275) rejects; a diagnostic only, no program's output or exit changes. |
 
 **B. Crash or hang (8)** — the no-crash contract of `docs/INVARIANTS.md`.
 
