@@ -15,7 +15,8 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   arm. Each arm is now typed under its own bindings (one pattern walker, `src/compiler/match_bindings.rs`, serves
   both). Arms whose types are incompatible, such as two classes the checker unifies to a parent, now type as
   unknown instead of as the first arm's class: the VM had built a `Kid` for `y with { x = 9 }` when `y` held a
-  `Par` (`with par 9` on the tree-walker, `kid 9` on the VM).
+  `Par` (`with par 9` on the tree-walker, `kid 9` on the VM). A binding of an erased generic payload (`Option.Some(v) => v`) is still
+  not an operand on the VM: defect queue entry GENERIC-PAYLOAD-OPERAND.
 - Regression: `match_binding_is_an_arithmetic_operand` (three legs plus the expected output: two binding arms, a
   function return, a `when` guard, a float payload, a `var`, the binding on the right, two matches in one
   expression, a throwing first arm, a nested match naming the outer binding, struct, class-payload, bare-binding
