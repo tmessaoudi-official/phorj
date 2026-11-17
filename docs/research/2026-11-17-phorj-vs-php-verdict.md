@@ -32,7 +32,7 @@ Re-run by me today on `target/release/phg`, oracle PHP 8.5.12 (`php -n`, a debug
 |---|---|---|---|
 | a catch body throws while a `finally` is pending | the `finally` block does not run | runs | runs |
 | `Validation.isInt` and `isAlpha` on a string ending in a newline | `false false` | `false false` | `true true` |
-| any verb given a non-UTF-8 argument | panic, exit 101 | - | - |
+| `phg check` given a non-UTF-8 argument (the panic is in argument reading, before the verb runs) | panic, exit 101 | - | - |
 
 ## The verdict
 
@@ -46,8 +46,9 @@ Re-run by me today on `target/release/phg`, oracle PHP 8.5.12 (`php -n`, a debug
    run). The committed benchmark baseline records more wins than losses against PHP with its JIT. But one core
    control-flow construct behaves differently on the default engine than on the reference oracle, twelve
    standard-library natives compute something else on the PHP leg, and five inputs crash the toolchain. The gate
-   caught none of them (3,752 tests passed at the pre-push run of 2026-11-14, plan row 4). Two were already
-   recorded as known issues; the rest were first found by the hunters of rows 8 and 9.
+   caught none of them (3,752 tests passed at the pre-push run of 2026-11-14, plan row 4). The Validation
+   divergence and the `Content-Length` abort were already recorded as known issues, and the last-digit risk of the
+   math library as a disclosed corner; the rest were first found by the hunters of rows 8 and 9.
 3. **As a product someone could choose over PHP today, it is not there.** There is no standard-library reference,
    no tutorial and no migration guide; the language server answers nothing for several everyday constructs; a
    multi-file project cannot be built into a binary; no real application runs on it; it has one developer and no
@@ -275,7 +276,8 @@ widely used [Unverified: recall; no figures quoted].
   symbol, so a rename edits both; nothing inside a string interpolation is served, so a rename leaves the program
   broken [Verified 11-16: QA N-1, N-2].
 - Loader-stage errors (an unused import, for one) fail `phg check` and never reach the editor [Verified 11-16:
-  sleuth CJ-6]. `phg check --json` prints plain text on lex, parse and loader errors.
+  sleuth CJ-6]. `phg check --json` prints plain text on lex, parse and loader errors [Reported
+  11-16: sleuth CJ-7, gaps N9].
 - Everyday errors (type mismatch, unknown function, every lex and parse error) carry no code [Reported 11-16:
   `/gaps` axis 10; three of four type errors in the QA diagnostics journey carried none, Verified 11-16].
 - **The toolchain crashes on five inputs**: a non-UTF-8 argument [Verified: probe above], a non-UTF-8
