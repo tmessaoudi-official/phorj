@@ -67,6 +67,12 @@ function originSum(Line l): int {
     };
 }
 
+// A `match` is an ordinary operand: each arm's bindings give the value its type, so the whole match
+// can be scaled like any other expression, on every backend.
+function scaledSize(Circle | Square sh): float {
+    return (match (sh) { Circle { r: r } => r, Square { side: side } => side }) * 1.5;
+}
+
 interface Animal {
 }
 
@@ -169,6 +175,8 @@ function main(): void {
     float aq = areaOf(new Square(4.0));
     int d = originSum(new Line(new Point(1, 2), new Point(10, 20)));
     Output.printLine("areaOf circle = {ac}, square = {aq}, origin sum = {d}");
+    // a match as an arithmetic operand
+    Output.printLine("scaled = {scaledSize(new Circle(2.5))}");
     // nested type pattern in a variant payload
     Output.printLine(speak(new Holds(new Cat("Tom"))));
     Output.printLine(speak(new Holds(new Dog("Rex"))));

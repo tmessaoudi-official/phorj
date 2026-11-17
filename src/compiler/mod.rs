@@ -230,6 +230,9 @@ struct Compiler<'a> {
     /// DEC-535: narrowed local `CTy`s visible to `ctype` (`&self`) while it types an if-expression arm
     /// — `(slot, CTy)`, innermost last. See `narrow.rs`.
     narrow_overlay: std::cell::RefCell<Vec<(usize, CTy)>>,
+    /// R9-K1: `match`-arm binding `CTy`s visible to `ctype` while it types an arm — `(name, CTy)`,
+    /// innermost last. See `match_bindings.rs`.
+    binding_overlay: std::cell::RefCell<Vec<(String, CTy)>>,
     /// When compiling a synthetic constructor body, holds the code indices of the body's `return`
     /// statements (redirected to the ctor epilogue instead of an `Op::Return`). `None` outside a
     /// ctor body. The interpreter discards a ctor body's return and always yields the promoted
@@ -471,6 +474,7 @@ fn native_ret_cty(idx: usize) -> CTy {
 
 // impl/free cohesion split (M-Decomp W4.1): program driver + stmt/expr/match clusters.
 mod expr;
+mod match_bindings;
 mod matches;
 mod program;
 mod statics;

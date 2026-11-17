@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — a `match` binding as an arithmetic operand on the VM (defect R9-K1, P0, 2026-11-17)
+
+- `phg run` (the VM) rejected a `match` whose deciding arm body names a pattern binding when the match was an
+  operand: `match (e) { A(v) => v, B(v, w) => v * w } + 1` failed with `compile error: undefined variable`, and
+  `var x = match …; x + 1` with `` `x` is not numeric ``; `phg check`, the tree-walker and the transpiled PHP ran
+  both. The compiler typed the arm body without the arm's bindings, which it registered only while compiling the
+  arm. Each arm is now typed under its own bindings (one pattern walker, `src/compiler/match_bindings.rs`, serves
+  both). Arms whose types are incompatible, such as two classes the checker unifies to a parent, now type as
+  unknown instead of as the first arm's class: the VM had built a `Kid` for `y with { x = 9 }` when `y` held a
+  `Par` (`with par 9` on the tree-walker, `kid 9` on the VM).
+- Regression: `match_binding_is_an_arithmetic_operand` (three legs plus the expected output: two binding arms, a
+  function return, a `when` guard, a float payload, a `var`, the binding on the right, two matches in one
+  expression, a throwing first arm, a nested match naming the outer binding, struct, class-payload, bare-binding
+  and type patterns, the class case above, and a later `float v` local a leaked binding would mistype) and a
+  `scaledSize` line in `examples/guide/pattern-matching.phg`.
+
 ### Fixed — `finally` after a throwing `catch` on the VM (defect R9-K2, P0, 2026-11-17)
 
 - `phg run` (the VM, with or without the JIT) skipped a `finally` block when the `catch` body itself threw, directly,

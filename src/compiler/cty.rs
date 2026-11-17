@@ -144,8 +144,8 @@ impl Compiler<'_> {
                 ))
             }
             Expr::Ident(name, _) => {
-                if let Some(b) = self.match_bindings.iter().rev().find(|b| b.name == *name) {
-                    Ok(b.ty.clone())
+                if let Some(t) = self.binding_cty(name) {
+                    Ok(t)
                 } else if let Some(s) = self.resolve_local(name) {
                     let narrowed = self
                         .narrow_overlay
@@ -388,15 +388,12 @@ impl Compiler<'_> {
             Expr::Propagate { .. } => Ok(CTy::Other),
             // `obj with { … }` yields a fresh instance of `obj`'s class — same compile-type as `obj`.
             Expr::CloneWith { object, .. } => self.ctype(object),
-            // A `match` value's type is its arms' shared type (checker-guaranteed); infer it from
-            // the first arm's body so `var x = match … { … }` specializes like an explicit local.
-            // A throwing arm (DEC-532) contributes no type, so the first arm that does NOT throw decides.
-            Expr::Match { arms, .. } => {
-                match arms.iter().find(|a| !matches!(a.body, Expr::Throw { .. })) {
-                    Some(arm) => self.ctype(&arm.body),
-                    None => Ok(CTy::Other),
-                }
-            }
+            // A `match` value's type is its arms' shared type (checker-guaranteed), each arm typed under
+            // its own bindings, so `var x = match … { … }` specializes like an explicit local (R9-K1).
+            // A throwing arm (DEC-532) contributes no type; incompatible arms give `Other`.
+            Expr::Match {
+                scrutinee, arms, ..
+            } => self.ctype_match(scrutinee, arms),
             // A range materializes to `List<int>`, so its compile-type is `List(Int)` — carrying the
             // element type lets `(0..n)[i] + 1` (or a range bound to a `var`, then indexed) specialize.
             Expr::Range { .. } => Ok(CTy::List(Box::new(CTy::Int))),

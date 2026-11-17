@@ -4467,6 +4467,92 @@ function main(): void {
     );
 }
 
+/// R9-K1 (defect queue, P0): a `match` whose deciding arm body names a pattern binding is an arithmetic
+/// operand on every leg. The compiler's `ctype` typed that arm body without the arm's bindings, so the VM
+/// rejected `match (e) { A(v) => v, … } + 1` with `undefined variable` and `var x = match …; x + 1` with
+/// `` `x` is not numeric `` while `phg check`, the tree-walker and PHP ran them (Invariant 7). Covered:
+/// two binding arms, a function return, a `when` guard, a float payload, a `var`, the binding on the
+/// right, two matches in one expression (Invariant 8), a throwing first arm (DEC-532), a nested match
+/// naming the outer binding, a struct pattern, a class payload's field, a bare binding arm, a type
+/// pattern, a `hot` loop, and a later `float v` local in the same function (a binding left in the overlay
+/// would type it `int`). `cls` and `with`: arms of two classes (`Kid`, `Par`) type as `Other`, never the
+/// first arm's class — the VM used to build a `Kid` for `hy with { x = 9 }` on a `Par` (found while fixing).
+#[test]
+fn match_binding_is_an_arithmetic_operand() {
+    agree_out_php(
+        r##"import Core.Output;
+class OneError implements Error { constructor(public string message) {} }
+enum E { A(int v), B(int v, int w) }
+enum Sh { Circle(float r), Sq(int s), Tri(int a, int b) }
+class Pt { constructor(public int x, public int y) {} }
+enum Wr { Wrap(Pt p), Other(int k) }
+open class Par { constructor(public int x) {} public open function who(): string { return "par"; } }
+class Kid extends Par { constructor(public int x) {} public function who(): string { return "kid"; } }
+enum H { HK(Kid kd), HP(Par pr) }
+function g(E e): int { return match (e) { A(v) => v, B(v, w) => v * w } * 2; }
+function pick(E e): int throws OneError {
+  return match (e) { A(v) => throw new OneError("a"), B(v, w) => w } + 10;
+}
+function hot(E e): int {
+  mutable int s = 0;
+  for (int i in [1, 2, 3]) { s = s + match (e) { A(v) => v, B(v, w) => w } + i; }
+  return s;
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+  E e = new B(2, 3);
+  E a = new A(7);
+  int z = match (e) { A(v) => v, B(v, w) => v * w } + 1;
+  Output.printLine("c1 {z}");
+  Output.printLine("ret {g(e)} {g(a)}");
+  var x = match (e) { A(v) => v, B(v, w) => w };
+  int y = x + 1;
+  Output.printLine("var {y}");
+  Sh s = new Sq(4);
+  int gd = match (s) { Sq(n) when n > 3 => n, default => 0 } * 2;
+  Output.printLine("guard {gd}");
+  Sh c = new Circle(1.25);
+  float f = match (c) { Circle(r) => r, Sq(n) => 1.0, Tri(p, q) => 2.0 } + 0.5;
+  Output.printLine("float {f}");
+  int one = 1 + match (a) { A(v) => v, B(v, w) => w };
+  Output.printLine("one {one}");
+  int two = match (e) { A(v) => v, B(v, w) => v } + match (a) { A(v) => v, B(v, w) => w };
+  Output.printLine("two {two}");
+  try { Output.printLine("throw {pick(e)}"); } catch (OneError err) { Output.printLine("no"); }
+  int nest = match (e) { B(v, w) => match (a) { A(u) => u + v, B(u, t) => t + v }, A(v) => v } + 1;
+  Output.printLine("nest {nest}");
+  Pt pt = new Pt(3, 4);
+  int sx = match (pt) { Pt { x: px } => px, default => 0 } + 1;
+  Output.printLine("struct {sx}");
+  Wr wr = new Wrap(new Pt(5, 6));
+  int wx = match (wr) { Wrap(p) => p.x, Other(k) => k } + 1;
+  Output.printLine("wrap {wx}");
+  int k5 = 5;
+  int bare = match (k5) { 0 => 0, n => n } + 1;
+  Output.printLine("bare {bare}");
+  Par pp = new Par(4);
+  int tp = match (pp) { Kid kk => kk.x, Par q => q.x, default => 0 } + 1;
+  Output.printLine("type {tp}");
+  H h = new HP(new Par(4));
+  var hx = match (h) { HK(kd) => kd, HP(pr) => pr };
+  Output.printLine("cls {hx.who()} {hx.x}");
+  var hy = match (h) { HK(kd) => new Kid(1), HP(pr) => new Par(2) };
+  var hw = hy with { x = 9 };
+  Output.printLine("with {hw.who()} {hw.x}");
+  mutable int total = 0;
+  for (int k in [0, 1, 2, 3, 4, 5]) { total = total + hot(e); }
+  Output.printLine("hot {total}");
+  float v = 2.25;
+  float lv = v + 0.5;
+  Output.printLine("leak {lv}");
+}
+"##,
+        "c1 7\nret 12 14\nvar 4\nguard 8\nfloat 1.75\none 8\ntwo 9\nthrow 13\nnest 10\nstruct 4\nwrap 6\n\
+         bare 6\ntype 5\ncls par 4\nwith par 9\nhot 90\nleak 2.75\n",
+        "R9-K1 match binding as an arithmetic operand",
+    );
+}
+
 #[test]
 fn s8_trait_method_reuse_is_byte_identical() {
     // M-RT S8 T1: a class composes a trait via `use`; the trait's method is flattened in and dispatches

@@ -9,14 +9,15 @@
 > (R9-K2 plan, close-out). Forge C-5 (the compiler re-derives types instead of consuming the checker's; DEC-562
 > stage 2) is the architectural root and stays open: this is the local fix.
 >
-> **STATE (2026-11-17, session stopped by the developer before the plan gate):** Phases 0-3C done, this plan is a
-> DRAFT awaiting the developer's GO. No code written. Probes on the 2026-11-17 release binary (VM vs tree-walker / PHP):
+> **STATE (2026-11-17, evening):** BUILT in autonomous mode (plan gate taken as ASSUMED, Decisions Log); all six steps
+> done. Drafting-session notes follow. Probes on the 2026-11-17 release binary (VM vs tree-walker / PHP):
 > sleuth c1, c3, u3, u7 fail `undefined variable` on the VM; `var x = match …; x + 1` fails `` `x` is not numeric ``;
 > generic `B<int>` `Holds(x) => x` + 1 fails `undefined variable x`; `1 + match …` and `Wrap(p) => p.x` + 1 already
 > agree; an outer local shadowed by a binding is rejected by the checker (redeclaration), so that case is dropped.
 > Reproducers: `var/claude/sleuth/2026-11-16/scratch-K/{c1,c3,u3,u7}.phg` (gitignored).
 
 ## Decisions Log
+- [2026-11-17 21:12] ASSUMED (review): plan gate taken in autonomous mode (away window 2026-11-17, keep-going on): build the approach of Formal Plan step 2 as drafted (pure collector + RefCell binding overlay, logic in matches.rs) — because it is an internal compiler fix with no user-visible surface (not Invariant 15) and the root cause was probed in the drafting session. Alternatives: wait for the developer's GO; consume the checker's types (Forge C-5 / DEC-562 stage 2, architectural, out of scope)
 
 ## Formal Plan
 1. Failing test first (`tests/differential.rs`, `agree_out_php`, three legs plus the expected output from the
@@ -43,17 +44,18 @@
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | Failing three-leg differential test, red on the VM for the stated reason | S | todo | - | tests/differential.rs |
-| 2 | Binding overlay and pure collector; `ctype` types the arm under its bindings | S | todo | - | src/compiler/matches.rs src/compiler/cty.rs src/compiler/cty_members.rs src/compiler/mod.rs src/compiler/emit.rs |
-| 3 | Generic-payload boundary probe | S | todo | - | - |
-| 4 | Sabotage the overlay push and the truncate | S | todo | - | src/compiler/matches.rs |
-| 5 | Guide example line and README row | S | todo | - | examples/guide/pattern-matching.phg examples/README.md |
-| 6 | JIT explain, full gate, release binary, SLICE-STATE, CHANGELOG, size gate | S | todo | - | docs/plans/SLICE-STATE.md CHANGELOG.md |
+| 1 | Failing three-leg differential test, red on the VM for the stated reason | S | done | `match_binding_is_an_arithmetic_operand` red before the fix: tree-walker printed the expected 13 lines, VM `compile error: undefined variable` `v`; advisor 3C added a bare-binding arm, a type pattern and the class case (pre-fix probe: tree-walker `par 9`, VM `kid 9`) | tests/differential.rs |
+| 2 | Binding overlay and pure collector; `ctype` types the arm under its bindings | S | done | test green on three legs (`PHORJ_REQUIRE_PHP=1`, 1 passed); type-only `(name, CTy)` overlay, every non-throwing arm typed, incompatible arms give `Other`; binding logic split to `match_bindings.rs` (matches.rs 167, cty.rs 491, mod.rs 496 lines) | src/compiler/match_bindings.rs src/compiler/matches.rs src/compiler/cty.rs src/compiler/mod.rs src/compiler/emit.rs |
+| 3 | Generic-payload boundary probe | S | done | recorded, not claimed: `B<int>` `Holds(x) => x` + 1 still fails on the VM, now `cannot infer numeric type of Match {…}` (was `undefined variable x`): the erased payload types `Other`, the KNOWN_ISSUES S2.1 generic-result limitation | - |
+| 4 | Sabotage the overlay push and the truncate | S | done | three mutants of `match_bindings.rs`, each landed, red, restored by `cmp`: no push → VM `undefined variable` `v`; no truncate → VM `runtime error at 64: expected int, found float` (the later `float v` line); no class guard → VM `with kid 9`; final baseline 1 passed | src/compiler/match_bindings.rs |
+| 5 | Guide example line and README row | S | done | `scaledSize` line: pre-fix VM `compile error: undefined variable` `r`, tree-walker `scaled = 3.75` | examples/guide/pattern-matching.phg examples/README.md |
+| 6 | JIT explain, full gate, release binary, SLICE-STATE, CHANGELOG, size gate | S | done | full all-features gate green 2026-11-17 21:47: nextest 3767 passed 2 skipped, clippy all-features and no-default-features, release build, size gate `grandfathered=54 fails=0 warns=176`, doc-guards; `PHORJ_JIT_EXPLAIN=1` declines `hot` on `unboxed GetEnumField(1)` (unrelated); `phg format` idempotent on the guide | docs/plans/SLICE-STATE.md CHANGELOG.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- The plan gate: GO on the approach above (step 2), or redirect.
 ### Needs research
 ### Fragile
 - `src/compiler/cty.rs` is at 494 lines: any growth past 500 breaches the hard cap (Invariant 13).
 ### Known issues
+- IF-CLASS-ARM-TYPE (new queue entry, P0 proposed): the `if`-expression form of the class divergence, found by probe while fixing; not in this fix.
+- The JIT declines `hot` (`unboxed GetEnumField(1)`), so the test's loop is not JIT coverage; nothing in this fix touches `src/jit/`.

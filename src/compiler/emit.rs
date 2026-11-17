@@ -57,6 +57,7 @@ impl<'a> Compiler<'a> {
             class_parents_all: None,
             match_bindings: Vec::new(),
             narrow_overlay: Default::default(),
+            binding_overlay: Default::default(),
             height: 0,
             ctor_return_jumps: None,
             loop_frames: Vec::new(),
