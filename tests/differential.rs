@@ -777,34 +777,61 @@ class Duck extends Swimmer, Flyer {}"#,
     );
 }
 
-/// PENDING (Invariant 15, DEC-584): a hooked property inherited from two parents (hook + hook, or hook +
-/// stored field). The checker accepts it; both native legs run the parent the shared origin resolver
-/// picks (sorted-first, as for an unreported method collision); PHP fatals ("Conflict resolution
-/// between hooked properties is currently not supported"). Only the native legs are pinned, so a
-/// ruling that changes either side reopens this test.
+/// PENDING (Invariant 15, DEC-584): a hooked property with two distinct declarations among a class's
+/// parents (hook + hook, or hook + stored field). The checker accepts it and PHP fatals ("Conflict
+/// resolution between hooked properties is currently not supported"). Until it is ruled, the hook is
+/// NOT inherited, so both native legs keep their pre-DEC-572 behaviour whichever parent comes first:
+/// hook + hook faults `no field`, hook + field reads the field. One declaration reached twice (a
+/// trait both parents use) is not a clash and is inherited. Only the native legs are pinned.
 #[test]
 fn hook_from_two_parents_is_pending_dec_584() {
-    for (src, want, label) in [
-        (
-            "import Core.Output; open class A { int label { get => 1; } } open class B { int label { get => 2; } } \
-             class C extends A, B {} #[Entry(kind: EntryKind.Cli)] function main(): void { C c = new C(); \
-             Output.printLine(\"{c.label}\"); }",
-            "1\n",
-            "hook_mi_hook_hook",
-        ),
-        (
-            "import Core.Output; open class A { int label { get => 1; } } open class B { constructor(public int label) {} } \
-             class C extends A, B {} #[Entry(kind: EntryKind.Cli)] function main(): void { C c = new C(4); A a = c; \
-             Output.printLine(\"{c.label} {a.label}\"); }",
-            "1 1\n",
-            "hook_mi_hook_field",
-        ),
-    ] {
+    let run = |src: &str, label: &str| {
         let src = with_pkg(src);
         let tree = cmd_treewalk(&src);
         assert_eq!(tree, cmd_run(&src), "interp vs VM for {label}");
-        assert_eq!(tree.as_deref(), Ok(want), "oracle output for {label}");
+        tree
+    };
+    let main = "#[Entry(kind: EntryKind.Cli)] function main(): void { C c = new C(); Output.printLine(\"{c.label}\"); }";
+    let hook_hook = run(
+        &format!("import Core.Output; open class A {{ int label {{ get => 1; }} }} open class B {{ int label {{ get => 2; }} }} class C extends A, B {{}} {main}"),
+        "hook_mi_hook_hook",
+    );
+    assert!(
+        hook_hook
+            .as_ref()
+            .is_err_and(|e| e.contains("no field `label` on `C`")),
+        "hook + hook: {hook_hook:?}"
+    );
+    for (a, b, label) in [
+        (
+            "int label { get => 1; }",
+            "constructor(public int label) {}",
+            "hook_mi_hook_field",
+        ),
+        (
+            "constructor(public int label) {}",
+            "int label { get => 1; }",
+            "hook_mi_field_hook",
+        ),
+    ] {
+        let out = run(
+            &format!("import Core.Output; open class A {{ {a} }} open class B {{ {b} }} class C extends A, B {{}} \
+                 #[Entry(kind: EntryKind.Cli)] function main(): void {{ C c = new C(4); A x = c; B y = c; \
+                 Output.printLine(\"{{c.label}} {{x.label}} {{y.label}}\"); }}"),
+            label,
+        );
+        assert_eq!(out.as_deref(), Ok("4 4 4\n"), "oracle output for {label}");
     }
+    let shared = run(
+        &format!("import Core.Output; trait T {{ int label {{ get => 7; }} }} open class A {{ use T; }} open class B {{ use T; }} \
+             class C extends A, B {{}} {main}"),
+        "hook_mi_shared_trait",
+    );
+    assert_eq!(
+        shared.as_deref(),
+        Ok("7\n"),
+        "a trait both parents use is one declaration"
+    );
 }
 
 /// M-RT S6c.1 — a diamond-shared field auto-merges (no conflict): `id` reaches `Mid` through both

@@ -34,7 +34,8 @@ pub fn class_method_origins(program: &Program) -> MemberOrigins {
 /// where the compiler registers it), and an own stored field shadows an inherited hook of its name
 /// (today's native behaviour; PHP runs the hook: PENDING as DEC-582), so an origin with no such hook
 /// means "the slot". Separate from the method table, which also names PHP methods in the transpiler.
-/// Its collision list is not reported: a hooked property inherited from two parents is PENDING DEC-584.
+/// A hooked property with two distinct declarations among the parents is NOT inherited (each side keeps
+/// today's pre-DEC-572 behaviour) and is listed as a collision, unreported: PENDING DEC-584.
 pub fn class_hook_origins(program: &Program) -> MemberOrigins {
     member_origins(program, Members::Hooks)
 }
@@ -64,6 +65,10 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
         memo: BTreeMap<String, BTreeMap<String, (String, String)>>,
         conflicts: Vec<(String, String, Span)>,
         in_progress: BTreeSet<String>,
+        /// Hooks only (DEC-584 PENDING): a clash is NOT inherited (the pre-DEC-572 behaviour), and a
+        /// trait-supplied entry is one declaration whichever using class folded it in.
+        hooks: bool,
+        via_trait: BTreeMap<(String, String), String>,
     }
 
     impl Ctx {
@@ -150,11 +155,15 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
                     continue;
                 }
                 let distinct: BTreeSet<(String, String)> = v.into_iter().map(|(_, o)| o).collect();
-                let mut it = distinct.into_iter();
-                match it.next() {
+                let decls: BTreeSet<(&String, &String)> = distinct
+                    .iter()
+                    .map(|o| (self.via_trait.get(o).unwrap_or(&o.0), &o.1))
+                    .collect();
+                let clash = decls.len() > 1;
+                match distinct.into_iter().next() {
                     None => {}
                     Some(first) => {
-                        if it.next().is_some() {
+                        if clash {
                             let span = self.spans.get(c).copied().unwrap_or(Span {
                                 start: 0,
                                 len: 0,
@@ -163,7 +172,9 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
                             });
                             self.conflicts.push((c.to_string(), name.clone(), span));
                         }
-                        map.insert(name, first); // deterministic pick (sorted-first)
+                        if !(clash && self.hooks) {
+                            map.insert(name, first); // deterministic pick (sorted-first)
+                        }
                     }
                 }
             }
@@ -183,6 +194,8 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
         memo: BTreeMap::new(),
         conflicts: Vec::new(),
         in_progress: BTreeSet::new(),
+        hooks: kind == Members::Hooks,
+        via_trait: BTreeMap::new(),
     };
     // A trait's members by name, for folding a used trait's hooks (and storage) into its user.
     let traits: BTreeMap<&str, &[ClassMember]> = program
@@ -197,13 +210,23 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
         match item {
             Item::Class(c) if kind == Members::Hooks => {
                 let mut ms = BTreeSet::new();
-                let used = c.uses.iter().filter_map(|u| traits.get(u.name.as_str()));
-                for members in std::iter::once(&c.members.as_slice()).chain(used) {
-                    hook_accessors(members, &mut ms);
+                let used = c
+                    .uses
+                    .iter()
+                    .filter_map(|u| Some((Some(&u.name), *traits.get(u.name.as_str())?)));
+                for (from, members) in std::iter::once((None, c.members.as_slice())).chain(used) {
+                    let mut own = BTreeSet::new();
+                    hook_accessors(members, &mut own);
                     // DEC-582 PENDING: an own stored field shadows an inherited hook of its name.
                     for f in own_storage_fields(members) {
-                        ms.insert(format!("{f}$get"));
-                        ms.insert(format!("{f}$set"));
+                        own.insert(format!("{f}$get"));
+                        own.insert(format!("{f}$set"));
+                    }
+                    for a in own {
+                        if let Some(t) = from {
+                            ctx.via_trait.insert((c.name.clone(), a.clone()), t.clone());
+                        }
+                        ms.insert(a);
                     }
                 }
                 ctx.decl.insert(c.name.clone(), ms);

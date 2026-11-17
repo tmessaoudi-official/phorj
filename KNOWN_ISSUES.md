@@ -71,10 +71,11 @@ covered, and unchanged: a subclass that STORES a field named like its parent's h
 while PHP runs the inherited hook; whether the field or the hook wins is PENDING as DEC-582 (Invariant 15), pinned on
 the native legs in the same test. The checker still types a child that redeclares ONE accessor as replacing the whole
 property (`p.label = 3` on such a child is rejected as read-only; PHP accepts it): PENDING as DEC-583. A hooked property
-inherited from two parents (hook + hook, or hook + stored field) type-checks; both native legs run the shared resolver's
-sorted-first parent (`1`, and `1 1` for hook + field) while PHP fatals ("Conflict resolution between hooked properties is
-currently not supported"). Before this fix the native legs faulted `no field` on the first shape and read the second
-parent's stored field on the second (`4 4`, inferred from the pre-fix lookup). Whether to reject it is PENDING as DEC-584,
+inherited from two parents (hook + hook, or hook + stored field) type-checks, and until it is ruled the hook is NOT
+inherited, so both native legs keep their pre-fix behaviour: hook + hook faults ``no field `label` on `C` ``, hook + field
+reads the field (`4 4 4`, whichever parent comes first; verified on both orders), while PHP fatals ("Conflict resolution
+between hooked properties is currently not supported"). One declaration reached twice (a diamond, or a trait both parents
+`use`) is not a clash and is inherited. Whether to reject the shape is PENDING as DEC-584,
 pinned natively in `hook_from_two_parents_is_pending_dec_584`. Construction-time and `with` setter runs are SET-HOOK-DURING-CONSTRUCTION (row 4f).
 
 ## BARE-NAME-SUBCLASS — a bare name that matches a field only a SUBCLASS stores splits the legs (found 2026-10-26)
@@ -4341,3 +4342,15 @@ programs check clean, and neither involves an inherited hook in its first form:
 
 Queued as MI-TRANSPILE-COMPOSITION (P1 proposed) in the SLICE-STATE defect queue. Cause not read [Unverified]: the
 multi-parent composition in `src/transpile/classes_synth.rs` is where both would start.
+
+## LIFT-PROPERTY-HOOKS — `phg lift` refuses any PHP property hook (found 2026-11-17)
+
+Found walking `/phg-ship-slice` for HOOK-INHERITANCE (plan `docs/plans/2026-11-17-hook-inheritance.plan.md`). A PHP 8.4
+class with a hooked property, `public int $balance { get => $this->raw; set(int $v) { … } }`, fails to lift with
+`lift parse error: expected ';', found LBrace` at the hook's opening brace; `php -n` runs the same file. The refusal is
+loud (exit 1, no draft), so no program is mis-lifted. Hooks are deliberately outside the lift subset: the PHP parser
+stops at the hook body, and the printer says so for a Phorj hook (`printer: property hooks are outside the lift subset`,
+`src/lift/printer/items.rs`). Property hooks shipped (M-mut.7b) with transpile support and no lift support, against
+Invariant 17's same-change rule, and inherited hooks (DEC-572) inherit the gap. Migration axis (north star,
+axis 8): a PHP 8.4 codebase that uses hooks cannot be lifted. Not a rule-1 defect (no program output changes); a lift
+feature row.

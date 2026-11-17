@@ -746,8 +746,8 @@ static type:
 - **A property hook** (`T name { get => …; set(T v) { … } }`) is looked up on the runtime class's own members and the
   traits it `use`s, then inherited from its parents like a method, **per accessor** (DEC-572, built 2026-11-17: a child
   that redeclares only `get` keeps its parent's `set`); the stored field is used when no class on the chain has the
-  hook. Open: a hooked property inherited from two parents (hook + hook, or hook + field) runs the resolver's sorted-first
-  parent natively while PHP fatals (PENDING DEC-584); a subclass's own stored field named like an inherited hook wins on the native
+  hook. Open: a hooked property inherited from two parents (hook + hook, or hook + field) is not inherited (the native
+  legs keep their pre-fix behaviour) while PHP fatals (PENDING DEC-584); a subclass's own stored field named like an inherited hook wins on the native
   legs while PHP runs the hook (PENDING DEC-582), and the checker still types a partial redeclaration as replacing
   the whole property (PENDING DEC-583). A read through a supertype, an untyped
   receiver (an erased generic binder, `null ?? …`) or a trait body's `this` all follow this rule. A hook-only property
