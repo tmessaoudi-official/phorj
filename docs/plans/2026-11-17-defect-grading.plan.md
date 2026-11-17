@@ -30,7 +30,7 @@
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | Propose a grade for every DEFECT QUEUE entry (41 seeded) and add 36 rows: 33 from row 9 by class (after dedupe: AE-5 into VALIDATION, H-1 into DEEP-INPUT-CRASHES; CJ-3 lifted from its P3 tail), row 9b V10, and two numbered serve items (SERVE-REASON-PHRASE, SERVE-SPILL); 77 entries, 4 proposed P0; Conflicts and the rulings not made listed under the tables | M | doing | - | docs/plans/SLICE-STATE.md docs/plans/MASTER-PLAN.md docs/plans/2026-11-17-defect-grading.plan.md |
+| 1 | Propose a grade for every DEFECT QUEUE entry (41 seeded) and add 36 rows: 33 from row 9 by class (after dedupe: AE-5 into VALIDATION, H-1 into DEEP-INPUT-CRASHES; CJ-3 lifted from its P3 tail), row 9b V10, and two numbered serve items (SERVE-REASON-PHRASE, SERVE-SPILL); 77 entries, 4 proposed P0; Conflicts and the rulings not made listed under the tables (work commit, subject `docs(slice-state, plans): defect-queue grading pass`) | M | done | 445e8241 | docs/plans/SLICE-STATE.md docs/plans/MASTER-PLAN.md docs/plans/2026-11-17-defect-grading.plan.md |
 | 2 | The developer ratifies the grades (one pass, exceptions marked), then rules the Conflicts and DEC-581; ratified grades replace "proposed" in SLICE-STATE and the two interims retire | S | blocked | - | docs/plans/SLICE-STATE.md |
 <!-- /progress-block -->
 ### Blocked
