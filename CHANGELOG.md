@@ -17,8 +17,11 @@ the method resolver (override, multi-parent, diamond); the oracle falls back to 
 accessor to the declaring class's compiled hook (`src/compiler/origin_alias.rs`, moved out of `program.rs`).
 Regression: `tests/differential.rs::hooks_are_inherited_like_methods` (ten shapes, three legs). Example:
 `examples/guide/property-hooks.phg` (`Savings`). Not changed: a subclass that stores a field named like an inherited
-hook still reads its field natively while PHP runs the hook (PENDING DEC-582, queue entry HOOK-FIELD-SHADOW), and
-construction-time setter runs stay SET-HOOK-DURING-CONSTRUCTION (DEC-571, row 4f).
+hook still reads its field natively while PHP runs the hook (PENDING DEC-582, queue entry HOOK-FIELD-SHADOW), the
+checker still types a child that redeclares one accessor as replacing the whole property (PENDING DEC-583), and
+construction-time setter runs stay SET-HOOK-DURING-CONSTRUCTION (DEC-571, row 4f). New check: a hooked property inherited
+from two parents (hook + hook, or hook + stored field) is `E-MI-FIELD-CONFLICT`, as PHP cannot compose it either
+(`hook_inherited_from_two_parents_is_a_field_conflict`).
 
 ### Fixed — a `match` binding as an arithmetic operand on the VM (defect R9-K1, P0, 2026-11-17)
 

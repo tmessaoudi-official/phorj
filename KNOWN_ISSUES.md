@@ -66,10 +66,13 @@ method resolver's own machinery (override, multi-parent, diamond), the oracle's 
 and the compiler aliases the accessor to the declaring class's compiled hook exactly as it aliases an inherited method.
 All three rows above now match PHP (`hooked`, `L`, `50`), and so do a child that redeclares only `get` (it keeps the
 parent's `set`: the native legs used to drop that write too), a three-level chain, a hook from a trait the parent uses,
-a second parent, compound assignment and a hot loop (`tests/differential.rs::hooks_are_inherited_like_methods`). Not
+an unrelated second parent, compound assignment and a hot loop (`tests/differential.rs::hooks_are_inherited_like_methods`). Not
 covered, and unchanged: a subclass that STORES a field named like its parent's hook keeps reading its field natively
 while PHP runs the inherited hook; whether the field or the hook wins is PENDING as DEC-582 (Invariant 15), pinned on
-the native legs in the same test. Construction-time and `with` setter runs are SET-HOOK-DURING-CONSTRUCTION (row 4f).
+the native legs in the same test. The checker still types a child that redeclares ONE accessor as replacing the whole
+property (`p.label = 3` on such a child is rejected as read-only; PHP accepts it): PENDING as DEC-583. A hooked property
+inherited from two parents is now `E-MI-FIELD-CONFLICT` (before, both native legs ran the sorted-first parent's hook while
+PHP fataled). Construction-time and `with` setter runs are SET-HOOK-DURING-CONSTRUCTION (row 4f).
 
 ## BARE-NAME-SUBCLASS — a bare name that matches a field only a SUBCLASS stores splits the legs (found 2026-10-26)
 

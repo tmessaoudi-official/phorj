@@ -617,8 +617,9 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
    app's own code can forge the handle.
 
 **Rulings this pass does not make** (raised at the closing check-in, never decided here; DEC-581 was ruled at it, reject): DEC-568, R9-K6, R9-AE-14, Q-0908-3, STRING-EQ-INT-STRING-UNION, the SET-EQ-ORDER carrier,
-LIBRARY-REACHES-MAIN, row 4i (STATIC-REDECL-TYPE), the PLAYGROUND-PHP-WASM `STDERR` emit, row 9b's V50, and DEC-582
-(HOOK-FIELD-SHADOW, recorded 2026-11-17 while building HOOK-INHERITANCE).
+LIBRARY-REACHES-MAIN, row 4i (STATIC-REDECL-TYPE), the PLAYGROUND-PHP-WASM `STDERR` emit, row 9b's V50, DEC-582
+(HOOK-FIELD-SHADOW) and DEC-583 (a partial hook redeclaration typed as whole-property), both recorded 2026-11-17 while
+building HOOK-INHERITANCE.
 
 **Order (ratified 2026-11-17):** the P0 set is HOOK-INHERITANCE, INIT-CHAIN, R9-K2 and R9-K1, R9-K2 first (the
 developer's choice); then P0 before P1, then the P1 quick wins (`var/claude/aggregate-findings/2026-11-16/report.md`, "Quick wins"), then the rest by

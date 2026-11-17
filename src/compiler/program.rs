@@ -403,7 +403,7 @@ pub(super) fn compile_program_with(
     // (`origin == self`) is already registered, so it is skipped.
     // DEC-572 (plan row 4e): property-hook accessors (`<name>$get`/`$set`) are inherited the same way.
     let (origins, _conflicts) = crate::ast::class_method_origins(program);
-    let hook_origins = crate::ast::class_hook_origins(program);
+    let (hook_origins, _) = crate::ast::class_hook_origins(program);
     let mut tables = super::origin_alias::MethodTables {
         methods: &mut methods,
         rets: &mut method_rets,

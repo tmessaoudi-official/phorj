@@ -777,6 +777,47 @@ class Duck extends Swimmer, Flyer {}"#,
     );
 }
 
+/// DEC-572 — a hooked property inherited from two parents is a property collision, exactly like two
+/// stored fields: `E-MI-FIELD-CONFLICT` (PHP: "Conflict resolution between hooked properties is
+/// currently not supported"). Before the check, both native legs silently ran the sorted-first parent's
+/// hook while PHP fataled. A diamond-shared hook and a child that redeclares the property are fine.
+#[test]
+fn hook_inherited_from_two_parents_is_a_field_conflict() {
+    for (src, what) in [
+        (
+            "open class A { int label { get => 1; } } open class B { int label { get => 2; } } class C extends A, B {}",
+            "hook + hook",
+        ),
+        (
+            "open class A { int label { get => 1; } } open class B { constructor(public int label) {} } class C extends A, B {}",
+            "hook + stored field",
+        ),
+    ] {
+        let errs = check_errs(src);
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-MI-FIELD-CONFLICT") && e.message.contains("`label`")),
+            "{what} must be E-MI-FIELD-CONFLICT, got: {errs:?}"
+        );
+    }
+    for (src, what) in [
+        (
+            "open class R { int label { get => 1; } } open class A extends R {} open class B extends R {} class C extends A, B {}",
+            "diamond-shared hook",
+        ),
+        (
+            "open class A { int label { get => 1; } } open class B { int label { get => 2; } } \
+             class C extends A, B { int label { get => 3; } }",
+            "child redeclares the property",
+        ),
+    ] {
+        let errs = check_errs(src);
+        assert!(
+            !errs.iter().any(|e| e.code == Some("E-MI-FIELD-CONFLICT")),
+            "{what} must not conflict, got: {errs:?}"
+        );
+    }
+}
+
 /// M-RT S6c.1 — a diamond-shared field auto-merges (no conflict): `id` reaches `Mid` through both
 /// `Left` and `Right`, but both arms resolve to the *same* declaring origin (`Base`), so it dedups
 /// exactly like a diamond-shared method. No `E-MI-FIELD-CONFLICT`.

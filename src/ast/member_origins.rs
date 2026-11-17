@@ -5,6 +5,13 @@
 
 use super::*;
 
+/// `(class, member) -> (declaring class, member)`, plus every unresolved cross-parent collision as
+/// `(class, member, class span)`.
+pub type MemberOrigins = (
+    std::collections::BTreeMap<(String, String), (String, String)>,
+    Vec<(String, String, Span)>,
+);
+
 /// The fully-resolved method-dispatch table for every class (M-RT S6b): for each `(class, name)` it
 /// gives the `(declaring_class, declaring_method)` a call of `name` on an instance of `class` runs.
 /// This is the **single source of dispatch** for *both* backends — the interpreter looks up the
@@ -17,26 +24,19 @@ use super::*;
 /// return value lists every **unresolved** cross-parent collision as `(class, name, class_span)` —
 /// the checker reports each as `E-MI-CONFLICT`. On a conflict the table still records a deterministic
 /// pick so a backend never panics (the checker fails the build first).
-#[allow(clippy::type_complexity)]
-pub fn class_method_origins(
-    program: &Program,
-) -> (
-    std::collections::BTreeMap<(String, String), (String, String)>,
-    Vec<(String, String, Span)>,
-) {
+pub fn class_method_origins(program: &Program) -> MemberOrigins {
     member_origins(program, Members::Methods)
 }
 
-/// DEC-572 (plan row 4e): the hook twin of [`class_method_origins`]: for each `(class, <name>$get|$set)`
+/// DEC-572 (plan row 4e): the hook twin of [`class_method_origins`]: per `(class, <name>$get|$set)`
 /// the class whose hook body runs, inherited like a method PER ACCESSOR (a child redeclaring only `get`
 /// keeps its parent's `set`, as in PHP). A `use`d trait's hook counts as the using class's own (that is
 /// where the compiler registers it), and an own stored field shadows an inherited hook of its name
 /// (today's native behaviour; PHP runs the hook: PENDING as DEC-582), so an origin with no such hook
 /// means "the slot". Separate from the method table, which also names PHP methods in the transpiler.
-pub fn class_hook_origins(
-    program: &Program,
-) -> std::collections::BTreeMap<(String, String), (String, String)> {
-    member_origins(program, Members::Hooks).0
+/// The second value lists every accessor inherited from two distinct parents (`E-MI-FIELD-CONFLICT`).
+pub fn class_hook_origins(program: &Program) -> MemberOrigins {
+    member_origins(program, Members::Hooks)
 }
 
 /// Which member names [`member_origins`] resolves.
@@ -87,13 +87,7 @@ fn hook_accessors(members: &[ClassMember], out: &mut std::collections::BTreeSet<
 }
 
 #[allow(clippy::type_complexity)]
-fn member_origins(
-    program: &Program,
-    kind: Members,
-) -> (
-    std::collections::BTreeMap<(String, String), (String, String)>,
-    Vec<(String, String, Span)>,
-) {
+fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
     use std::collections::{BTreeMap, BTreeSet};
 
     struct Ctx {

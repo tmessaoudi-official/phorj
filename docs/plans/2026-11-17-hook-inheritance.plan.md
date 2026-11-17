@@ -20,6 +20,7 @@
 - [2026-11-17 22:56] ASSUMED (review): a subclass that STORES a field named like its parent's hook keeps today's native behaviour (the field wins, `7 7`; PHP prints `4 4`) — because DEC-572 does not cover the shape and Invariant 15 forbids ruling it autonomously; recorded PENDING as DEC-582 (recommended (c): reject the shape) and queue entry HOOK-FIELD-SHADOW (P1 proposed). Alternatives: let the inherited hook win (PHP), reject now
 - [2026-11-17 22:56] ASSUMED (review): src/interpreter/coop.rs goes 300 -> 301 lines (one struct-literal field, hook_origins); not split — because the three Interp constructors (mod.rs, entry.rs, coop.rs) each list every field and a split for one line would not be by cohesion; the size gate's warn count is unchanged (176) since class_hierarchy.rs fell to 268. Alternatives: fold hook origins into method_origins (allocates a key on every tree-walker field read), split coop.rs
 - [2026-11-17 22:56] ASSUMED (review): renamed the pinning test vm_hook_on_an_extended_class_is_decided_by_the_runtime_class to hooks_are_inherited_like_methods and updated the KNOWN_ISSUES cite — because it no longer pins the runtime-class-only behaviour. Alternative: keep the old name
+- [2026-11-17 23:33] ASSUMED (review): a hooked property inherited from two parents (hook + hook, hook + stored field) is reported as E-MI-FIELD-CONFLICT with property wording — basis: DEC-572 'inherited like methods' + the existing analogues (E-MI-CONFLICT for methods, E-MI-FIELD-CONFLICT for fields) + PHP fatals on both shapes; reuses the existing code, so no new diagnostic surface. Before: both native legs ran the sorted-first parent's hook while PHP fataled. Alternatives: a new E-MI-HOOK-CONFLICT code; record PENDING and leave the split
 
 ## Formal Plan
 1. Failing test first: rewrite `vm_hook_on_an_extended_class_is_decided_by_the_runtime_class` (it pins the pre-ruling
@@ -50,7 +51,7 @@
 | 3 | Interpreter fallback and compiler aliasing | S | done | 12 of 12 hook tests green; `program.rs` 646 to 635 (alias loop moved to `origin_alias.rs`) | src/interpreter/construct.rs src/interpreter/engine.rs src/interpreter/mod.rs src/compiler/program.rs |
 | 4 | Sabotage both legs | S | done | six mutants red for the stated reason, each restored with `cmp`: no hook alias (VM `p p p hooked`), oracle get / set fallback, VM `$get`-only, no field shadow (`4 4`), whole-property override (`1 2`) | - |
 | 5 | Example, README, KNOWN_ISSUES, register, audit row, SLICE-STATE, CHANGELOG | S | done | `Savings` prints `savings after -3: 0, empty: true` on three legs; DEC-572 built, DEC-582 PENDING; queue HOOK-FIELD-SHADOW | examples/guide/property-hooks.phg examples/README.md KNOWN_ISSUES.md CHANGELOG.md docs/plans/SLICE-STATE.md |
-| 6 | JIT explain, LSP probe, full gate, release binary | S | doing | JIT: hook reads decline as an own hook does (`CallMethod on Unknown`); LSP: completion lists inherited hooks, hover/definition null for every instance member (LSP-INSTANCE-MEMBER-HOVER, pre-existing) | - |
+| 6 | JIT explain, LSP probe, full gate, release binary | S | done | JIT: hook reads decline as an own hook does (`CallMethod on Unknown`); LSP: completion lists inherited hooks, hover/definition null for every instance member (LSP-INSTANCE-MEMBER-HOVER, pre-existing); full all-features gate green twice (nextest 3767, then 3768 with the 6C conflict test); release rebuilt | - |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
@@ -58,6 +59,9 @@
 ### Fragile
 - `src/interpreter/coop.rs` 301 lines (one field over the soft cap; ASSUMED entry); `src/interpreter/mod.rs` 463.
 ### Known issues
+- DEC-583 PENDING: the checker types a child that redeclares ONE accessor as replacing the whole property (rejects `p.label = 3` as read-only); run time and PHP are per accessor.
+- A diamond with a shared promoted constructor parameter transpiles to invalid PHP (`Redefinition of parameter $raw`): unrelated to hooks, native legs agree; not recorded elsewhere yet.
+- A fault inside a hook body renders a different line and trace on the two native legs (oracle: no getter frame; VM: `Dog::label$get`), for an own hook too: the queued TRACE-FRAME-NAMES class.
 - HOOK-FIELD-SHADOW / DEC-582 PENDING: a subclass's stored field named like an inherited hook wins natively; PHP runs the hook. Pinned on the native legs.
 - The JIT declines a function that reads a hook (`CallMethod on Unknown`), inherited or own alike: pre-existing, not new.
 - LSP-INSTANCE-MEMBER-HOVER (KNOWN_ISSUES, P2): hover/definition answer `null` on every user instance member; completion is fine.

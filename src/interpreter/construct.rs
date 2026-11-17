@@ -10,7 +10,7 @@ pub(super) type HookOrigins = HashMap<String, HashMap<String, (Option<String>, O
 
 pub(super) fn hook_origin_table(program: &Program) -> HookOrigins {
     let mut out: HookOrigins = HashMap::new();
-    for ((class, accessor), (origin, _)) in crate::ast::class_hook_origins(program) {
+    for ((class, accessor), (origin, _)) in crate::ast::class_hook_origins(program).0 {
         if origin == class {
             continue;
         }

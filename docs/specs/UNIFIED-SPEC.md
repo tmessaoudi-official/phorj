@@ -99,7 +99,7 @@
   - [Comment syntax](#comment-syntax) *(2026-07-31 — DEC-419, SHIPPED)*
 - **Part III — Type system & semantics**
   - [Comprehensive statics](#comprehensive-statics) *(2026-06-28 — A+B SHIPPED, LSB deferred)*
-  - [Runtime-class dispatch — `with` and property hooks](#runtime-class-dispatch--with-and-property-hooks) *(2026-10-26 — row 4b, SHIPPED; three rulings queued as rows 4e–4g)*
+  - [Runtime-class dispatch — `with` and property hooks](#runtime-class-dispatch--with-and-property-hooks) *(2026-10-26 — row 4b, SHIPPED; row 4e built 2026-11-17, rows 4f–4g queued)*
   - [Secret type](#secret-type) *(2026-06-28 — SHIPPED)*
   - [Nested-value index-assignment](#nested-value-index-assignment) *(2026-07-01 — SHIPPED)*
   - [`using` — the scope guard](#using--the-scope-guard) *(2026-07-30 — DEC-364, SHIPPED)*
@@ -744,7 +744,12 @@ static type:
 - **`obj with { f = e, … }`** copies the runtime instance (a `Dog` behind an `Animal` stays a `Dog`) and evaluates the
   overrides in **source order**.
 - **A property hook** (`T name { get => …; set(T v) { … } }`) is looked up on the runtime class's own members and the
-  traits it `use`s; the stored field is used when that class has no hook. A read through a supertype, an untyped
+  traits it `use`s, then inherited from its parents like a method, **per accessor** (DEC-572, built 2026-11-17: a child
+  that redeclares only `get` keeps its parent's `set`); the stored field is used when no class on the chain has the
+  hook. A hooked property inherited from two parents (hook + hook, or hook + field) is `E-MI-FIELD-CONFLICT`, resolved by
+  redeclaring it in the child. Open: a subclass's own stored field named like an inherited hook wins on the native
+  legs while PHP runs the hook (PENDING DEC-582), and the checker still types a partial redeclaration as replacing
+  the whole property (PENDING DEC-583). A read through a supertype, an untyped
   receiver (an erased generic binder, `null ?? …`) or a trait body's `this` all follow this rule. A hook-only property
   read on a class without the hook faults `no field`.
 - **A backed enum's `.value`** reads its backing (DEC-302) whatever the receiver's static type, including one the
@@ -754,9 +759,9 @@ The VM decides at compile time only when it is exact (a class no class extends) 
 `CloneInstance` / `GetFieldOrHook` / `SetFieldOrHook`. Those are emitted only when the receiver's class or a descendant
 has the hook, which is an implementation detail with no observable effect.
 
-**RULED 2026-10-26 (developer, option (a) each), not yet built:** DEC-571 — a subclass's set hook runs during
-parent-constructor promotion and `with`, as in PHP (plan row 4f); DEC-572 — a subclass inherits its parent's hooks, as in
-PHP (row 4e); DEC-573 — a bare name never reads a field, so a name matching only a subclass's field is the top-level
+**RULED 2026-10-26 (developer, option (a) each):** DEC-571 — a subclass's set hook runs during
+parent-constructor promotion and `with`, as in PHP (plan row 4f, not yet built); DEC-572 — a subclass inherits its
+parent's hooks, as in PHP (row 4e, BUILT 2026-11-17); DEC-573 — a bare name never reads a field, so a name matching only a subclass's field is the top-level
 function (row 4g). Until those rows land, the shapes remain disclosed splits in KNOWN_ISSUES.
 
 ## Secret type
