@@ -55,6 +55,18 @@ class Validator {
     }
 }
 
+// A `catch` body may throw too (here: translating one error into another). The `finally` still runs
+// first — on every backend — and the new error then propagates to the caller.
+function translated(int n): int throws TooLargeError {
+    try {
+        return validate(n);
+    } catch (NegativeInputError | TooLargeError e) {
+        throw new TooLargeError("translated: {n} was rejected");
+    } finally {
+        Output.printLine("  (translated {n})");
+    }
+}
+
 #[Entry(kind: EntryKind.Cli)]
 function main(): void {
     // Multiple `catch` clauses dispatch by type; `finally` runs on every path (ok, caught, or
@@ -91,5 +103,11 @@ function main(): void {
         Output.printLine("unreached");
     } catch (TooLargeError e) {
         Output.printLine("method throw handled: {e.message}");
+    }
+    // A throw out of a `catch` body runs that try's `finally` before it leaves.
+    try {
+        Output.printLine("translated(-1) = {translated(0 - 1)}");
+    } catch (TooLargeError e) {
+        Output.printLine("caller caught: {e.message}");
     }
 }

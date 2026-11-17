@@ -4243,20 +4243,30 @@ class BadInputError implements Error { constructor(public string message) {} }
 /// three-way (`interp ≡ VM ≡ php`) gate (2b.7). The shared header defines two `Error` subtypes.
 #[cfg(test)]
 const ERR_HDR: &str = "import Core.Output; \
-    class E1 implements Error { constructor(public string message) {} } \
-    class E2 implements Error { constructor(public string message) {} }";
+    class OneError implements Error { constructor(public string message) {} } \
+    class TwoError implements Error { constructor(public string message) {} }";
+
+/// `agree` for the M-faults 2b cases: both backends must also SUCCEED. Until 2026-11-17 these cases
+/// named their errors `E1`/`E2`, which `E-ERROR-NAME` rejects, so both legs failed the checker
+/// alike and a bare `agree` passed without running anything (found while fixing R9-K2).
+#[cfg(test)]
+fn agree_ran(src: &str) {
+    agree(src);
+    let out = cmd_treewalk(&with_pkg(src));
+    assert!(out.is_ok(), "expected the program to run, got {out:?}");
+}
 
 #[test]
 fn throw_caught_and_finally_runs_on_both_backends() {
     // Normal path runs `a = parse(5)`; the throw path is caught; `finally` runs on every exit edge.
-    agree(&format!(
+    agree_ran(&format!(
         "{ERR_HDR} \
-         function parse(int n) -> int throws E1 {{ if (n < 0) {{ throw new E1(\"neg\"); }} return n + 1; }} \
+         function parse(int n) -> int throws OneError {{ if (n < 0) {{ throw new OneError(\"neg\"); }} return n + 1; }} \
          #[Entry(kind: EntryKind.Cli)] function main() -> void {{ \
            try {{ \
              var a = parse(5); Output.printLine(\"a={{a}}\"); \
              var b = parse(0 - 3); Output.printLine(\"unreached\"); \
-           }} catch (E1 e) {{ Output.printLine(\"caught {{e.message}}\"); }} \
+           }} catch (OneError e) {{ Output.printLine(\"caught {{e.message}}\"); }} \
            finally {{ Output.printLine(\"cleanup\"); }} \
          }}"
     ));
@@ -4266,32 +4276,32 @@ fn throw_caught_and_finally_runs_on_both_backends() {
 fn return_through_finally_and_nested_rethrow_agree() {
     // `pick` returns through its `finally` on the ok path and re-throws (finally still runs) on the
     // throw path; the outer `try` catches the re-thrown exception.
-    agree(&format!(
+    agree_ran(&format!(
         "{ERR_HDR} \
-         function pick(int n) -> int throws E1 {{ \
-           try {{ if (n < 0) {{ throw new E1(\"inner\"); }} return n; }} \
+         function pick(int n) -> int throws OneError {{ \
+           try {{ if (n < 0) {{ throw new OneError(\"inner\"); }} return n; }} \
            finally {{ Output.printLine(\"fin {{n}}\"); }} \
          }} \
          #[Entry(kind: EntryKind.Cli)] function main() -> void {{ \
            try {{ var a = pick(2); Output.printLine(\"a={{a}}\"); var b = pick(0 - 1); }} \
-           catch (E1 e) {{ Output.printLine(\"outer {{e.message}}\"); }} \
+           catch (OneError e) {{ Output.printLine(\"outer {{e.message}}\"); }} \
          }}"
     ));
 }
 
 #[test]
 fn multiple_and_union_catch_dispatch_agree() {
-    // Multiple sequential `catch` clauses dispatch by type; a union `throws E1 | E2` is the set
-    // {E1, E2}, each discharged by its own clause.
-    agree(&format!(
+    // Multiple sequential `catch` clauses dispatch by type; a union `throws OneError | TwoError` is the set
+    // {OneError, TwoError}, each discharged by its own clause.
+    agree_ran(&format!(
         "{ERR_HDR} \
-         function risky(int n) -> int throws E1 | E2 {{ \
-           if (n == 1) {{ throw new E1(\"one\"); }} if (n == 2) {{ throw new E2(\"two\"); }} return n; \
+         function risky(int n) -> int throws OneError | TwoError {{ \
+           if (n == 1) {{ throw new OneError(\"one\"); }} if (n == 2) {{ throw new TwoError(\"two\"); }} return n; \
          }} \
          #[Entry(kind: EntryKind.Cli)] function main() -> void {{ for (int i in [1, 2, 3]) {{ \
            try {{ var r = risky(i); Output.printLine(\"ok {{r}}\"); }} \
-           catch (E1 e) {{ Output.printLine(\"E1 {{e.message}}\"); }} \
-           catch (E2 e) {{ Output.printLine(\"E2 {{e.message}}\"); }} \
+           catch (OneError e) {{ Output.printLine(\"OneError {{e.message}}\"); }} \
+           catch (TwoError e) {{ Output.printLine(\"TwoError {{e.message}}\"); }} \
          }} }}"
     ));
 }
@@ -4300,7 +4310,7 @@ fn multiple_and_union_catch_dispatch_agree() {
 fn break_and_continue_through_finally_agree() {
     // A `break`/`continue` out of a `try` inside a loop still runs the `finally` (and drops the
     // handler) before transferring — byte-identical on both backends.
-    agree(&format!(
+    agree_ran(&format!(
         "{ERR_HDR} \
          #[Entry(kind: EntryKind.Cli)] function main() -> void {{ for (int i in [1, 2, 3, 4]) {{ \
            try {{ \
@@ -4313,11 +4323,11 @@ fn break_and_continue_through_finally_agree() {
 #[test]
 fn propagate_throws_with_question_mark_agrees() {
     // `f()?` on a throwing call propagates to the enclosing `throws`; the outer `try` catches it.
-    agree(&format!(
+    agree_ran(&format!(
         "{ERR_HDR} \
-         function f() -> int throws E1 {{ throw new E1(\"x\"); }} \
-         function g() -> int throws E1 {{ return f()?; }} \
-         #[Entry(kind: EntryKind.Cli)] function main() -> void {{ try {{ var n = g(); }} catch (E1 e) {{ Output.printLine(\"g threw {{e.message}}\"); }} }}"
+         function f() -> int throws OneError {{ throw new OneError(\"x\"); }} \
+         function g() -> int throws OneError {{ return f()?; }} \
+         #[Entry(kind: EntryKind.Cli)] function main() -> void {{ try {{ var n = g(); }} catch (OneError e) {{ Output.printLine(\"g threw {{e.message}}\"); }} }}"
     ));
 }
 
@@ -4329,8 +4339,132 @@ fn panic_bypasses_catch_on_both_backends() {
         "{ERR_HDR} \
          #[Entry(kind: EntryKind.Cli)] function main() -> void {{ var xs = [1, 0, 2]; \
            try {{ for (int x in xs) {{ var q = 10 / x; Output.printLine(\"q {{q}}\"); }} }} \
-           catch (E1 e) {{ Output.printLine(\"nope\"); }} }}"
+           catch (OneError e) {{ Output.printLine(\"nope\"); }} }}"
     ));
+}
+
+/// R9-K2 (defect queue, P0): a `finally` runs when the `catch` body itself throws — directly, through a
+/// callee, or by re-throwing the bound value — on every leg. `two` throws from its SECOND clause and `miss` matches
+/// no clause, so the per-clause landing pad sits between clauses on a live path. `leak` throws again in
+/// the SAME function after a catch body fell through, so a clause handler left installed would catch
+/// it (a function return drops its handlers, which hides the leak from the caller-side throws). The VM used to compile a catch body with no
+/// handler, so the throw left the frame before the clause's `finally`. Each way out of a catch body
+/// (fall-through, `return`, `break`, `continue`) is followed by a caught throw from the caller, so a
+/// handler left installed would misroute it; `hot` and `brk` have loops and one thrown class, so the JIT
+/// compiles them (`PHORJ_JIT_EXPLAIN=1` is silent for both), and `hot` returns a value its skipped
+/// `finally` would change (3435, not 3405). Faults are not involved (K6 is a separate, pending question).
+#[test]
+fn finally_runs_when_the_catch_body_throws() {
+    agree_out_php(
+        r##"import Core.Output;
+
+class AError implements Error { constructor(public string message) {} }
+class BError implements Error { constructor(public string message) {} }
+
+function boom(string m): void throws BError { throw new BError(m); }
+
+function a(): void throws BError {
+  try { throw new AError("a"); }
+  catch (AError e) { string tag = "a-" + e.message; Output.printLine("catch {tag}"); throw new BError(tag); }
+  finally { string f = "a-fin"; Output.printLine(f); }
+}
+
+function b(): void throws BError {
+  try { throw new AError("b"); } catch (AError e) { boom("b2")?; } finally { Output.printLine("b-fin"); }
+}
+
+function c(): void throws AError {
+  try { throw new AError("c"); } catch (AError e) { throw e; } finally { Output.printLine("c-fin"); }
+}
+
+function two(): void throws AError {
+  try { throw new BError("two"); }
+  catch (AError e) { Output.printLine("two-wrong"); }
+  catch (BError e) { string t = "two-" + e.message; throw new AError(t); }
+  finally { string f = "two-fin"; Output.printLine(f); }
+}
+
+function miss(): void throws AError | BError {
+  try { throw new BError("miss"); } catch (AError e) { throw new AError("unreached"); } finally { Output.printLine("miss-fin"); }
+}
+
+function leak(): int {
+  mutable int n = 0;
+  try {
+    try { throw new AError("x"); } catch (AError e) { n = n + 1; } finally { n = n + 10; }
+    raiseA(0);
+  } catch (AError e2) { n = n + 100; }
+  return n;
+}
+
+function d(): void throws BError {
+  try {
+    try { throw new AError("d-in"); } catch (AError e) { throw new BError("d-mid"); } finally { Output.printLine("d-inner-fin"); }
+  } catch (BError e) { Output.printLine("d-caught {e.message}"); throw new BError("d-out"); } finally { Output.printLine("d-outer-fin"); }
+}
+
+function fall(): int {
+  try { throw new AError("x"); } catch (AError e) { Output.printLine("fall-catch"); } finally { Output.printLine("fall-fin"); }
+  return 1;
+}
+
+function ret(): int {
+  try { throw new AError("x"); } catch (AError e) { return 2; } finally { Output.printLine("ret-fin"); }
+}
+
+function brk(): int {
+  mutable int n = 0;
+  mutable int i = 0;
+  while (i < 3) {
+    i = i + 1;
+    try { raiseA(i); } catch (AError e) { if (i == 2) { break; } continue; } finally { n = n + 1; }
+  }
+  return n;
+}
+
+function raiseA(int i): void throws AError { throw new AError("h"); }
+
+function hot(int k): int {
+  mutable int s = 0;
+  mutable int i = 0;
+  while (i < 3) {
+    i = i + 1;
+    try {
+      try { if (i == 2) { raiseA(i); } s = s + i; }
+      catch (AError e) { if (k % 2 == 0) { return s + 100; } raiseA(k); }
+      finally { s = s + 10; }
+    } catch (AError e2) { s = s + 1000; }
+  }
+  return s;
+}
+
+function report(string label, int v): void throws BError {
+  Output.printLine("{label} {v}");
+  boom("after-" + label)?;
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+  try { a(); } catch (BError e) { Output.printLine("got {e.message}"); }
+  try { b(); } catch (BError e) { Output.printLine("got {e.message}"); }
+  try { c(); } catch (AError e) { Output.printLine("got {e.message}"); }
+  try { two(); } catch (AError e) { Output.printLine("got {e.message}"); }
+  try { miss(); } catch (BError e) { Output.printLine("got miss-B"); } catch (AError e) { Output.printLine("got miss-A"); }
+  Output.printLine("leak {leak()}");
+  try { d(); } catch (BError e) { Output.printLine("got {e.message}"); }
+  try { report("fall", fall()); } catch (BError e) { Output.printLine("got {e.message}"); }
+  try { report("ret", ret()); } catch (BError e) { Output.printLine("got {e.message}"); }
+  try { report("brk", brk()); } catch (BError e) { Output.printLine("got {e.message}"); }
+  mutable int total = 0;
+  for (int k in [0, 1, 2, 3, 4, 5]) {
+    total = total + hot(k);
+  }
+  Output.printLine("hot {total}");
+}
+"##,
+        "catch a-a\na-fin\ngot a-a\nb-fin\ngot b2\nc-fin\ngot c\ntwo-fin\ngot two-two\nmiss-fin\ngot miss-B\nleak 111\nd-inner-fin\nd-caught d-mid\nd-outer-fin\ngot d-out\nfall-catch\nfall-fin\nfall 1\ngot after-fall\nret-fin\nret 2\ngot after-ret\nbrk 2\ngot after-brk\nhot 3435\n",
+        "R9-K2 finally after a throwing catch",
+    );
 }
 
 #[test]

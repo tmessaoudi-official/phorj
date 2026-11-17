@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `finally` after a throwing `catch` on the VM (defect R9-K2, P0, 2026-11-17)
+
+- `phg run` (the VM, with or without the JIT) skipped a `finally` block when the `catch` body itself threw, directly,
+  through a callee, or by re-throwing the bound value; the tree-walker and the transpiled PHP ran it. `compile_try`
+  now gives each catch body its own handler when the `try` has a `finally`: a throw out of the body runs the
+  `finally`, then propagates. `return`, `break` and `continue` out of a catch body pop that handler first. Runtime
+  faults are not covered here (they still bypass `finally` on the VM, a separate pending question, K6).
+- Regression: `finally_runs_when_the_catch_body_throws` (three legs plus the expected output; each exit of a catch
+  body is followed by a caught throw so a leaked handler shows, including a later throw in the same function; a
+  throw from a second `catch` clause; an exception no clause matches; a JIT-compiled case) and a `translated` case in
+  `examples/guide/errors.phg`.
+- Six older `try`/`catch`/`finally` differential cases had been passing without running anything: their error classes
+  were named `E1`/`E2`, which `E-ERROR-NAME` rejects, so both legs failed the checker alike. They are renamed and now
+  also assert that the program ran (`agree_ran`).
+
 ### Added — standing guards for the Claude configuration and PHP forward-compat (2026-11-15)
 
 - `scripts/claude-config-guard.py`, blocking in pre-commit and pre-push: path-scoped rules files keep valid

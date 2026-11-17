@@ -269,6 +269,8 @@ impl Compiler<'_> {
     /// catch_lp:                       ; VM landed with the thrown value at slot `v_slot`
     ///   ; ($exc local registered here so catch-body locals stack above the value)
     ///   for each clause: <type test(s)> → bind+body → <finally> → Jump(cleanup)
+    ///                    with a `finally`, the body runs under its own handler (PushHandler(pad) …
+    ///                    PopHandler); pad: <finally> ; Throw — a throw out of the catch body (R9-K2)
     ///   <finally> ; Throw             ; no clause matched → re-throw
     /// cleanup: Pop($exc)              ; caught paths discard the value, converge with the normal path
     /// end:
@@ -335,9 +337,13 @@ impl Compiler<'_> {
             }
 
             // Bind the value to the clause variable (via `match_bindings`, reading slot `v_slot`),
-            // then compile the catch body with its own finally/transfer context (no handler — the
-            // unwind already consumed it).
+            // then compile the catch body with its own finally/transfer context. The unwind consumed
+            // the try body's handler; when there is a `finally`, the catch body gets a handler of its
+            // own (R9-K2), so a throw out of it still runs the `finally` before leaving (`fin_pad`).
             self.height = v_slot + 1;
+            let clause_push = finally
+                .is_some()
+                .then(|| self.emit_jump(Op::PushHandler(0), line));
             self.begin_scope();
             let n_before = self.match_bindings.len();
             self.match_bindings.push(MatchBinding {
@@ -348,7 +354,8 @@ impl Compiler<'_> {
             });
             self.finally_stack.push(TryCtx {
                 finally: finally.map(<[Stmt]>::to_vec),
-                has_handler: false,
+                // A `return`/`break`/`continue` out of the catch body pops the clause handler.
+                has_handler: clause_push.is_some(),
                 loop_depth: self.loop_frames.len(),
             });
             for s in &clause.body {
@@ -358,11 +365,29 @@ impl Compiler<'_> {
             self.match_bindings.truncate(n_before);
             self.end_scope(line);
 
-            // Caught: run finally, drop the value, converge.
+            // Caught: drop the clause handler (the `finally` runs outside it), run finally, drop the
+            // value, converge.
             self.height = v_slot + 1;
+            if clause_push.is_some() {
+                self.emit(Op::PopHandler, line);
+            }
             self.emit_finally_block(finally, line)?;
             self.emit(Op::Pop, line); // discard $exc → height v_slot
             caught_jumps.push(self.emit_jump(Op::Jump(0), line)); // → end (past cleanup's Pop)
+
+            // fin_pad: the catch body threw. The VM landed the new value at slot `v_slot + 1`
+            // (above `$exc`); register it so the `finally`'s own locals stack above it, run the
+            // `finally`, and re-throw it to the enclosing handler.
+            if let Some(push_idx) = clause_push {
+                let fin_pad = self.here();
+                self.patch_jump_to(push_idx, fin_pad);
+                self.height = v_slot + 2;
+                let rethrown = self.add_local("$exc_catch", CTy::Other);
+                debug_assert_eq!(rethrown, v_slot + 1, "catch-body throw lands above `$exc`");
+                self.emit_finally_block(finally, line)?;
+                self.emit(Op::Throw, line);
+                self.locals.pop(); // unregister $exc_catch
+            }
             self.patch_jump(no_match);
         }
 
