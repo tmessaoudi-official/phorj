@@ -41,7 +41,7 @@ PENDING as DEC-571 (Invariant 15); **RULED (a) by the developer, 2026-10-26: the
 row 4f. `vm_hook_write_through_a_supertype_runs_the_setter` pins today's PHP output so
 that either side changing reopens it.
 
-## HOOK-INHERITANCE — a subclass does not inherit its parent's property hook on the native legs; PHP does (found 2026-10-26)
+## FIXED — HOOK-INHERITANCE — a subclass does not inherit its parent's property hook on the native legs; PHP does (found 2026-10-26, fixed 2026-11-17)
 
 Found by row 4b's close panel (correctness and safety lenses). It predates the row. The oracle looks a hook up on the
 runtime class's own members and its `use`d traits only (`Interpreter::hook_get` / `hook_set`), never on a parent, and
@@ -54,11 +54,22 @@ the VM's `methods` table aliases inherited methods but not the synthetic `<name>
 | `open class Dog { constructor(public mutable int raw) {} int label { get => this.raw; set(int v) { this.raw = v * 10; } } }`, `class Puppy extends Dog {}`; `Dog d = new Puppy(1); d.label = 5;` | the write is **silently dropped** (`raw` stays `1`): no slot, no setter | inherits the setter, presumably `raw = 50` |
 
 Until row 4b's close the VM also disagreed with the oracle on both (``no method `name$get` on `Puppy` ``); it now
-agrees (`tests/differential.rs::vm_hook_on_an_extended_class_is_decided_by_the_runtime_class`, which compares only the
-native legs; the write row was found by round 2 of the close panel). The silent write drop on a program that checks
+agreed (the test that pinned it, `vm_hook_on_an_extended_class_is_decided_by_the_runtime_class`, became
+`hooks_are_inherited_like_methods` with the fix; the write row was found by round 2 of the close panel). The silent write drop on a program that checks
 clean is the strongest case for DEC-572's recommended option. Whether hooks are inherited is a language question,
 recorded PENDING as DEC-572 (Invariant 15). **RULED (a) by the developer, 2026-10-26: hooks are inherited, as in PHP**
 — queued as plan row 4e.
+
+**Fixed 2026-11-17** (plan `docs/plans/2026-11-17-hook-inheritance.plan.md`). A hook is inherited like a method, per
+accessor: `ast::class_hook_origins` (`src/ast/member_origins.rs`) resolves each `(class, <name>$get|$set)` with the
+method resolver's own machinery (override, multi-parent, diamond), the oracle's `hook_get` / `hook_set` fall back to it,
+and the compiler aliases the accessor to the declaring class's compiled hook exactly as it aliases an inherited method.
+All three rows above now match PHP (`hooked`, `L`, `50`), and so do a child that redeclares only `get` (it keeps the
+parent's `set`: the native legs used to drop that write too), a three-level chain, a hook from a trait the parent uses,
+a second parent, compound assignment and a hot loop (`tests/differential.rs::hooks_are_inherited_like_methods`). Not
+covered, and unchanged: a subclass that STORES a field named like its parent's hook keeps reading its field natively
+while PHP runs the inherited hook; whether the field or the hook wins is PENDING as DEC-582 (Invariant 15), pinned on
+the native legs in the same test. Construction-time and `with` setter runs are SET-HOOK-DURING-CONSTRUCTION (row 4f).
 
 ## BARE-NAME-SUBCLASS — a bare name that matches a field only a SUBCLASS stores splits the legs (found 2026-10-26)
 
@@ -4297,3 +4308,16 @@ match `phg run` [Verified: sweep 2026-09-29; each cause below read from the pane
 
 The agreement badge therefore reports "outputs differ" for these. The strict_types fix (`playground/web/php-run.js`) does not
 touch any of it; a php-wasm build on PHP 8.5 with 64-bit ints would clear all but the `STDERR` pair.
+
+## LSP-INSTANCE-MEMBER-HOVER — hover and go-to-definition answer `null` on a user instance member (P2, found 2026-11-17)
+
+Found while checking Invariant 17 for HOOK-INHERITANCE (plan `docs/plans/2026-11-17-hook-inheritance.plan.md`), by a
+live `phg lsp` session on the release binary. With `open class Dog { … int label { get => this.raw; } function m(): int
+{ … } }`, `class Puppy extends Dog {}`, `Puppy p = new Puppy(1);` and `Dog d = new Dog(2);`, hover and definition
+return `null` on `p.m()`, `p.label`, `p.raw` and `d.label` alike: an inherited method, an inherited hook, an inherited
+stored field, and an own hook on a class nothing extends. The control hover on the type `Puppy` renders
+`class Puppy extends Dog`. Completion lists every one of those members (`catalog::class_members` walks the supertypes),
+so only the navigation half is missing. It predates the hook fix (an own hook and an inherited method answer the same).
+Invariant 17's hover and go-to-definition rows are therefore not met for instance members; the class-qualified form
+`Class.member` was fixed by LSP-CLASS-QUALIFIED-MEMBERS. Not a defect under the north star's rule 1 (no program output
+changes); queued here for the LSP work.

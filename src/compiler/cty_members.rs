@@ -102,8 +102,8 @@ impl Compiler<'_> {
     /// The synthetic method name `<name>$get` when `object.name` is a hook decided at COMPILE time
     /// (M-mut.7b): `object`'s compile-type class is EXACT and registers `<name>$get`. `None` ⇒ a
     /// stored field (`GetField`), or a hook only the runtime class decides ([`Self::hook_dynamic`]) —
-    /// which covers an extended class too, since a subclass does not inherit its parent's hook in the
-    /// oracle (plan row 4b; KNOWN_ISSUES HOOK-INHERITANCE).
+    /// an extended class, whose subclass may override the hook. An inherited hook is aliased under
+    /// the subclass in `method_rets` (DEC-572, `origin_alias.rs`), so an exact subclass takes this path.
     pub(in crate::compiler) fn hook_get_method(&self, object: &Expr, name: &str) -> Option<String> {
         self.hook_static(object, name, "get")
     }

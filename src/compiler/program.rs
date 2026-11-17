@@ -401,28 +401,17 @@ pub(super) fn compile_program_with(
     // through, so the two backends can never disagree. No new functions are compiled: an inherited
     // entry is a table alias to the declaring class's already-registered fn index. A class's own method
     // (`origin == self`) is already registered, so it is skipped.
-    {
-        let (origins, _conflicts) = crate::ast::class_method_origins(program);
-        for ((cname, name), (oc, om)) in &origins {
-            let key = (cname.clone(), name.clone());
-            if methods.contains_key(&key) {
-                continue; // own / already-registered entry wins
-            }
-            let anc_key = (oc.clone(), om.clone());
-            if let Some(idx) = methods.get(&anc_key).copied() {
-                methods.insert(key.clone(), idx);
-                if let Some(rty) = method_rets.get(&anc_key).cloned() {
-                    method_rets.insert(key.clone(), rty);
-                }
-                if let Some(set_id) = method_overloads.get(&anc_key).copied() {
-                    method_overloads.insert(key.clone(), set_id);
-                }
-                if let Some(i) = method_generic_ret_from_param.get(&anc_key).copied() {
-                    method_generic_ret_from_param.insert(key, i);
-                }
-            }
-        }
-    }
+    // DEC-572 (plan row 4e): property-hook accessors (`<name>$get`/`$set`) are inherited the same way.
+    let (origins, _conflicts) = crate::ast::class_method_origins(program);
+    let hook_origins = crate::ast::class_hook_origins(program);
+    let mut tables = super::origin_alias::MethodTables {
+        methods: &mut methods,
+        rets: &mut method_rets,
+        overloads: &mut method_overloads,
+        generic_ret_from_param: &mut method_generic_ret_from_param,
+    };
+    tables.alias(&origins);
+    tables.alias(&hook_origins);
 
     // M-RT super/parent: direct parents of every class, for `parent`-call resolution inside method and
     // constructor bodies (shared with the interpreter/checker via `ast::resolve_parent_method`).

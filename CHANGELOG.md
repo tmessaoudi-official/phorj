@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — a subclass inherits its parent's property hooks (defect HOOK-INHERITANCE, P0, DEC-572, 2026-11-17)
+
+A property hook is now inherited like a method, per accessor, on the tree-walker and the VM, as it already was in the
+transpiled PHP. Before, `class Puppy extends Dog {}` read the stored field instead of `Dog`'s `get` hook, a hook-only
+property read through a `Puppy` faulted ``no field `label` on `Puppy` ``, and a write through an inherited `set` hook
+was silently dropped, including on a child that redeclares only `get`. `ast::class_hook_origins` (new,
+`src/ast/member_origins.rs`, split with `class_method_origins` out of `class_hierarchy.rs`) resolves each accessor with
+the method resolver (override, multi-parent, diamond); the oracle falls back to it, and the compiler aliases the
+accessor to the declaring class's compiled hook (`src/compiler/origin_alias.rs`, moved out of `program.rs`).
+Regression: `tests/differential.rs::hooks_are_inherited_like_methods` (ten shapes, three legs). Example:
+`examples/guide/property-hooks.phg` (`Savings`). Not changed: a subclass that stores a field named like an inherited
+hook still reads its field natively while PHP runs the hook (PENDING DEC-582, queue entry HOOK-FIELD-SHADOW), and
+construction-time setter runs stay SET-HOOK-DURING-CONSTRUCTION (DEC-571, row 4f).
+
 ### Fixed — a `match` binding as an arithmetic operand on the VM (defect R9-K1, P0, 2026-11-17)
 
 - `phg run` (the VM) rejected a `match` whose deciding arm body names a pattern binding when the match was an

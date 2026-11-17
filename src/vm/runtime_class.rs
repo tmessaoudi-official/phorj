@@ -160,8 +160,8 @@ impl Vm<'_> {
                     inst.fields.borrow_mut()[s] = Some(value);
                 }
                 // A name not in the layout is dropped, as the oracle's `set_field` does: a hook-only
-                // property written on a class that does not declare the hook (KNOWN_ISSUES
-                // HOOK-INHERITANCE — a subclass does not inherit it; DEC-572).
+                // property written on a class that neither declares nor inherits the hook (an
+                // inherited `$set` is aliased in `methods` and found above — DEC-572).
                 self.stack.push(Value::Unit);
                 Ok(())
             }

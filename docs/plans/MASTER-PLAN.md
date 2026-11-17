@@ -88,7 +88,7 @@
 | DEC-567 | Six strictness/neutrality questions (flow lints, provably-null `!`, ctor rule, `List.get`, refinement types, subtree visibility) | PENDING (Invariant 15) |
 | DEC-568 | Whether DEC-363's header guard widens past CR/LF/NUL: leading-whitespace (obs-fold) lines, lines with no `:`, handler-supplied `Content-Length`/`Transfer-Encoding` (slice-close panel 2026-10-08; disclosed in KNOWN_ISSUES) | PENDING (Invariant 15) |
 | DEC-571 | A subclass's set hook runs for the parent constructor's promoted assignment and for `with`, as in PHP (row 4b close panel; KNOWN_ISSUES SET-HOOK-DURING-CONSTRUCTION) | RULED (a) 2026-10-26 — plan row 4f |
-| DEC-572 | Property hooks are inherited like methods, as in PHP; a write through a class without the hook calls the inherited setter (KNOWN_ISSUES HOOK-INHERITANCE) | RULED (a) 2026-10-26 — plan row 4e |
+| DEC-572 | Property hooks are inherited like methods, as in PHP; a write through a class without the hook calls the inherited setter (KNOWN_ISSUES HOOK-INHERITANCE) | RULED (a) 2026-10-26 — plan row 4e, BUILT 2026-11-17 |
 | DEC-573 | A bare name never reads a field: one matching only a subclass's field is the top-level function on every leg (KNOWN_ISSUES BARE-NAME-SUBCLASS) | RULED (a) 2026-10-26 — plan row 4g |
 | DEC-574 | A multi-parent class's parent static is the parent's one shared slot, as in single inheritance; PHP emits a decomposed parent's statics public (row 4c close panel; KNOWN_ISSUES STATIC-COMPOSITION-PARITY item 2) | RULED (a) 2026-10-27 — built in plan row 4c |
 | DEC-575 | Every class's field initializers run on construction, base-first down the chain, each class's traits then its own (KNOWN_ISSUES INIT-CHAIN) | RULED (a) 2026-10-27 — plan row 4h |

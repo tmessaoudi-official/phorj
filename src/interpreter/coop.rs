@@ -38,6 +38,7 @@ impl<'c> Interp<'c> {
             class_implements: std::collections::BTreeMap::new(),
             class_tables: crate::native::ClassTables::default(),
             method_origins: std::collections::BTreeMap::new(),
+            hook_origins: HashMap::new(),
             variants: HashMap::new(),
             enum_variants: HashMap::new(),
             enum_backing: HashMap::new(),

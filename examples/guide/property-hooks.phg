@@ -20,7 +20,7 @@ class Temp {
     }
 }
 
-class Account {
+open class Account {
     constructor(public mutable int raw) {}
     int balance {
         get => this.raw;
@@ -37,6 +37,11 @@ class Account {
     bool isEmpty {
         get => this.raw == 0;
     }
+}
+
+// DEC-572: a hook is inherited like a method. `Savings` declares no hook, yet reading or writing
+// `balance` on it runs `Account`'s hook, as PHP does.
+class Savings extends Account {
 }
 
 #[Entry(kind: EntryKind.Cli)]
@@ -57,5 +62,10 @@ function main(): void {
     a.balance = -10;
     // the set hook clamps to 0
     Output.printLine("after -10: {a.balance}, empty: {a.isEmpty}");
+    // 0, true
+    Savings s = new Savings(5);
+    s.balance = -3;
+    // the inherited set hook clamps to 0
+    Output.printLine("savings after -3: {s.balance}, empty: {s.isEmpty}");
 }
 // 0, true

@@ -99,17 +99,16 @@ impl<'c> Interp<'c> {
                             // A property hook (M-mut.7b) resolves before a stored field: bind `v` to
                             // the assigned value and run its `set` block with `this` = the receiver.
                             // The checker guarantees a hook assigned here has a `set` (E-HOOK-NO-SET).
-                            if let Some((p, body)) = self.hook_set(&inst.class, name) {
+                            if let Some((cls, p, body)) = self.hook_set(&inst.class, name) {
                                 // Mirror the VM's synthetic hook-setter name for trace parity.
                                 let setter = format!("{}::{name}$set", inst.class);
-                                let cls = inst.class.clone();
                                 self.run_call(
                                     &setter,
                                     &[p.name],
                                     &body,
                                     vec![v],
                                     Some(Value::Instance(inst)),
-                                    Some(cls.as_ref()),
+                                    Some(cls.as_str()),
                                     false, // a property hook setter is a method — never `#[UncheckedOverflow]`
                                 )?;
                                 return Ok(());

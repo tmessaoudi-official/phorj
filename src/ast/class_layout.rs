@@ -134,30 +134,8 @@ pub fn class_field_conflicts(program: &Program) -> Vec<(String, String, Span)> {
 /// inclusion. Cycle-safe via a visited set (an `extends` cycle is `E-MI-CYCLE` elsewhere).
 pub fn class_field_layout(program: &Program) -> std::collections::BTreeMap<String, Vec<String>> {
     use std::collections::{BTreeMap, BTreeSet};
-    // Own storage field names per class OR trait (promoted ctor params + non-static `Field` members).
-    let own_fields = |members: &[ClassMember]| -> Vec<String> {
-        let mut v = Vec::new();
-        for m in members {
-            match m {
-                ClassMember::Field {
-                    name, modifiers, ..
-                } if !modifiers.contains(&Modifier::Static)
-                    && !modifiers.contains(&Modifier::Const) =>
-                {
-                    v.push(name.clone());
-                }
-                ClassMember::Constructor { params, .. } => {
-                    for p in params {
-                        if p.modifiers.iter().any(|m| m.is_member_visibility()) {
-                            v.push(p.name.clone());
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-        v
-    };
+    // Own storage field names per class OR trait (shared with `class_hook_origins`).
+    let own_fields = own_storage_fields;
     let mut own: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut extends: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut uses: BTreeMap<String, Vec<String>> = BTreeMap::new();

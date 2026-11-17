@@ -476,6 +476,7 @@ fn native_ret_cty(idx: usize) -> CTy {
 mod expr;
 mod match_bindings;
 mod matches;
+mod origin_alias;
 mod program;
 mod statics;
 mod stmt;

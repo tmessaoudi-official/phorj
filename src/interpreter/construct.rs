@@ -2,6 +2,28 @@
 
 use super::*;
 
+/// DEC-572 (plan row 4e): `class -> property -> (get origin, set origin)` for every INHERITED hook
+/// accessor — the class whose hook body runs, from the shared `ast::class_hook_origins`. A class's
+/// own (or `use`d-trait) hooks are absent: the direct lookup finds them. Nested `&str`-keyed maps so
+/// the fallback on every plain field read allocates nothing.
+pub(super) type HookOrigins = HashMap<String, HashMap<String, (Option<String>, Option<String>)>>;
+
+pub(super) fn hook_origin_table(program: &Program) -> HookOrigins {
+    let mut out: HookOrigins = HashMap::new();
+    for ((class, accessor), (origin, _)) in crate::ast::class_hook_origins(program) {
+        if origin == class {
+            continue;
+        }
+        let (prop, is_get) = match accessor.strip_suffix("$get") {
+            Some(p) => (p.to_string(), true),
+            None => (accessor.trim_end_matches("$set").to_string(), false),
+        };
+        let slot = out.entry(class).or_default().entry(prop).or_default();
+        *(if is_get { &mut slot.0 } else { &mut slot.1 }) = Some(origin);
+    }
+    out
+}
+
 impl<'c> Interp<'c> {
     /// The ordered constructor plan `class_name` runs (M-RT S6c.2) — mirrors `ast::ctor_plan`: its own
     /// ctor if declared, else (single inheritance) the parent's plan, else (multiple inheritance) every
@@ -135,6 +157,15 @@ impl<'c> Interp<'c> {
     /// The cloned `get` expression of a property hook `class.name`, if the class declares one with a
     /// `get` (M-mut.7b). `None` if there is no such hook or it is write-only.
     pub(super) fn hook_get(&self, class: &str, name: &str) -> Option<Expr> {
+        self.own_hook_get(class, name).or_else(|| {
+            let origin = self.hook_origins.get(class)?.get(name)?.0.as_deref()?;
+            self.own_hook_get(origin, name)
+        })
+    }
+
+    /// [`Self::hook_get`] on `class` itself and its `use`d traits only (DEC-572: the inherited case
+    /// goes through [`HookOrigins`]; an origin that is a shadowing stored field finds nothing here).
+    fn own_hook_get(&self, class: &str, name: &str) -> Option<Expr> {
         let decl = self.classes.get(class)?;
         let own = decl.members.iter().find_map(|m| match m {
             ClassMember::Hook {
@@ -145,16 +176,29 @@ impl<'c> Interp<'c> {
             _ => None,
         });
         // M-RT S8 (T4): fall back to a `use`d trait's hook (trait members live under the trait name).
-        own.or_else(|| decl.uses.iter().find_map(|u| self.hook_get(&u.name, name)))
+        own.or_else(|| {
+            decl.uses
+                .iter()
+                .find_map(|u| self.own_hook_get(&u.name, name))
+        })
     }
 
-    /// The cloned `set` parameter + block of a property hook `class.name`, if the class declares one
-    /// with a `set` (M-mut.7b). `None` if there is no such hook or it is read-only.
+    /// The cloned `set` parameter + block of a property hook `class.name`, if the class declares or
+    /// inherits one with a `set` (M-mut.7b; DEC-572), with the class whose hook it is — the setter's
+    /// class context, as an inherited method runs with its declaring class. `None` if read-only.
     pub(super) fn hook_set(
         &self,
         class: &str,
         name: &str,
-    ) -> Option<(crate::ast::Param, Vec<Stmt>)> {
+    ) -> Option<(String, crate::ast::Param, Vec<Stmt>)> {
+        let own = |c: &str| {
+            self.own_hook_set(c, name)
+                .map(|(p, b)| (c.to_string(), p, b))
+        };
+        own(class).or_else(|| own(self.hook_origins.get(class)?.get(name)?.1.as_deref()?))
+    }
+
+    fn own_hook_set(&self, class: &str, name: &str) -> Option<(crate::ast::Param, Vec<Stmt>)> {
         let decl = self.classes.get(class)?;
         let own = decl.members.iter().find_map(|m| match m {
             ClassMember::Hook {
@@ -165,7 +209,11 @@ impl<'c> Interp<'c> {
             _ => None,
         });
         // M-RT S8 (T4): fall back to a `use`d trait's hook.
-        own.or_else(|| decl.uses.iter().find_map(|u| self.hook_set(&u.name, name)))
+        own.or_else(|| {
+            decl.uses
+                .iter()
+                .find_map(|u| self.own_hook_set(&u.name, name))
+        })
     }
 
     /// Evaluate a property hook's `get` expression with `this` bound to the receiver, in a fresh

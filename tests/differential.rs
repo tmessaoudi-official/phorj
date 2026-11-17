@@ -8170,60 +8170,119 @@ fn vm_hook_write_through_a_supertype_runs_the_setter() {
     }
 }
 
-/// The oracle looks a hook up on the RUNTIME class's own members and `use`d traits only — a
-/// grandchild does not inherit it — so a receiver typed as an extended class is decided at run time
-/// on the VM too: `d.name` with `Dog d = new Puppy(…)` reads the stored field, and a hook-only
-/// property read through such a receiver faults `no field`, never `no method … $get`. The PHP leg
-/// inherits hooks (KNOWN_ISSUES HOOK-INHERITANCE; DEC-572 RULED (a), plan row 4e), so it is not compared here.
+/// DEC-572 RULED (a) (defect HOOK-INHERITANCE, plan row 4e): a property hook is inherited like a
+/// method, per accessor, on every leg — through an exact subclass (compile-time hook path), a
+/// parent-typed receiver (runtime-class path), a three-level chain, a `use`d trait on the parent,
+/// a second parent, compound assignment, and a hot loop. Before the fix the native legs read the
+/// stored field (`p p p`), faulted `no field label on Puppy`, or silently dropped a write that PHP
+/// sends through the inherited setter. Every expected string is PHP's.
 #[test]
-fn vm_hook_on_an_extended_class_is_decided_by_the_runtime_class() {
-    let read = with_pkg(
-        "import Core.Output; open class Animal { constructor(public mutable string name) {} } \
-         open class Dog extends Animal { string name { get => \"hooked\"; } } class Puppy extends Dog {} \
-         #[Entry(kind: EntryKind.Cli)] function main(): void { Puppy p = new Puppy(\"p\"); Animal a = p; Dog d = p; \
-         Output.printLine(\"{p.name} {a.name} {d.name}\"); }",
-    );
-    let tree = cmd_treewalk(&read);
-    assert_eq!(
-        tree,
-        cmd_run(&read),
-        "interp vs VM for vwsc_hook_extended_read"
-    );
-    assert_eq!(tree.as_deref(), Ok("p p p\n"), "oracle output");
+fn hooks_are_inherited_like_methods() {
+    let cases: &[(&str, &str, &str)] = &[
+        (
+            "import Core.Output; open class Animal { constructor(public mutable string name) {} } \
+             open class Dog extends Animal { string name { get => \"hooked\"; } } class Puppy extends Dog {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Puppy p = new Puppy(\"p\"); Animal a = p; Dog d = p; \
+             Dog c = new Dog(\"c\"); Output.printLine(\"{p.name} {a.name} {d.name} {c.name}\"); }",
+            "hooked hooked hooked hooked\n",
+            "hookinh_read_over_stored",
+        ),
+        (
+            "import Core.Output; open class Dog { string label { get => \"L\"; } } class Puppy extends Dog {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Dog d = new Puppy(); Puppy p = new Puppy(); \
+             Output.printLine(\"{d.label} {p.label} {new Dog().label}\"); }",
+            "L L L\n",
+            "hookinh_hook_only_read",
+        ),
+        (
+            "import Core.Output; open class Dog { constructor(public mutable int raw) {} \
+             int label { get => this.raw; set(int v) { this.raw = v * 10; } } } class Puppy extends Dog {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Dog d = new Puppy(1); d.label = 5; \
+             Puppy p = new Puppy(1); p.label = 6; Dog e = new Dog(1); e.label = 7; \
+             Output.printLine(\"{d.raw} {p.raw} {e.raw} {p.label}\"); }",
+            "50 60 70 60\n",
+            "hookinh_write_setter",
+        ),
+        (
+            "import Core.Output; open class Dog { constructor(public mutable int raw) {} \
+             int label { get => this.raw; set(int v) { this.raw = v * 10; } } } \
+             class Pup extends Dog { int label { get => this.raw + 1; } } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Dog d = new Pup(1); d.label = 5; \
+             Output.printLine(\"{d.raw} {d.label}\"); }",
+            "50 51\n",
+            "hookinh_override_get_inherit_set",
+        ),
+        (
+            "import Core.Output; open class Dog { constructor(public mutable int raw) {} \
+             int label { get => this.raw; set(int v) { this.raw = v * 10; } } } \
+             open class Pup extends Dog {} class Tiny extends Pup {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Tiny t = new Tiny(1); t.label = 4; Dog d = t; Pup p = t; \
+             Output.printLine(\"{t.label} {d.label} {p.label} {t.raw}\"); }",
+            "40 40 40 40\n",
+            "hookinh_three_levels",
+        ),
+        (
+            "import Core.Output; trait Lab { mutable int store = 3; \
+             int label { get => this.store * 2; set(int v) { this.store = v + 100; } } } \
+             open class Dog { use Lab; } class Pup extends Dog {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Pup p = new Pup(); Dog d = p; \
+             Output.printLine(\"{p.label} {d.label}\"); p.label = 1; Output.printLine(\"{p.store} {d.label}\"); }",
+            "6 6\n101 202\n",
+            "hookinh_trait_on_parent",
+        ),
+        (
+            "import Core.Output; open class A { constructor(public mutable int raw) {} int label { get => this.raw + 1; } } \
+             open class B { function other(): int { return 0; } } class C extends A, B {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { C c = new C(4); A a = c; Output.printLine(\"{c.label} {a.label}\"); }",
+            "5 5\n",
+            "hookinh_second_parent",
+        ),
+        (
+            "import Core.Output; open class Dog { constructor(public mutable int raw) {} \
+             int label { get => this.raw; set(int v) { this.raw = v * 10; } } } class Pup extends Dog {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Pup p = new Pup(1); p.label += 2; Dog d = p; \
+             d.label += 1; Output.printLine(\"{p.raw}\"); }",
+            "310\n",
+            "hookinh_compound_assign",
+        ),
+        (
+            "import Core.Output; open class Dog { constructor(public mutable int raw) {} int label { get => this.raw; } } \
+             class Pup extends Dog { string tag { get => \"t\"; } } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Pup p = new Pup(7); Dog d = p; \
+             Output.printLine(\"{p.label} {p.tag} {d.label}\"); }",
+            "7 t 7\n",
+            "hookinh_own_unrelated_hook",
+        ),
+        (
+            "import Core.Output; open class Dog { constructor(public mutable int raw) {} int label { get => this.raw + 1; } } \
+             class Pup extends Dog {} \
+             function hot(Dog d): int { mutable int s = 0; mutable int i = 0; while (i < 1000) { s = s + d.label; i = i + 1; } return s; } \
+             function hotP(Pup d): int { mutable int s = 0; mutable int i = 0; while (i < 1000) { s = s + d.label; i = i + 1; } return s; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { Output.printLine(\"{hot(new Pup(2))} {hotP(new Pup(3))} {hot(new Dog(1))}\"); }",
+            "3000 4000 2000\n",
+            "hookinh_hot_loop",
+        ),
+    ];
+    for (src, want, label) in cases {
+        agree_out_php(src, want, label);
+    }
 
-    let hook_only = with_pkg(
-        "import Core.Output; open class Dog { string label { get => \"L\"; } } class Puppy extends Dog {} \
-         #[Entry(kind: EntryKind.Cli)] function main(): void { Dog d = new Puppy(); Output.printLine(d.label); }",
+    // PENDING (Invariant 15, DEC-582): a subclass that STORES a field named like its parent's hook.
+    // The native legs read the subclass's stored field; PHP runs the inherited hook (`4 4`). The fix
+    // keeps the native behaviour until the developer rules, so only the native legs are pinned.
+    let shadow = with_pkg(
+        "import Core.Output; open class Dog { int label { get => 4; } } \
+         class Pup extends Dog { constructor(public int label) {} } \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { Pup p = new Pup(7); Dog d = p; \
+         Output.printLine(\"{p.label} {d.label}\"); }",
     );
-    let tree = cmd_treewalk(&hook_only);
+    let tree = cmd_treewalk(&shadow);
     assert_eq!(
         tree,
-        cmd_run(&hook_only),
-        "interp vs VM for vwsc_hook_only_extended"
+        cmd_run(&shadow),
+        "interp vs VM for hookinh_field_shadows_hook"
     );
-    assert!(
-        tree.as_ref()
-            .is_err_and(|e| e.contains("no field `label` on `Puppy`")),
-        "oracle fault: {tree:?}"
-    );
-
-    // The write twin (panel round 2, completeness F1): a get+set hook-only property written through
-    // an extended class whose runtime class has no hook is DROPPED by the oracle (no slot, no
-    // setter) — the VM now does the same instead of faulting `no method label$set`. A silent drop is
-    // part of DEC-572's case (RULED (a): it becomes a setter call in plan row 4e); this pins it until then.
-    let write = with_pkg(
-        "import Core.Output; open class Dog { constructor(public mutable int raw) {} \
-         int label { get => this.raw; set(int v) { this.raw = v * 10; } } } class Puppy extends Dog {} \
-         #[Entry(kind: EntryKind.Cli)] function main(): void { Dog d = new Puppy(1); d.label = 5; \
-         Dog e = new Dog(1); e.label = 5; Output.printLine(\"{d.raw} {e.raw}\"); }",
-    );
-    let tree = cmd_treewalk(&write);
-    assert_eq!(
-        tree,
-        cmd_run(&write),
-        "interp vs VM for vwsc_hook_extended_write"
-    );
-    assert_eq!(tree.as_deref(), Ok("1 50\n"), "oracle output");
+    assert_eq!(tree.as_deref(), Ok("7 7\n"), "oracle output");
 }
 
 /// A backed enum's `.value` stays `EnumValue` when some class has a hook-only `value` property:

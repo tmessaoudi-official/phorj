@@ -148,6 +148,7 @@ impl<'c> Interp<'c> {
         // conflict list is checker-only (E-MI-CONFLICT); a clean program reaches here conflict-free.
         let (origins, _conflicts) = crate::ast::class_method_origins(program);
         self.method_origins = origins;
+        self.hook_origins = super::construct::hook_origin_table(program);
         // M-RT super/parent: cache the inheritance tables for lexical `parent` resolution (shared with
         // the checker + compiler via `ast::resolve_parent_method`).
         self.parent_parents = crate::ast::class_parents(program);

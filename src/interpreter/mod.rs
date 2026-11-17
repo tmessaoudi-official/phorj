@@ -127,6 +127,8 @@ pub struct Interp<'c> {
     /// multi-parent / resolution-clause / renamed call resolves to the *same* body the VM dispatches
     /// to (M-RT S6b). Subsumes the parent-chain walk: `call_method` is now a single table lookup.
     method_origins: std::collections::BTreeMap<(String, String), (String, String)>,
+    /// DEC-572: inherited property hooks, `class -> property -> (get origin, set origin)` ([`HookOrigins`]).
+    hook_origins: construct::HookOrigins,
     /// variant name -> (enum name, arity) — bare-keyed FALLBACK (last declaration wins);
     /// canonical qualified constructions resolve via `enum_variants` (DEC-329.3).
     variants: HashMap<String, (String, usize)>,
@@ -290,6 +292,7 @@ fn run_program_main(
         class_implements: std::collections::BTreeMap::new(),
         class_tables: crate::native::ClassTables::default(),
         method_origins: std::collections::BTreeMap::new(),
+        hook_origins: HashMap::new(),
         variants: HashMap::new(),
         enum_variants: HashMap::new(),
         enum_backing: HashMap::new(),
