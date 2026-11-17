@@ -60,5 +60,6 @@
 ### Fragile
 - `src/compiler/cty.rs` is at 494 lines: any growth past 500 breaches the hard cap (Invariant 13).
 ### Known issues
+- Microbench G-8 ratchet verdict OWED for this fix (pre-push 2026-11-17: 1-min load 8.86 > 2.5, skipped; `perf-gate.sh` still ran), as for R9-K2.
 - IF-CLASS-ARM-TYPE (new queue entry, P0 proposed): the `if`-expression form of the class divergence, found by probe while fixing; not in this fix.
 - The JIT declines `hot` (`unboxed GetEnumField(1)`), so the test's loop is not JIT coverage; nothing in this fix touches `src/jit/`.
