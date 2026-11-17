@@ -13,6 +13,9 @@
 - [2026-11-17 11:36] AGREED: Row 9 scope (developer, via AskUserQuestion, 2026-11-17): P0/P1 AND the P2 defects of row 9 enter the queue after dedupe (not the docs or design P2s), named by class only. Rejected: P0/P1 only (recommended); none.
 - [2026-11-17 11:36] AGREED: Plan home (developer, via AskUserQuestion, 2026-11-17): a NEW plan file, this one; the ledgered ground-prep plan is not reopened. Rejected: row 11 there; SLICE-STATE only.
 - [2026-11-17 11:55] AGREED: Publication of row 9's security-shaped findings (developer, via AskUserQuestion, 2026-11-17, the 6C round 1 advisor finding): CLASS ONLY - R9-A-1, R9-A-2, R9-A-3 and R9-D-1 are queue rows that name the surface but no mechanism or reproduction, which stay in the gitignored row 9 report (the DEC-581 precedent). Rejected: a pointer line only; the mechanisms as drafted.
+- [2026-11-17 12:09] AGREED: Grades RATIFIED AS PROPOSED (developer, via AskUserQuestion, 2026-11-17): all 77 grades and the P0-P3 rubric, the line-number deviation accepted; the four 'leave the queue' entries and the DEC-205 cycle leak ('not a defect yet') leave the queue; the 'ungraded = P1' interim retires; the ten Conflicts stay open. Rejected: review the list first; not yet.
+- [2026-11-17 12:10] AGREED: DEC-581 RULED (developer, via AskUserQuestion, 2026-11-17, Invariant 15): REJECT like setrawcookie - the Http.Cookie constructor faults (DEC-363's class) on ';' ',' space and tab in value and cookiePath, on every leg; QA-N9 becomes a P1 build that blocks. Rejected: encode the value like setcookie; split (reject the path, encode the value); defer.
+- [2026-11-17 12:10] AGREED: Next (developer, via AskUserQuestion, 2026-11-17): fix R9-K2 (the VM skips finally after a throwing catch) first; it must not decide K6 (a fault, not a throw), which stays PENDING. Rejected: close row 4c first; the P1 quick-win batch; stop.
 
 ## Formal Plan
 1. Re-read every queue entry's body (KNOWN_ISSUES section, audit-plan row, scout row, row 8 text). An entry the text
@@ -31,17 +34,12 @@
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 1 | Propose a grade for every DEFECT QUEUE entry (41 seeded) and add 36 rows: 33 from row 9 by class (after dedupe: AE-5 into VALIDATION, H-1 into DEEP-INPUT-CRASHES; CJ-3 lifted from its P3 tail), row 9b V10, and two numbered serve items (SERVE-REASON-PHRASE, SERVE-SPILL); 77 entries, 4 proposed P0; Conflicts and the rulings not made listed under the tables (work commit, subject `docs(slice-state, plans): defect-queue grading pass`) | M | done | 445e8241 | docs/plans/SLICE-STATE.md docs/plans/MASTER-PLAN.md docs/plans/2026-11-17-defect-grading.plan.md |
-| 2 | The developer ratifies the grades (one pass, exceptions marked), then rules the Conflicts and DEC-581; ratified grades replace "proposed" in SLICE-STATE and the two interims retire | S | blocked | - | docs/plans/SLICE-STATE.md |
+| 2 | The developer ratifies the grades and rules DEC-581 (both 2026-11-17: as proposed; reject); SLICE-STATE drops "proposed", five entries leave the queue (72 left), the first interim retires, the register and MASTER-PLAN follow | S | doing | - | docs/plans/SLICE-STATE.md docs/plans/MASTER-PLAN.md docs/research/full-audit/raw/C-decisions.md docs/plans/2026-11-17-defect-grading.plan.md docs/plans/2026-11-14-ground-prep.plan.md |
 <!-- /progress-block -->
 ### Blocked
-- Step 2 waits on the developer's ratification (north-star "Open": a grade is a proposal until ratified).
 ### Needs input
-- Ratify the proposed grades in SLICE-STATE § DEFECT QUEUE (74 entries), and the proposed P0/P1/P2/P3 rubric with them.
 - The ten Conflicts listed under the queue's tables.
-- A deviation from the AGREED plan entry: it promised "the line it rests on" for each grade; the rows name the entry and
-  quote its facts instead, without line numbers (they drift; the quoted-anchor convention). Accept, or ask for anchors.
-- DEC-581 (Cookie guard widening), owed at this pass by the 2026-11-16 ruling; then K6, AE-14, Q-0908-3 and the other
-  rulings listed under the tables (raised at the closing check-in, never decided by Claude).
+- K6, AE-14, Q-0908-3 and the other rulings listed under the queue's tables (DEC-581 was ruled 2026-11-17: reject).
 ### Needs research
 - Row 9's P3 tail (about 41 sleuth and 38 inspect items) was not re-read against rule 1's letter; only CJ-3 was lifted.
 - `KNOWN_ISSUES.md` headings were not reconciled against the queue: NARROWED-REASSIGN and LIFT-TERNARY-IN-CONCAT are

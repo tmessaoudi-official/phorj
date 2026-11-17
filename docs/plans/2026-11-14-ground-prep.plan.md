@@ -108,8 +108,8 @@ snapshotted outside the repo before row 2 writes anything.
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- RESOLVED 2026-11-17 (its own task, plan `docs/plans/2026-11-17-defect-grading.plan.md`; grades proposed, ratification
-  owed) — where the defect-queue grading pass (SLICE-STATE, section DEFECT QUEUE; owed under DEC-578) falls: after row 9
+- RESOLVED 2026-11-17 (its own task, plan `docs/plans/2026-11-17-defect-grading.plan.md`; grades ratified
+  2026-11-17) — where the defect-queue grading pass (SLICE-STATE, section DEFECT QUEUE; owed under DEC-578) falls: after row 9
   inside this plan, or as its own task. Not ruled. Row 9's hunters may add entries, which argues for after.
 - The order of groups 2-4 is a recommendation; the developer may reorder rows 7-9.
 - Memory promotions - row 3b applied P1, P2, P5, P6, P7 and P8 (ruled 2026-11-14) and amended the "speed levers"
@@ -151,7 +151,7 @@ snapshotted outside the repo before row 2 writes anything.
   `scripts/git-hooks/pre-commit`, `.config/nextest.toml` or `Cargo.toml` loaded only `gate-mechanics.md`; no read and
   a non-matching read loaded no scoped rule; the never-load control rule never loaded.
 - From row 8 (2026-11-16), each the developer's to rule or to do:
-  - DEC-581 (PENDING, Invariant 15): whether the `Cookie` guard widens to the cookie syntax (QA-N9) - to decide at the
+  - RESOLVED 2026-11-17 (RULED reject, at the grading pass) — DEC-581 (PENDING, Invariant 15): whether the `Cookie` guard widens to the cookie syntax (QA-N9) - to decide at the
     defect-queue grading pass, by the developer's choice.
   - The 84 UNIFIED-SPEC findings (five proposed P1) live only in the gitignored `var/claude/cross-check/2026-11-16/`:
     fix them in a docs row, or queue them as rows, or let row 10 cite them as they are.
