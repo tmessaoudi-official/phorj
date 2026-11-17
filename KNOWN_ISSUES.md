@@ -71,8 +71,11 @@ covered, and unchanged: a subclass that STORES a field named like its parent's h
 while PHP runs the inherited hook; whether the field or the hook wins is PENDING as DEC-582 (Invariant 15), pinned on
 the native legs in the same test. The checker still types a child that redeclares ONE accessor as replacing the whole
 property (`p.label = 3` on such a child is rejected as read-only; PHP accepts it): PENDING as DEC-583. A hooked property
-inherited from two parents is now `E-MI-FIELD-CONFLICT` (before, both native legs ran the sorted-first parent's hook while
-PHP fataled). Construction-time and `with` setter runs are SET-HOOK-DURING-CONSTRUCTION (row 4f).
+inherited from two parents (hook + hook, or hook + stored field) type-checks; both native legs run the shared resolver's
+sorted-first parent (`1`, and `1 1` for hook + field) while PHP fatals ("Conflict resolution between hooked properties is
+currently not supported"). Before this fix the native legs faulted `no field` on the first shape and read the second
+parent's stored field on the second (`4 4`, inferred from the pre-fix lookup). Whether to reject it is PENDING as DEC-584,
+pinned natively in `hook_from_two_parents_is_pending_dec_584`. Construction-time and `with` setter runs are SET-HOOK-DURING-CONSTRUCTION (row 4f).
 
 ## BARE-NAME-SUBCLASS — a bare name that matches a field only a SUBCLASS stores splits the legs (found 2026-10-26)
 
@@ -4324,3 +4327,17 @@ so only the navigation half is missing. It predates the hook fix (an own hook an
 Invariant 17's hover and go-to-definition rows are therefore not met for instance members; the class-qualified form
 `Class.member` was fixed by LSP-CLASS-QUALIFIED-MEMBERS. Not a defect under the north star's rule 1 (no program output
 changes); queued here for the LSP work.
+
+## MI-TRANSPILE-COMPOSITION — two multi-parent shapes transpile to PHP that fails while the native legs agree (found 2026-11-17)
+
+Found by the 6C probes of plan `docs/plans/2026-11-17-hook-inheritance.plan.md` (release binary, PHP 8.5 oracle). Both
+programs check clean, and neither involves an inherited hook in its first form:
+
+| program | interpreter = VM | PHP |
+|---|---|---|
+| `open class R { constructor(public mutable int raw) {} … }`, `open class A extends R {}`, `open class B extends R {}`, `class C extends A, B {}`; `new C(4, 5)` | runs (`6 6` with a hook on `R`) | `Fatal error: Redefinition of parameter $raw` (the concatenated constructor repeats the diamond's shared param) |
+| `trait T { mutable int store = 3; }`, `open class A { use T; }`, `open class B { use T; }`, `class C extends A, B {}`; `new C().store` | `3` | `Deprecated: Creation of dynamic property C::$store`: the trait's field is not composed into `C` |
+| the same with `trait T { int label { get => 7; } }`; `c.label` | `7 7` | `Warning: Undefined property: C::$label` |
+
+Queued as MI-TRANSPILE-COMPOSITION (P1 proposed) in the SLICE-STATE defect queue. Cause not read [Unverified]: the
+multi-parent composition in `src/transpile/classes_synth.rs` is where both would start.

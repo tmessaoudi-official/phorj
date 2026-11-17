@@ -19,9 +19,9 @@ Regression: `tests/differential.rs::hooks_are_inherited_like_methods` (ten shape
 `examples/guide/property-hooks.phg` (`Savings`). Not changed: a subclass that stores a field named like an inherited
 hook still reads its field natively while PHP runs the hook (PENDING DEC-582, queue entry HOOK-FIELD-SHADOW), the
 checker still types a child that redeclares one accessor as replacing the whole property (PENDING DEC-583), and
-construction-time setter runs stay SET-HOOK-DURING-CONSTRUCTION (DEC-571, row 4f). New check: a hooked property inherited
-from two parents (hook + hook, or hook + stored field) is `E-MI-FIELD-CONFLICT`, as PHP cannot compose it either
-(`hook_inherited_from_two_parents_is_a_field_conflict`).
+construction-time setter runs stay SET-HOOK-DURING-CONSTRUCTION (DEC-571, row 4f). A hooked property inherited from two
+parents (hook + hook, or hook + stored field) type-checks and both native legs run the resolver's sorted-first parent,
+while PHP fatals; whether to reject it is PENDING DEC-584 (pinned natively in `hook_from_two_parents_is_pending_dec_584`).
 
 ### Fixed — a `match` binding as an arithmetic operand on the VM (defect R9-K1, P0, 2026-11-17)
 

@@ -21,6 +21,7 @@
 - [2026-11-17 22:56] ASSUMED (review): src/interpreter/coop.rs goes 300 -> 301 lines (one struct-literal field, hook_origins); not split — because the three Interp constructors (mod.rs, entry.rs, coop.rs) each list every field and a split for one line would not be by cohesion; the size gate's warn count is unchanged (176) since class_hierarchy.rs fell to 268. Alternatives: fold hook origins into method_origins (allocates a key on every tree-walker field read), split coop.rs
 - [2026-11-17 22:56] ASSUMED (review): renamed the pinning test vm_hook_on_an_extended_class_is_decided_by_the_runtime_class to hooks_are_inherited_like_methods and updated the KNOWN_ISSUES cite — because it no longer pins the runtime-class-only behaviour. Alternative: keep the old name
 - [2026-11-17 23:33] ASSUMED (review): a hooked property inherited from two parents (hook + hook, hook + stored field) is reported as E-MI-FIELD-CONFLICT with property wording — basis: DEC-572 'inherited like methods' + the existing analogues (E-MI-CONFLICT for methods, E-MI-FIELD-CONFLICT for fields) + PHP fatals on both shapes; reuses the existing code, so no new diagnostic surface. Before: both native legs ran the sorted-first parent's hook while PHP fataled. Alternatives: a new E-MI-HOOK-CONFLICT code; record PENDING and leave the split
+- [2026-11-17 23:59] ASSUMED (review): WITHDRAWN the 23:33 pick (E-MI-FIELD-CONFLICT for a hooked property inherited from two parents): a new compile error on a program that ran natively before is a user-visible language decision, which phg-ask-human's Invariant-15 carve-out says an autonomous session records PENDING and never builds. Also its 'before' claim was wrong: pre-DEC-572 the hook+field shape read B's field natively (4 4, inferred), only hook+hook faulted. Recorded as DEC-584 PENDING (recommended (a) E-MI-FIELD-CONFLICT) + queue HOOK-MI-COLLISION; native behaviour pinned in hook_from_two_parents_is_pending_dec_584. The checker code and explain text are back to `5a8c4d40` (`fix: a subclass inherits its parent's property hooks`)
 
 ## Formal Plan
 1. Failing test first: rewrite `vm_hook_on_an_extended_class_is_decided_by_the_runtime_class` (it pins the pre-ruling
@@ -60,7 +61,8 @@
 - `src/interpreter/coop.rs` 301 lines (one field over the soft cap; ASSUMED entry); `src/interpreter/mod.rs` 463.
 ### Known issues
 - DEC-583 PENDING: the checker types a child that redeclares ONE accessor as replacing the whole property (rejects `p.label = 3` as read-only); run time and PHP are per accessor.
-- A diamond with a shared promoted constructor parameter transpiles to invalid PHP (`Redefinition of parameter $raw`): unrelated to hooks, native legs agree; not recorded elsewhere yet.
+- DEC-584 PENDING / queue HOOK-MI-COLLISION: a hooked property inherited from two parents runs the sorted-first parent natively; PHP fatals. Pinned natively.
+- MI-TRANSPILE-COMPOSITION (queue, P1 proposed): a diamond's shared promoted param and a trait both parents use transpile to failing PHP; native legs agree. Pre-existing.
 - A fault inside a hook body renders a different line and trace on the two native legs (oracle: no getter frame; VM: `Dog::label$get`), for an own hook too: the queued TRACE-FRAME-NAMES class.
 - HOOK-FIELD-SHADOW / DEC-582 PENDING: a subclass's stored field named like an inherited hook wins natively; PHP runs the hook. Pinned on the native legs.
 - The JIT declines a function that reads a hook (`CallMethod on Unknown`), inherited or own alike: pre-existing, not new.

@@ -118,32 +118,7 @@ impl Checker {
     /// it can be resolved *only* by the child redeclaring the field (or renaming it in a parent).
     /// A diamond-shared field (both arms reach the same declaring class) auto-merges, like methods.
     pub(in crate::checker) fn check_mi_field_conflicts(&mut self, program: &crate::ast::Program) {
-        let fields = crate::ast::class_field_conflicts(program);
-        // DEC-572: a hooked property is a property — one inherited from two parents (hook + hook, or
-        // hook + stored field) is the same collision, and PHP cannot compose it either. Reported once
-        // per property, and not again when both sides are plain fields (reported just below).
-        let mut seen: std::collections::BTreeSet<(String, String)> = fields
-            .iter()
-            .map(|(c, n, _)| (c.clone(), n.clone()))
-            .collect();
-        for (class, accessor, span) in crate::ast::class_hook_origins(program).1 {
-            let name = accessor
-                .trim_end_matches("$get")
-                .trim_end_matches("$set")
-                .to_string();
-            if seen.insert((class.clone(), name.clone())) {
-                self.err_coded(
-                    span,
-                    format!("property `{name}` is inherited from more than one parent of class `{class}`"),
-                    "E-MI-FIELD-CONFLICT",
-                    Some(format!(
-                        "PHP cannot compose two hooked properties — redeclare `{name}` in `{class}` (its own \
-                         hook or field wins) to resolve the collision"
-                    )),
-                );
-            }
-        }
-        for (class, name, span) in fields {
+        for (class, name, span) in crate::ast::class_field_conflicts(program) {
             self.err_coded(
                 span,
                 format!("field `{name}` is inherited from more than one parent of class `{class}`"),

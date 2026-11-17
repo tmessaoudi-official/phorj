@@ -12,6 +12,7 @@ mod class_layout;
 mod entry;
 mod field_inits;
 mod item_meta;
+mod member_names;
 mod member_origins;
 #[macro_use]
 mod leaves;
@@ -28,6 +29,7 @@ pub use entry::*;
 pub use field_inits::*;
 pub use item_meta::*;
 pub use lower_using::*;
+pub(crate) use member_names::*;
 pub use member_origins::*;
 pub use static_owners::*;
 pub use subexprs::*;

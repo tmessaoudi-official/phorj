@@ -28,13 +28,13 @@ pub fn class_method_origins(program: &Program) -> MemberOrigins {
     member_origins(program, Members::Methods)
 }
 
-/// DEC-572 (plan row 4e): the hook twin of [`class_method_origins`]: per `(class, <name>$get|$set)`
+/// DEC-572 (plan row 4e): the hook twin of [`class_method_origins`]: for each `(class, <name>$get|$set)`
 /// the class whose hook body runs, inherited like a method PER ACCESSOR (a child redeclaring only `get`
 /// keeps its parent's `set`, as in PHP). A `use`d trait's hook counts as the using class's own (that is
 /// where the compiler registers it), and an own stored field shadows an inherited hook of its name
 /// (today's native behaviour; PHP runs the hook: PENDING as DEC-582), so an origin with no such hook
 /// means "the slot". Separate from the method table, which also names PHP methods in the transpiler.
-/// The second value lists every accessor inherited from two distinct parents (`E-MI-FIELD-CONFLICT`).
+/// Its collision list is not reported: a hooked property inherited from two parents is PENDING DEC-584.
 pub fn class_hook_origins(program: &Program) -> MemberOrigins {
     member_origins(program, Members::Hooks)
 }
@@ -44,46 +44,6 @@ pub fn class_hook_origins(program: &Program) -> MemberOrigins {
 enum Members {
     Methods,
     Hooks,
-}
-
-/// A class's or trait's own per-instance storage fields: promoted constructor params and non-static,
-/// non-const `Field` members. Shared by [`class_field_layout`] and [`class_hook_origins`].
-pub(crate) fn own_storage_fields(members: &[ClassMember]) -> Vec<String> {
-    let mut v = Vec::new();
-    for m in members {
-        match m {
-            ClassMember::Field {
-                name, modifiers, ..
-            } if !modifiers.contains(&Modifier::Static)
-                && !modifiers.contains(&Modifier::Const) =>
-            {
-                v.push(name.clone());
-            }
-            ClassMember::Constructor { params, .. } => {
-                for p in params {
-                    if p.modifiers.iter().any(|m| m.is_member_visibility()) {
-                        v.push(p.name.clone());
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    v
-}
-
-/// The synthetic accessor names (`<name>$get` / `<name>$set`) of the hooks among `members`.
-fn hook_accessors(members: &[ClassMember], out: &mut std::collections::BTreeSet<String>) {
-    for m in members {
-        if let ClassMember::Hook { name, get, set, .. } = m {
-            if get.is_some() {
-                out.insert(format!("{name}$get"));
-            }
-            if set.is_some() {
-                out.insert(format!("{name}$set"));
-            }
-        }
-    }
 }
 
 #[allow(clippy::type_complexity)]

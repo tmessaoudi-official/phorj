@@ -281,8 +281,7 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              collision there are no `use`/`rename`/`exclude` clauses — PHP has no `insteadof` for\n\
              properties. Resolve it by redeclaring the field in C (or renaming it in a parent). A\n\
              diamond where both arms reach the *same* declaring field auto-merges and is never a\n\
-             conflict. A hooked property counts as a field (DEC-572): a hook inherited from two parents,\n\
-             or a hook and a field of the same name, collide the same way, resolved the same way.\n"
+             conflict.\n"
         }
         "E-ABSTRACT-INSTANTIATE" => {
             "E-ABSTRACT-INSTANTIATE — an abstract class cannot be instantiated.\n\n\
