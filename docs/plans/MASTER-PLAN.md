@@ -30,7 +30,7 @@
 
 ## 0. CURSOR — WHERE WE ARE (update every working session)
 
-> **▶ 2026-11-14 — ground preparation:** before development resumes, the four global-tool groups the developer ruled on 2026-11-13 run (structure, standing guards, shipped-product checks, the hunters sweep), then the expert opinion. No `src/` change is part of it. Status: `docs/plans/2026-11-14-ground-prep.plan.md` and `SLICE-STATE.md`. The ordering rule (defects first) and the defect cursor (row 4c) are unchanged.
+> **▶ 2026-11-14 — ground preparation:** before development resumes, the four global-tool groups the developer ruled on 2026-11-13 run (structure, standing guards, shipped-product checks, the hunters sweep), then the expert opinion. No `src/` change is part of it. Status: `docs/plans/2026-11-14-ground-prep.plan.md` and `SLICE-STATE.md`. **Complete 2026-11-17:** every row is done and the expert opinion is `docs/research/2026-11-17-phorj-vs-php-verdict.md` (an assessment, not a ruling). The ordering rule (defects first) and the defect cursor (row 4c) are unchanged.
 
 > **▶ 2026-11-13 — NORTH STAR (DEC-578, DEC-579, DEC-580):** the goal, the fifteen axis bars and the rules every session follows are `.claude/rules/north-star.md` (loaded every session), with `VISION.md` imported by CLAUDE.md. **DEFECTS FIRST, severity-gated, is now the ordering rule**: it supersedes the feature orders stated in the "Active programme" and "Next" rows below, in §0 THE QUEUE and in §0.06; their rows stay queued. The defect queue is in `SLICE-STATE.md` (candidates, grading OWED). Three feature rows are paused: readiness row 19, big-wave-2 row 7, scout row 4l. Mirror rows: §0.11.
 
