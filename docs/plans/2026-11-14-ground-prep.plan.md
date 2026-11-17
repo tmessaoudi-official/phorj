@@ -108,7 +108,8 @@ snapshotted outside the repo before row 2 writes anything.
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- Where the defect-queue grading pass (SLICE-STATE, section DEFECT QUEUE; owed under DEC-578) falls: after row 9
+- RESOLVED 2026-11-17 (its own task, plan `docs/plans/2026-11-17-defect-grading.plan.md`; grades proposed, ratification
+  owed) — where the defect-queue grading pass (SLICE-STATE, section DEFECT QUEUE; owed under DEC-578) falls: after row 9
   inside this plan, or as its own task. Not ruled. Row 9's hunters may add entries, which argues for after.
 - The order of groups 2-4 is a recommendation; the developer may reorder rows 7-9.
 - Memory promotions - row 3b applied P1, P2, P5, P6, P7 and P8 (ruled 2026-11-14) and amended the "speed levers"
@@ -156,10 +157,11 @@ snapshotted outside the repo before row 2 writes anything.
     fix them in a docs row, or queue them as rows, or let row 10 cite them as they are.
   - `KNOWN_ISSUES.md` still says `phg serve` is `Connection: close` (the server keeps connections alive) - not fixed in
     a record-only row.
-  - PKG-VERBS-HELP carries a P1 grade from the old scale; under north-star rule 1 a help listing is not wrong output.
+  - PKG-VERBS-HELP carries a P1 grade from the old scale; under north-star rule 1 a help listing is not wrong output (proposed P2 at the 2026-11-17 grading pass).
 - From row 9 (2026-11-16), each the developer's to rule or to do; the detail is in the gitignored
   `var/claude/aggregate-findings/2026-11-16/report.md`:
-  - Which row 9 findings enter the defect queue, and at which grade: 1 proposed P0 (the VM skips `finally` after a
+  - RESOLVED 2026-11-17 (developer: P0/P1 and the P2 defects enter as `R9-…` rows, grades proposed; plan
+    `docs/plans/2026-11-17-defect-grading.plan.md`) — which row 9 findings enter the defect queue, and at which grade: 1 proposed P0 (the VM skips `finally` after a
     throwing catch body), 22 proposed P1 by class (one security exposure in `phg serve` static files, four crash
     classes, twelve native-vs-PHP-twin divergences, one VM-vs-oracle CTy miss, one check-vs-LSP miss, one
     transpiled match that does not parse, and the two questions below). Graded proposals only; nothing was written to the queue or the register.
@@ -177,7 +179,7 @@ snapshotted outside the repo before row 2 writes anything.
   - (V18) The held entry: three-leg probe of `**` and `|>` as arithmetic and interpolated operands, then an exemption
     record for `transpile/kinds.rs`'s `_ => OpKind::Other` - audit row 9.
   - (V14) NULL-SAFE-UNKNOWN-MEMBER is an exit-behaviour split (tree-walker prints, VM exit 1): a P1 candidate by
-    north-star rule 1, for the grading pass. (V10) DISASSEMBLE-OVERLOAD-ORDER has no defect-queue row.
+    north-star rule 1, for the grading pass. (V10) DISASSEMBLE-OVERLOAD-ORDER has no defect-queue row (added, proposed P2, at the 2026-11-17 grading pass; V14 graded proposed P1 there).
   - (V08) DEEP-INPUT-CRASHES' Content-Length abort is still open at `a79623e2` - audit row 5. (V29) The two native-only
     hook tests can pin their PHP leg now that PHP 8.5 runs locally - audit row 4e.
 ### Needs research
