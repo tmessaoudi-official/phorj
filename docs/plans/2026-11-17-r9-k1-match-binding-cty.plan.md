@@ -18,6 +18,9 @@
 
 ## Decisions Log
 - [2026-11-17 21:12] ASSUMED (review): plan gate taken in autonomous mode (away window 2026-11-17, keep-going on): build the approach of Formal Plan step 2 as drafted (pure collector + RefCell binding overlay, logic in matches.rs) — because it is an internal compiler fix with no user-visible surface (not Invariant 15) and the root cause was probed in the drafting session. Alternatives: wait for the developer's GO; consume the checker's types (Forge C-5 / DEC-562 stage 2, architectural, out of scope)
+- [2026-11-17 21:57] ASSUMED (review): class-compatibility guard added beyond the drafted plan: arms of incompatible types (two classes) type as Other instead of the first arm's class — because advisor 3C flagged the regression surface and a probe showed the VM building a Kid for y with { x = 9 } on a Par (tree-walker par 9, VM kid 9); field and method reads of such a value probed fine on three legs. Alternatives: first-arm typing as before (keeps the divergence); type as the common ancestor (not needed once Other kept fields)
+- [2026-11-17 21:57] ASSUMED (review): binding logic split out of matches.rs into src/compiler/match_bindings.rs — because matches.rs would pass the 300-line soft cap and Invariant 13 makes split-as-you-go the default. Alternatives: grow matches.rs to ~320 lines
+- [2026-11-17 21:57] ASSUMED (review): IF-CLASS-ARM-TYPE recorded in the defect queue at P0 (proposed, ratification owed) — because the ratified rubric makes P0 a default-engine wrong output on a checked program (VM true 9, tree-walker and PHP false 9). Alternatives: P1
 
 ## Formal Plan
 1. Failing test first (`tests/differential.rs`, `agree_out_php`, three legs plus the expected output from the

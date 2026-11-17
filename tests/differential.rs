@@ -4476,7 +4476,8 @@ function main(): void {
 /// naming the outer binding, a struct pattern, a class payload's field, a bare binding arm, a type
 /// pattern, a `hot` loop, and a later `float v` local in the same function (a binding left in the overlay
 /// would type it `int`). `cls` and `with`: arms of two classes (`Kid`, `Par`) type as `Other`, never the
-/// first arm's class — the VM used to build a `Kid` for `hy with { x = 9 }` on a `Par` (found while fixing).
+/// first arm's class — the VM used to build a `Kid` for `hy with { x = 9 }` on a `Par` (found while fixing);
+/// `field` keeps a field of such a value an operand (`Other` must not lose `.x`).
 #[test]
 fn match_binding_is_an_arithmetic_operand() {
     agree_out_php(
@@ -4539,6 +4540,8 @@ function main(): void {
   var hy = match (h) { HK(kd) => new Kid(1), HP(pr) => new Par(2) };
   var hw = hy with { x = 9 };
   Output.printLine("with {hw.who()} {hw.x}");
+  int fq = hy.x + match (h) { HK(kd) => kd, HP(pr) => pr }.x;
+  Output.printLine("field {fq}");
   mutable int total = 0;
   for (int k in [0, 1, 2, 3, 4, 5]) { total = total + hot(e); }
   Output.printLine("hot {total}");
@@ -4548,7 +4551,7 @@ function main(): void {
 }
 "##,
         "c1 7\nret 12 14\nvar 4\nguard 8\nfloat 1.75\none 8\ntwo 9\nthrow 13\nnest 10\nstruct 4\nwrap 6\n\
-         bare 6\ntype 5\ncls par 4\nwith par 9\nhot 90\nleak 2.75\n",
+         bare 6\ntype 5\ncls par 4\nwith par 9\nfield 6\nhot 90\nleak 2.75\n",
         "R9-K1 match binding as an arithmetic operand",
     );
 }
