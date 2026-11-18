@@ -865,6 +865,14 @@ fn hook_from_two_parents_is_pending_dec_584() {
         Ok("3\n"),
         "get from one parent, set from the other"
     );
+    // A diamond-shared hook is one declaration reached twice: inherited, no clash.
+    let diamond = run(
+        "import Core.Output; open class R { int label { get => 6; } } open class A extends R {} open class B extends R {} \
+         class C extends A, B {} #[Entry(kind: EntryKind.Cli)] function main(): void { C c = new C(); R r = c; \
+         Output.printLine(\"{c.label} {r.label}\"); }",
+        "hook_mi_diamond",
+    );
+    assert_eq!(diamond.as_deref(), Ok("6 6\n"), "a diamond-shared hook");
 }
 
 /// M-RT S6c.1 — a diamond-shared field auto-merges (no conflict): `id` reaches `Mid` through both
