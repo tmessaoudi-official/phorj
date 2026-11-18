@@ -21,7 +21,7 @@ hook still reads its field natively while PHP runs the hook (PENDING DEC-582, qu
 checker still types a child that redeclares one accessor as replacing the whole property (PENDING DEC-583), and
 construction-time setter runs stay SET-HOOK-DURING-CONSTRUCTION (DEC-571, row 4f). A hooked property inherited from two
 parents (hook + hook, or hook + stored field) type-checks and the hook is not inherited (both native legs keep their
-pre-fix behaviour: hook + hook faults `no field`, hook + field reads the field) while PHP fatals; whether to reject it is PENDING DEC-584 (pinned natively in `hook_from_two_parents_is_pending_dec_584`).
+pre-fix behaviour: hook + hook faults `no field`, hook + field reads the field; judged per property, and a subclass of the clash keeps it) while PHP fatals; whether to reject it is PENDING DEC-584 (pinned natively in `hook_from_two_parents_is_pending_dec_584`).
 
 ### Fixed — a `match` binding as an arithmetic operand on the VM (defect R9-K1, P0, 2026-11-17)
 

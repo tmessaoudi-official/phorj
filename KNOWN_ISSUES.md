@@ -4354,3 +4354,15 @@ stops at the hook body, and the printer says so for a Phorj hook (`printer: prop
 Invariant 17's same-change rule, and inherited hooks (DEC-572) inherit the gap. Migration axis (north star,
 axis 8): a PHP 8.4 codebase that uses hooks cannot be lifted. Not a rule-1 defect (no program output changes); a lift
 feature row.
+
+## OWN-TRAIT-HOOK-SPLIT — a class's own hook vs its trait's hook of the same name: the legs disagree (found 2026-11-18)
+
+`trait T { int label { get => 7; } }` and `class A { use T; int label { get => 1; } }`, then `new A().label`: `phg check`
+is clean, the tree-walker prints `1` (the class's own hook wins, as an own method wins over a trait's), the VM prints `7`,
+and PHP fatals ("A and T define the same hooked property ($label) in the composition of A. Conflict resolution between
+hooked properties is currently not supported"). No inheritance is involved, so this predates DEC-572 [Inferred: a single
+class, which the hook-origin change does not reach; the pre-fix binary was not rebuilt]. Cause not traced
+[Unverified]: the compiler registers `label$get` under `A` for both the own member and the folded trait member
+(`src/compiler/program.rs`, the hook interning near the `$get` / `$set` names), so whichever registers last wins.
+Queued as OWN-TRAIT-HOOK-SPLIT (P1 proposed). Whether to reject the shape as PHP does is an Invariant-15 question;
+making the VM agree with the oracle is not (Invariant 2).

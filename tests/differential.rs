@@ -832,6 +832,39 @@ fn hook_from_two_parents_is_pending_dec_584() {
         Ok("7\n"),
         "a trait both parents use is one declaration"
     );
+    // The clash leaves a slot: a subclass adding a third declaration still reads the field.
+    let below = run(
+        "import Core.Output; open class A { int label { get => 1; } } open class B { constructor(public int label) {} } \
+         open class C extends A, B {} open class E { int label { get => 9; } } class D extends C, E {} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void { D d = new D(4); C c = d; \
+         Output.printLine(\"{d.label} {c.label}\"); }",
+        "hook_mi_below_clash",
+    );
+    assert_eq!(below.as_deref(), Ok("4 4\n"), "a clash's subclass");
+    // A class's own hook is its own declaration even when a trait it uses has one too.
+    let own = run(
+        &format!("import Core.Output; trait T {{ int label {{ get => 7; }} }} open class A {{ use T; int label {{ get => 1; }} }} \
+             open class B {{ use T; }} class C extends A, B {{}} {main}"),
+        "hook_mi_own_over_trait",
+    );
+    assert!(
+        own.as_ref()
+            .is_err_and(|e| e.contains("no field `label` on `C`")),
+        "own + trait: {own:?}"
+    );
+    // A getter from one parent and a setter from the other are two declarations of one property.
+    let split = run(
+        "import Core.Output; open class A { constructor(public mutable int ra) {} int label { get => this.ra; } } \
+         open class B { constructor(public mutable int rb) {} int label { set(int v) { this.rb = v * 10; } } } \
+         class C extends A, B {} #[Entry(kind: EntryKind.Cli)] function main(): void { C c = new C(2, 3); B b = c; \
+         b.label = 5; Output.printLine(\"{c.rb}\"); }",
+        "hook_mi_get_set_split",
+    );
+    assert_eq!(
+        split.as_deref(),
+        Ok("3\n"),
+        "get from one parent, set from the other"
+    );
 }
 
 /// M-RT S6c.1 — a diamond-shared field auto-merges (no conflict): `id` reaches `Mid` through both

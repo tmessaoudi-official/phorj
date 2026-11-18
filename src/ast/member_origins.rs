@@ -28,14 +28,13 @@ pub fn class_method_origins(program: &Program) -> MemberOrigins {
     member_origins(program, Members::Methods)
 }
 
-/// DEC-572 (plan row 4e): the hook twin of [`class_method_origins`]: for each `(class, <name>$get|$set)`
-/// the class whose hook body runs, inherited like a method PER ACCESSOR (a child redeclaring only `get`
-/// keeps its parent's `set`, as in PHP). A `use`d trait's hook counts as the using class's own (that is
-/// where the compiler registers it), and an own stored field shadows an inherited hook of its name
-/// (today's native behaviour; PHP runs the hook: PENDING as DEC-582), so an origin with no such hook
-/// means "the slot". Separate from the method table, which also names PHP methods in the transpiler.
-/// A hooked property with two distinct declarations among the parents is NOT inherited (each side keeps
-/// today's pre-DEC-572 behaviour) and is listed as a collision, unreported: PENDING DEC-584.
+/// DEC-572 (row 4e): the hook twin of [`class_method_origins`] — for each `(class, <name>$get|$set)` the
+/// class whose hook body runs, inherited PER ACCESSOR as in PHP. A `use`d trait's hook is the using
+/// class's own (where the compiler registers it); an own stored field shadows an inherited hook (PENDING
+/// DEC-582), so an origin with no such hook means "the slot". Kept apart from the method table, which the
+/// transpiler reads as PHP method names. Two parents bringing a property with different declarations
+/// leave a slot marker (origin = the class itself), so the class and its subclasses keep the pre-DEC-572
+/// behaviour; the collision is listed, unreported (PENDING DEC-584).
 pub fn class_hook_origins(program: &Program) -> MemberOrigins {
     member_origins(program, Members::Hooks)
 }
@@ -54,9 +53,8 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
     struct Ctx {
         decl: BTreeMap<String, BTreeSet<String>>,
         extends: BTreeMap<String, Vec<String>>,
-        /// M-RT S8: class → the traits it `use`s. A used trait contributes its own methods exactly like
-        /// a parent contributes its resolved table, so trait-vs-trait / trait-vs-parent collisions and
-        /// `use`/`rename`/`exclude` resolution clauses all reuse the same machinery.
+        /// M-RT S8: class → the traits it `use`s. A used trait contributes its methods like a parent's
+        /// table, so trait collisions and `use`/`rename`/`exclude` clauses reuse the same machinery.
         uses: BTreeMap<String, Vec<String>>,
         /// M-RT S8: trait name → its declared method names.
         trait_decl: BTreeMap<String, BTreeSet<String>>,
@@ -65,8 +63,7 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
         memo: BTreeMap<String, BTreeMap<String, (String, String)>>,
         conflicts: Vec<(String, String, Span)>,
         in_progress: BTreeSet<String>,
-        /// Hooks only (DEC-584 PENDING): a clash is NOT inherited (the pre-DEC-572 behaviour), and a
-        /// trait-supplied entry is one declaration whichever using class folded it in.
+        /// Hooks only (DEC-584): a clash leaves a slot; a trait's entry is one declaration in every user.
         hooks: bool,
         via_trait: BTreeMap<(String, String), String>,
     }
@@ -149,17 +146,40 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
                     }
                 }
             }
+            // Hooks: a property clashes when two direct parents bring it with different declaration sets
+            // (classes or traits, any accessor); one parent's get override over a stored field is not one.
+            let prop = |n: &str| n.rsplit_once('$').map_or(n, |(p, _)| p).to_string();
+            let mut by_parent: BTreeMap<String, BTreeMap<&String, BTreeSet<String>>> =
+                BTreeMap::new();
+            if self.hooks {
+                for (name, v) in &contrib {
+                    for (via, o) in v {
+                        let d = self.via_trait.get(o).unwrap_or(&o.0).clone();
+                        by_parent
+                            .entry(prop(name))
+                            .or_default()
+                            .entry(via)
+                            .or_default()
+                            .insert(d);
+                    }
+                }
+            }
+            let clashes: BTreeSet<String> = by_parent
+                .into_iter()
+                .filter(|(_, per)| per.values().collect::<BTreeSet<_>>().len() > 1)
+                .map(|(p, _)| p)
+                .collect();
             // Finalize each inherited name: dedup by origin (diamond), else conflict.
             for (name, v) in contrib {
                 if map.contains_key(&name) {
                     continue;
                 }
                 let distinct: BTreeSet<(String, String)> = v.into_iter().map(|(_, o)| o).collect();
-                let decls: BTreeSet<(&String, &String)> = distinct
-                    .iter()
-                    .map(|o| (self.via_trait.get(o).unwrap_or(&o.0), &o.1))
-                    .collect();
-                let clash = decls.len() > 1;
+                let clash = if self.hooks {
+                    clashes.contains(&prop(&name))
+                } else {
+                    distinct.len() > 1
+                };
                 match distinct.into_iter().next() {
                     None => {}
                     Some(first) => {
@@ -172,7 +192,10 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
                             });
                             self.conflicts.push((c.to_string(), name.clone(), span));
                         }
-                        if !(clash && self.hooks) {
+                        if clash && self.hooks {
+                            // Slot marker: no hook runs; a subclass sees `c` as one more declaration.
+                            map.insert(name.clone(), (c.to_string(), name));
+                        } else {
                             map.insert(name, first); // deterministic pick (sorted-first)
                         }
                     }
@@ -197,7 +220,6 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
         hooks: kind == Members::Hooks,
         via_trait: BTreeMap::new(),
     };
-    // A trait's members by name, for folding a used trait's hooks (and storage) into its user.
     let traits: BTreeMap<&str, &[ClassMember]> = program
         .items
         .iter()
@@ -208,6 +230,7 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
         .collect();
     for item in &program.items {
         match item {
+            // Hooks: fold each used trait's hooks and storage (`traits`, by name) into its user.
             Item::Class(c) if kind == Members::Hooks => {
                 let mut ms = BTreeSet::new();
                 let used = c
@@ -223,7 +246,8 @@ fn member_origins(program: &Program, kind: Members) -> MemberOrigins {
                         own.insert(format!("{f}$set"));
                     }
                     for a in own {
-                        if let Some(t) = from {
+                        // An accessor the class declares itself stays the class's own declaration.
+                        if let Some(t) = from.filter(|_| !ms.contains(&a)) {
                             ctx.via_trait.insert((c.name.clone(), a.clone()), t.clone());
                         }
                         ms.insert(a);
