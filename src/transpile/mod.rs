@@ -24,6 +24,7 @@ mod fs_php;
 mod functions;
 mod gates;
 mod helper_buckets;
+mod init_chain;
 mod kinds;
 mod kinds_calls;
 mod lambda_stmt;
@@ -111,6 +112,8 @@ struct Transpiler {
     consts: HashSet<(String, String)>,
     /// Statics and field initializers composed across inheritance and traits (row 4c; `field_inits.rs`).
     composition: field_inits::Composition,
+    /// The initializer-chain tables (DEC-575/585/586, `init_chain.rs`).
+    init_chain: init_chain::InitChain,
     variants: HashSet<String>,
     /// DEC-320 split emission: `Some` = only these top-level items emit; `None` = classic emit.
     keep: Option<HashSet<String>>,

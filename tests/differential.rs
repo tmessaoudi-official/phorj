@@ -8779,3 +8779,152 @@ fn static_owner_order_trait_first_inits_and_a_protected_multi_parent_static() {
         agree_out_php(&format!("import Core.Output; {src}"), expected, tag);
     }
 }
+
+/// Defect INIT-CHAIN (P0), DEC-575 refined by DEC-585 and DEC-586 (plan
+/// `docs/plans/2026-11-18-init-chain.plan.md`): every class's field initializers run on construction, base-first,
+/// in the prelude of a constructor that does not forward; a `parent.constructor(…)` statement runs the forwarded
+/// ancestors' initializers at the call; a diamond's shared base runs once per arm. Before the fix the first group
+/// faulted `no field … on …` on both native legs alike (so each case pins the output, never a bare agreement), and
+/// the PHP-only cases fataled in PHP. Every case runs; the failing labels are reported together.
+const INIT_K: &str =
+    "import Core.Output; function k(string n, int v): int { Output.printLine(n); return v; } ";
+
+fn run_init_chain_cases(cases: &[(&str, &str, &str)]) {
+    let mut failed = Vec::new();
+    for (src, expected, tag) in cases {
+        let src = format!("{INIT_K}{src}");
+        if std::panic::catch_unwind(|| agree_out_php(&src, expected, tag)).is_err() {
+            failed.push(*tag);
+        }
+    }
+    assert!(failed.is_empty(), "init-chain cases failed: {failed:?}");
+}
+
+#[test]
+fn init_chain_runs_every_class_initializers() {
+    run_init_chain_cases(&[
+        (
+            "open class A { int x = 1; } class B extends A { int y = 2; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { B b = new B(); Output.printLine(\"{b.x} {b.y}\"); }",
+            "1 2\n",
+            "initchain_inherited",
+        ),
+        (
+            "open class A { int x = 1; } class B extends A { int y = 2; constructor() {} } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { B b = new B(); Output.printLine(\"{b.x} {b.y}\"); }",
+            "1 2\n",
+            "initchain_own_ctor_no_forward",
+        ),
+        (
+            "trait T { int t = 5; } open class A { use T; } class B extends A { int y = 2; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { B b = new B(); Output.printLine(\"{b.t} {b.y}\"); }",
+            "5 2\n",
+            "initchain_trait_on_parent",
+        ),
+        (
+            "open class A { int x = 1; } open class B extends A { int y = this.x + 1; } \
+             class C extends B { int z = this.y + 1; constructor(public int w) {} } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { C c = new C(9); \
+             Output.printLine(\"{c.x} {c.y} {c.z} {c.w}\"); }",
+            "1 2 3 9\n",
+            "initchain_three_levels",
+        ),
+        (
+            "open class Base { int b = k(\"base\", 1); } open class L extends Base { int l = k(\"l\", 2); } \
+             open class R extends Base { int r = k(\"r\", 3); } class D extends L, R {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { D d = new D(); Output.printLine(\"{d.b} {d.l} {d.r}\"); }",
+            "base\nl\nbase\nr\n1 2 3\n",
+            "initchain_diamond_per_arm",
+        ),
+        (
+            "open class A { int a = k(\"A.init\", 1); constructor() { Output.printLine(\"A.body\"); } } \
+             open class M extends A { int m = k(\"M.init\", 2); } \
+             open class B extends M { int b = k(\"B.init\", 3); constructor() { parent.constructor(); Output.printLine(\"B.body\"); } } \
+             class C extends B { int c = k(\"C.init\", 4); constructor() { parent.constructor(); Output.printLine(\"C.body\"); } } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { C c = new C(); \
+             Output.printLine(\"{c.a} {c.m} {c.b} {c.c}\"); }",
+            "C.init\nB.init\nA.init\nM.init\nA.body\nB.body\nC.body\n1 2 3 4\n",
+            "initchain_forwarding_three_levels_middle",
+        ),
+        (
+            "open class A { constructor(public int x) {} } class B extends A { int y = this.x + 1; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { B b = new B(5); Output.printLine(\"{b.x} {b.y}\"); }",
+            "5 6\n",
+            "initchain_php_inherited_ctor_own_inits",
+        ),
+        (
+            "trait T { constructor(public int x) { Output.printLine(\"T.body\"); } } open class A { use T; } \
+             class B extends A { int y = 2; constructor() { parent.constructor(7); Output.printLine(\"B.body\"); } } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { B b = new B(); Output.printLine(\"{b.x} {b.y}\"); }",
+            "T.body\nB.body\n7 2\n",
+            "initchain_forward_into_trait_ctor",
+        ),
+        (
+            "open class A { private int x = 4; public function getX(): int { return this.x; } } \
+             class B extends A { int y = 2; } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { B b = new B(); Output.printLine(\"{b.getX()} {b.y}\"); }",
+            "4 2\n",
+            "initchain_private_inherited",
+        ),
+    ]);
+}
+
+/// DEC-585 / DEC-586: shapes that already agree on every leg and must not change (regression pins).
+#[test]
+fn init_chain_keeps_the_forwarding_and_diamond_shapes() {
+    run_init_chain_cases(&[
+        (
+            "open class A { int x = k(\"A.init\", 1); constructor() { Output.printLine(\"A.body\"); } } \
+             class B extends A { int y = k(\"B.init\", 2); constructor() { parent.constructor(); Output.printLine(\"B.body\"); } } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { B b = new B(); Output.printLine(\"{b.x} {b.y}\"); }",
+            "B.init\nA.init\nA.body\nB.body\n1 2\n",
+            "initchain_keep_forwarding_order",
+        ),
+        (
+            "open class A { int d = this.x * 2; constructor(public int x) {} } \
+             class B extends A { int y = 1; constructor() { parent.constructor(3); } } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { B b = new B(); Output.printLine(\"{b.x} {b.d} {b.y}\"); }",
+            "3 6 1\n",
+            "initchain_keep_forwarded_promoted_read",
+        ),
+        (
+            "open class Base { int b = k(\"base\", 1); } open class L extends Base {} open class R extends Base {} \
+             class D extends L, R {} \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { D d = new D(); Output.printLine(\"{d.b}\"); }",
+            "base\nbase\n1\n",
+            "initchain_keep_diamond_twice",
+        ),
+        (
+            "open class A { int x = k(\"A.init\", 1); constructor() { Output.printLine(\"A.body\"); } } \
+             class B extends A { int y = k(\"B.init\", 2); constructor(bool c) { if (c) { parent.constructor(); } \
+             Output.printLine(\"B.post\"); } } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { B b = new B(false); Output.printLine(\"{b.y}\"); }",
+            "B.init\nB.post\n2\n",
+            "initchain_keep_conditional_forward",
+        ),
+        (
+            "open class A { int x = k(\"A.init\", 1); constructor() { Output.printLine(\"A.body\"); } } \
+             class B extends A { int y = k(\"B.init\", 2); constructor() { parent.constructor(); parent.constructor(); } } \
+             #[Entry(kind: EntryKind.Cli)] function main(): void { B b = new B(); Output.printLine(\"{b.y}\"); }",
+            "B.init\nA.init\nA.body\nA.init\nA.body\n2\n",
+            "initchain_keep_double_forward",
+        ),
+    ]);
+}
+
+/// Queue entry FORWARD-PRIVATE-INIT (found planning row 4h, 2026-11-18; pre-existing): a `private`
+/// ancestor field initialized through `parent.constructor(…)` is right on both native legs (`4 2`), but
+/// the inliner splices `this.x = 4` into the subclass's constructor, which PHP runs in the subclass's
+/// scope ("Creation of dynamic property B::$x", then a fatal). The native legs are pinned here; the PHP
+/// leg is the open entry (the splice carries no marker the transpiler could route to
+/// `__phorj_init_A()` without a new `Stmt` variant).
+#[test]
+fn init_chain_private_field_through_forwarding_native_legs() {
+    let src = with_pkg(&format!(
+        "{INIT_K}open class A {{ private int x = 4; public function getX(): int {{ return this.x; }} constructor(int z) {{}} }} \
+         class B extends A {{ int y = 2; constructor() {{ parent.constructor(1); }} }} \
+         #[Entry(kind: EntryKind.Cli)] function main(): void {{ B b = new B(); Output.printLine(\"{{b.getX()}} {{b.y}}\"); }}"
+    ));
+    assert_eq!(cmd_treewalk(&src).as_deref(), Ok("4 2\n"));
+    assert_eq!(cmd_run(&src).as_deref(), Ok("4 2\n"));
+}

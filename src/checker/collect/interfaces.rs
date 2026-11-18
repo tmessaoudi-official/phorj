@@ -30,6 +30,7 @@ impl Checker {
             uses: Vec::new(),
             members: t.members.clone(),
             foreign: false,
+            ctor_forwards: false,
             span: t.span,
         };
         self.collect_class(&synthetic);

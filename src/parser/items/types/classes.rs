@@ -83,6 +83,7 @@ impl Parser {
             uses,
             members,
             foreign: false,
+            ctor_forwards: false,
             span: sp,
         })
     }

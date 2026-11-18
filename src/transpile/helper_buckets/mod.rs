@@ -36,7 +36,7 @@
 //! ## The count was wrong three times
 //!
 //! DEC-377 said **168**; DEC-412 corrected to **149 real**; the audited figure was **165**, and it is
-//! **194** as of DEC-561 (DEC-560 added `__phorj_checked_rem` and `__phorj_substring`, DEC-561 `__phorj_verify_password`; DEC-557 reached 191; DEC-348 added six lock helpers, DEC-347 two streaming-lines helpers,
+//! **195** as of DEC-575 (row 4h added `__phorj_inits`, the per-class initializer-chain dispatcher: PHP has no field-initializer expressions and never chains constructors); **194** as of DEC-561 (DEC-560 added `__phorj_checked_rem` and `__phorj_substring`, DEC-561 `__phorj_verify_password`; DEC-557 reached 191; DEC-348 added six lock helpers, DEC-347 two streaming-lines helpers,
 //! DEC-494/496/487/489/472 the charset, accent-fold, sleep, word-wrap and process rows, DEC-554 the
 //! three typed-match helpers, DEC-557 the structural `__phorj_eq`). The number moves whenever a
 //! helper is added, which is fine; what must never drift again is the number stated here versus the
@@ -80,7 +80,7 @@
 //!   `__phorj_text_index_of` `__phorj_text_reverse` `__phorj_text_trim` `__phorj_text_trim_end`
 //!   `__phorj_text_trim_start` `__phorj_trunc` `__phorj_verify_password` `__phorj_wordwrap`
 //!
-//! ## Bucket 2 — no single-expression equivalent (119)
+//! ## Bucket 2 — no single-expression equivalent (120)
 //!
 //! Reason stated per family, as DEC-377 requires: `fs_*` `http_*` `db_*` `uri_*` need `try`/`catch` to
 //! turn an exception into a value, and `try` is not an expression in PHP · `regex_*` `log_*` need a
@@ -107,7 +107,7 @@
 //!   `__phorj_http_boundary_of` `__phorj_http_cookie_pairs` `__phorj_http_decode_path` `__phorj_http_header_pairs`
 //!   `__phorj_http_json_parse` `__phorj_http_multipart_fields` `__phorj_http_parse_multipart` `__phorj_http_parse_query`
 //!   `__phorj_http_parse_request` `__phorj_http_pct_decode` `__phorj_http_read_spill` `__phorj_http_stash_body`
-//!   `__phorj_http_trim` `__phorj_ini_parse` `__phorj_init_statics` `__phorj_last_index_of`
+//!   `__phorj_http_trim` `__phorj_ini_parse` `__phorj_init_statics` `__phorj_inits` `__phorj_last_index_of`
 //!   `__phorj_lcm` `__phorj_list_difference` `__phorj_list_intersection` `__phorj_log_configure`
 //!   `__phorj_log_emit` `__phorj_log_fmt` `__phorj_log_json_escape` `__phorj_log_ord`
 //!   `__phorj_log_rotate` `__phorj_log_write` `__phorj_map_remove` `__phorj_map_set`
@@ -255,6 +255,7 @@ const HELPER_BUCKETS: &[(&str, u8)] = &[
     ("__phorj_index_of", 1),
     ("__phorj_ini_parse", 2),
     ("__phorj_init_statics", 2),
+    ("__phorj_inits", 2),
     ("__phorj_json_build", 1),
     ("__phorj_json_decode", 1),
     ("__phorj_json_encode", 1),

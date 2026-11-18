@@ -87,6 +87,7 @@ impl<'c> Interp<'c> {
                             uses: Vec::new(),
                             members: t.members.clone(),
                             foreign: false,
+                            ctor_forwards: false,
                             span: t.span,
                         },
                     );

@@ -25,8 +25,7 @@ impl Transpiler {
         program: &Program,
     ) -> Result<(), String> {
         let plan = crate::ast::ctor_plan(program, &c.name);
-        let field_inits = crate::ast::field_initializers(program, &c.name);
-        if plan.is_empty() && field_inits.is_empty() {
+        if plan.is_empty() && !self.inits_needed(&c.name) {
             return Ok(());
         }
         let params: Vec<String> = plan
@@ -54,10 +53,7 @@ impl Transpiler {
                 }
             }
         }
-        for (fname, init) in &field_inits {
-            let e = self.emit_expr(init)?;
-            self.line(&format!("$this->{fname} = {e};"));
-        }
+        self.emit_inits_call(&c.name); // the chain, through `__phorj_inits` (DEC-575)
         for (_, body) in &plan {
             for s in body {
                 self.emit_stmt(s)?;
@@ -154,6 +150,7 @@ impl Transpiler {
         self.line(&format!("use T{};", c.name));
         let prev = self.cur_class_fields.replace(self.class_field_context(c).1);
         self.emit_synth_construct(c, program)?;
+        self.emit_inits_dispatch(&c.name); // its `__phorj_init_<C>` went to `T<C>` (init_chain.rs)
         self.cur_class_fields = prev;
         self.indent -= 1;
         self.line("}");

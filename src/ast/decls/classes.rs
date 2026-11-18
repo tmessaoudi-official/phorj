@@ -126,6 +126,12 @@ pub struct ClassDecl {
     /// (`E-FOREIGN-RUNTIME`); the transpiler emits references as the global PHP form (`new \Name`,
     /// `\Name::s`, `$o->m`) and emits no class definition. `false` for every ordinary class.
     pub foreign: bool,
+    /// True when this class's own constructor contains a `parent.constructor(…)` statement (anywhere in
+    /// its body). Set by `checker::inline_parent_ctor` from the raw body just before it splices the call
+    /// away, so the backends still know it (DEC-585): such a constructor initializes its ancestors at the
+    /// forwarding call, and its prelude runs only its own initializers (`ast::field_initializers`).
+    /// `false` everywhere else, and always before that pass runs.
+    pub ctor_forwards: bool,
     pub span: Span,
 }
 

@@ -711,8 +711,12 @@ names the ONE slot of the first class that declares `f` in `[C]` then its ancest
 `extends` order (`ast::class_lookup_order`, the order the checker types it in); a redeclaring subclass
 has its own slot, and a trait's static is a per-using-class copy. Computed static initializers run once
 before `main`, class by class in program order: the class's traits' statics, then its own (DEC-576). Instance
-field initializers run traits' first (forced: a trait initializer cannot name its user's fields), then the class's own, owned by the class whose constructor plan
-runs (`ast::field_initializers`; DEC-575 widens this to the whole chain, plan row 4h).
+field initializers run traits' first (forced: a trait initializer cannot name its user's fields), then the class's own, for
+EVERY class of the chain, base-first, in the constructor prelude (after promotion, before any body; DEC-575, built in
+plan row 4h, 2026-11-18). A constructor that forwards with `parent.constructor(…)` initializes its ancestors at the
+call instead (DEC-585), and a diamond's shared base runs once per arm, like its constructor (DEC-586). Single source:
+`ast::field_initializers` / `ast::init_chain_classes`; PHP: `__phorj_init_<Class>()` per class plus the virtual
+`__phorj_inits()` called from every constructor prelude.
 
 ### Area B — overloaded static methods — BUILT
 

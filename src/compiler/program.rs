@@ -53,6 +53,7 @@ pub(super) fn compile_program_with(
                 uses: Vec::new(),
                 members: t.members.clone(),
                 foreign: false,
+                ctor_forwards: false,
                 span: t.span,
             }),
             _ => None,

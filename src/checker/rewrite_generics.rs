@@ -198,6 +198,7 @@ pub fn erase_generics(program: Program) -> Program {
                     uses: c.uses,
                     members,
                     foreign: c.foreign,
+                    ctor_forwards: c.ctor_forwards,
                     span: c.span,
                 })
             }

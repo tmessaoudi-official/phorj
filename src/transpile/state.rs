@@ -15,6 +15,7 @@ impl Transpiler {
             classes: HashSet::new(),
             consts: HashSet::new(),
             composition: Default::default(),
+            init_chain: Default::default(),
             variants: HashSet::new(),
             enums: HashSet::new(),
             keep: None,

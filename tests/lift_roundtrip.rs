@@ -391,6 +391,17 @@ echo esc(); echo "|"; echo sq(); echo "|"; echo hole("X");"#,
         // conditional inside an inner concat that is a call argument inside the outer hole.
         // Row 4d: `match (true)` lifts to an if-chain. `||` must short-circuit exactly as PHP stops at
         // the first `=== true` condition, and a `default` written FIRST is still the fallback.
+        // Row 4h (INIT-CHAIN): PHP property defaults on a parent and a grandparent lift to field
+        // initializers that run on every subclass construction, with and without an own constructor.
+        (
+            "inherited_property_defaults",
+            r#"<?php
+class A { public int $x = 1; }
+class B extends A { public int $y = 2; }
+class C extends B { public int $z = 3; public function __construct(public int $w) {} }
+$b = new B(); $c = new C(9);
+echo $b->x . " " . $b->y . "|" . $c->x . " " . $c->y . " " . $c->z . " " . $c->w;"#,
+        ),
         (
             "match_true_chain",
             r#"<?php

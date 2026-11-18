@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — every class's field initializers run on construction (defect INIT-CHAIN, P0, DEC-575/585/586, 2026-11-18)
+
+Constructing a subclass now runs every ancestor's field initializers, base-first, each class's traits then its own,
+on all three legs. Before, only the class owning the constructor plan ran its set, so `open class A { int x = 1; }
+class B extends A { int y = 2; }` faulted `no field x on B` on every leg, as did a subclass with its own constructor,
+a trait's initializer on a subclass of its user, and a diamond whose arms had initializers of their own. Ruled with
+it: a constructor that forwards with `parent.constructor(…)` initializes its ancestors at the call, as before
+(DEC-585), and a diamond's shared base runs once per arm, like its constructor (DEC-586). Also fixed:
+`parent.constructor(…)` into a parent whose constructor comes from a trait ran nothing; and in PHP, a subclass with
+initializers of its own over an inherited constructor got a zero-arg `__construct` that overrode it. The PHP leg now
+emits `protected __phorj_init_<Class>()` per class and a virtual `__phorj_inits()` called from every constructor
+prelude (helper registry: 195). Example: `examples/guide/init-chain.phg`. Open: FORWARD-PRIVATE-INIT
+(KNOWN_ISSUES).
+
 ### Fixed — a subclass inherits its parent's property hooks (defect HOOK-INHERITANCE, P0, DEC-572, 2026-11-17)
 
 A property hook is now inherited like a method, per accessor, on the tree-walker and the VM, as it already was in the

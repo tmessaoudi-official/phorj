@@ -120,6 +120,7 @@ impl Lifter {
             uses: Vec::new(),
             members,
             foreign: false,
+            ctor_forwards: false,
             span: SP,
         })
     }

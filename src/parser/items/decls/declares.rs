@@ -165,6 +165,7 @@ impl Parser {
             uses: Vec::new(),
             members,
             foreign: true,
+            ctor_forwards: false,
             span: sp,
         }))
     }

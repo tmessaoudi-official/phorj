@@ -77,9 +77,6 @@ impl Transpiler {
         }
         let prev = self.cur_class_fields.replace(fields);
         self.emit_class_members(c, &promoted_names, is_error, false)?;
-        if self.composition.trait_ctor_route.contains(&c.name) {
-            self.emit_synth_construct(c, program)?; // plan row 4c item 4
-        }
         self.emit_tostring_delegate(c)?; // DEC-331 D9b (magic_php.rs)
         self.cur_class_fields = prev;
         self.indent -= 1;
@@ -127,6 +124,7 @@ impl Transpiler {
             uses: Vec::new(),
             members: t.members.clone(),
             foreign: false,
+            ctor_forwards: false,
             span: t.span,
         };
         let disp = if self.namespaced {
@@ -334,11 +332,11 @@ impl Transpiler {
                         (true, false) => Some("$message"),
                         (false, false) => None,
                     };
-                    // Feature B: this class's own expression field initializers lower into the ctor
-                    // prelude (after promotion + any `parent::__construct`, before the body), so an
-                    // initializer reads `this` and an earlier sibling — matching the Rust backends.
-                    let field_inits = self.init_set(c);
-                    if body.is_empty() && parent_args.is_none() && field_inits.is_empty() {
+                    // Feature B: the chain's initializers run in the ctor prelude (after promotion + any
+                    // `parent::__construct`, before the body) through the virtual `__phorj_inits`
+                    // (DEC-575, `init_chain.rs`) — the Rust backends' order.
+                    let calls_inits = self.inits_needed(&c.name);
+                    if body.is_empty() && parent_args.is_none() && !calls_inits {
                         self.line(&format!(
                             "{cvis}function __construct({}) {{}}",
                             ps.join(", ")
@@ -353,10 +351,7 @@ impl Transpiler {
                         if let Some(args) = parent_args {
                             self.line(&format!("parent::__construct({args});"));
                         }
-                        for (fname, init) in &field_inits {
-                            let e = self.emit_expr(init)?;
-                            self.line(&format!("$this->{fname} = {e};"));
-                        }
+                        self.emit_inits_call(&c.name);
                         for s in body {
                             self.emit_stmt(s)?;
                         }
@@ -413,6 +408,7 @@ impl Transpiler {
                 }
             }
         }
+        self.emit_init_methods(c, as_trait)?;
         self.emit_init_only_construct(c, as_trait)?;
         Ok(())
     }

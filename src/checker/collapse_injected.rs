@@ -326,6 +326,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                 uses: c.uses.clone(),
                 members: c.members.iter().map(rmember).collect(),
                 foreign: c.foreign,
+                ctor_forwards: c.ctor_forwards,
                 span: c.span,
             }),
             Item::Trait(t) => Item::Trait(crate::ast::TraitDecl {

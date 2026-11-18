@@ -1,0 +1,83 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+// Field initializers down an inheritance chain (DEC-575, DEC-585, DEC-586). Constructing a subclass runs
+// EVERY class's initializers, base-first, each class's traits then its own, in the constructor's prelude
+// (after promotion, before the body). A constructor that forwards with `parent.constructor(…)`
+// initializes its ancestors at that call instead. A diamond's shared base runs once per arm, like its
+// constructor. PHP has neither initializer expressions nor constructor chaining, so the transpiler emits
+// one `protected __phorj_init_<Class>()` per class and a virtual `__phorj_inits()` that runs the chain.
+function note(string what, int value): int {
+    Output.printLine("  init {what}");
+    return value;
+}
+
+trait Tagged {
+    string tag = "t";
+}
+
+open class Shape {
+    use Tagged;
+    int sides = note("Shape.sides", 0);
+}
+
+open class Polygon extends Shape {
+    int corners = this.sides + note("Polygon.corners", 1);
+}
+
+class Square extends Polygon {
+    int edge = note("Square.edge", 2);
+    constructor(public string name) {}
+}
+
+open class Base {
+    int base = note("Base.base", 10);
+    constructor() {
+        Output.printLine("  body Base");
+    }
+}
+
+class Forwarding extends Base {
+    int own = note("Forwarding.own", 20);
+    constructor() {
+        parent.constructor();
+        Output.printLine("  body Forwarding");
+    }
+}
+
+open class Root {
+    int root = note("Root.root", 1);
+}
+
+open class Left extends Root {
+    int left = note("Left.left", 2);
+}
+
+open class Right extends Root {
+    int right = note("Right.right", 3);
+}
+
+class Diamond extends Left, Right {
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine("square:");
+    Square s = new Square("sq");
+    // the inherited fields are initialized, base-first: Shape, then Polygon, then Square
+    Output.printLine("{s.name} {s.tag} {s.sides} {s.corners} {s.edge}");
+    // sq t 0 1 2
+    Output.printLine("forwarding:");
+    Forwarding f = new Forwarding();
+    // its own set in the prelude, Base's at the parent.constructor() call
+    Output.printLine("{f.base} {f.own}");
+    // 10 20
+    Output.printLine("diamond:");
+    Diamond d = new Diamond();
+    // Root runs once per arm
+    Output.printLine("{d.root} {d.left} {d.right}");
+}
+// 1 2 3

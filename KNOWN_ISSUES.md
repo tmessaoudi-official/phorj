@@ -133,7 +133,7 @@ format every_repo_…` blocks with a thread in `unix_stream_data_wait` on fd 0; 
 a test-isolation defect, not a language one. Workaround: run the suite with `</dev/null`. Fix: give the sweep's
 in-process runs an empty stdin. Owner: plan row 9 (the craftsmanship batch).
 
-## INIT-CHAIN — a subclass with its own initializers or constructor does not run its ancestors' field initializers (found 2026-10-27; RULED, queued)
+## FIXED — INIT-CHAIN — a subclass with its own initializers or constructor does not run its ancestors' field initializers (found 2026-10-27, fixed 2026-11-18)
 
 Found by row 4c's close panel (correctness F2/F4/F5, safety F3); it predates the row. Only the class whose constructor
 plan runs contributes its initializer set (`ast::field_initializers`), so `open class A { int x = 1; } class B extends A
@@ -142,9 +142,32 @@ constructor without `parent.constructor(…)`, for a trait's initializers on a s
 whose arms have initializers of their own (the shared base's never run). Two related PHP-leg shapes: a class with its
 own initializers and an inherited constructor synthesizes a zero-arg `__construct` that overrides the inherited one
 (`transpile/classes.rs`), and `parent.constructor(…)` into a parent whose constructor comes from a trait inlines an
-empty block (`checker/inline_parent_ctor.rs` `find_owner` looks only for an own constructor). **DEC-575 RULED (a) by
+empty block (on every leg, not only PHP: re-probed 2026-11-18) (`checker/inline_parent_ctor.rs` `find_owner` looks only for an own constructor). **DEC-575 RULED (a) by
 the developer, 2026-10-27: every class's initializers run, base-first down the chain**, each class's traits then its
 own; PHP via a `protected function __phorj_init_<Class>()` per class. Queued as plan row 4h.
+
+**Fixed 2026-11-18** (plan `docs/plans/2026-11-18-init-chain.plan.md`; DEC-575 refined by DEC-585 and DEC-586, both
+ruled that day). `ast::field_initializers` now walks the whole chain base-first, each class's traits then its own,
+stopping at a class whose own constructor forwards (`ClassDecl::ctor_forwards`, set by the inliner before it splices
+the call away); a `parent.constructor(…)` call runs the target's chain at the call, as before, plus any class between
+a named ancestor and the caller; a diamond's shared base runs once per arm. The inliner counts a composed trait
+constructor as its class's. The PHP leg emits `protected __phorj_init_<Class>()` per class and a virtual
+`__phorj_inits()` per class of an initializing hierarchy, called from every constructor prelude, so an inherited
+constructor runs the subclass's chain in the native order and a `private` field is set in its own class's scope; the
+zero-arg `__construct` that overrode an inherited constructor is gone. Regressions:
+`init_chain_runs_every_class_initializers`, `init_chain_keeps_the_forwarding_and_diamond_shapes` (the kept shapes
+pinned), example `examples/guide/init-chain.phg`. Left open: FORWARD-PRIVATE-INIT below.
+
+## FORWARD-PRIVATE-INIT — a `private` ancestor field initialized through `parent.constructor(…)` fails in PHP (found 2026-11-18)
+
+`open class A { private int x = 4; public function getX(): int { return this.x; } constructor(int z) {} } class B
+extends A { int y = 2; constructor() { parent.constructor(1); } }`, then `new B()`: both native legs print `4 2`; PHP
+warns "Creation of dynamic property B::$x is deprecated" and fatals (`Typed property A::$x must not be accessed
+before initialization`) [Verified: row 4h debug build, PHP 8.5 oracle, 2026-11-18]. Pre-existing: the inliner splices the
+forwarded initializers into `B`'s constructor as `this.x = 4`, which PHP runs in `B`'s scope. The fix would route
+that spliced run to `__phorj_init_A()` (row 4h), but the splice carries no marker the transpiler can read without a
+new `Stmt` variant. Native legs pinned by `init_chain_private_field_through_forwarding_native_legs`.
+
 
 ## DECOMPOSED-PARENT-TRAITS — a multi-parent parent's own `use T` is dropped in PHP (found 2026-10-27)
 

@@ -1,8 +1,8 @@
 //! Expression field initializers (Feature B): which initializers run when a class is constructed,
-//! in what order — one list for all three backends and the PHP constructor prelude. It mirrors
-//! [`super::ctor_plan`] class for class (plan row 4c item 4, KNOWN_ISSUES STATIC-COMPOSITION-PARITY):
-//! the class whose constructor plan runs owns the initializer set, and a trait's initializers are
-//! part of its user's set.
+//! in what order — one list for all three backends, the PHP constructor prelude and the
+//! `parent.constructor(…)` inliner. Every class's set runs, base-first down the chain (DEC-575); a
+//! constructor that forwards initializes its ancestors at the call (DEC-585); a diamond-shared base
+//! runs once per arm (DEC-586). A trait's initializers are part of its user's set.
 
 use super::*;
 
@@ -68,41 +68,104 @@ fn trait_decl<'p>(program: &'p Program, name: &str) -> Option<&'p TraitDecl> {
     })
 }
 
-/// The ordered **expression field initializers** to run when constructing `class` (Feature B).
+/// The ordered **expression field initializers** to run when constructing `class` (Feature B), in the
+/// prelude of its constructor plan (after promotion, before any body).
 ///
-/// PHP does not auto-chain `parent::__construct`, so construction runs ONE constructor plan, and
-/// the class that plan belongs to owns the initializers, exactly as [`ctor_plan`] decides: a class
-/// owns its set (traits' then its own, [`own_field_initializers_with_traits`]) when it declares a
-/// constructor, composes a trait constructor, or has any initializer of its own or its traits';
-/// otherwise a single parent's set is inherited, and a multi-parent class runs every parent's set in
-/// `extends` order (S6c.2b — every parent's constructor runs, so every parent's initializers do; a
-/// diamond-shared base's run once per arm, as its constructor does). Each initializer may read `this`
-/// and an earlier one (a later one is `E-FIELD-INIT-FORWARD-REF`). Cycle-safe via `seen`.
+/// Every class's initializers run, base-first down the chain, each class's traits' then its own
+/// (DEC-575). A class whose own constructor forwards with `parent.constructor(…)` stops the walk: its
+/// ancestors are initialized at that call instead, by the inliner (DEC-585), so its set is only its
+/// own. Otherwise the set is each parent's set in `extends` order, then the class's own; a
+/// diamond-shared base therefore runs once per arm, as its constructor does (DEC-586). An inherited
+/// constructor plan whose owner forwards is covered by the same rule: the walk stops at that owner,
+/// whose (inlined) body initializes what lies above it. Each initializer may read `this` and an
+/// earlier one (a later one is `E-FIELD-INIT-FORWARD-REF`). Cycle-safe via `seen`, cloned per branch.
 pub fn field_initializers(program: &Program, class: &str) -> Vec<(String, Expr)> {
-    fn walk(program: &Program, class: &str, seen: &mut Vec<String>) -> Vec<(String, Expr)> {
+    init_chain_classes(program, class)
+        .iter()
+        .filter_map(|c| class_decl(program, c))
+        .flat_map(|d| own_field_initializers_with_traits(program, d))
+        .collect()
+}
+
+/// The classes whose own sets [`field_initializers`] runs for `class`, in order (a diamond-shared base
+/// once per arm). The PHP leg emits one `__phorj_init_<Class>()` call per entry (DEC-575's mapping).
+pub fn init_chain_classes(program: &Program, class: &str) -> Vec<String> {
+    fn walk(program: &Program, class: &str, seen: &mut Vec<String>, out: &mut Vec<String>) {
         if seen.iter().any(|c| c == class) {
-            return Vec::new();
+            return;
         }
         seen.push(class.to_string());
-        let Some(decl) = program.items.iter().find_map(|it| match it {
-            Item::Class(c) if c.name == class => Some(c),
-            _ => None,
-        }) else {
-            return Vec::new();
+        let Some(decl) = class_decl(program, class) else {
+            return;
         };
-        let has_ctor = decl
-            .members
-            .iter()
-            .any(|m| matches!(m, ClassMember::Constructor { .. }));
-        let own = own_field_initializers_with_traits(program, decl);
-        if has_ctor || uses_trait_ctor(program, decl) || !own.is_empty() {
-            return own;
+        if !decl.ctor_forwards {
+            for p in &decl.extends {
+                walk(program, p, &mut seen.clone(), out);
+            }
         }
-        let parents = decl.extends.clone();
-        parents
-            .iter()
-            .flat_map(|p| walk(program, p, &mut seen.clone()))
-            .collect()
+        out.push(class.to_string());
     }
-    walk(program, class, &mut Vec::new())
+    let mut out = Vec::new();
+    walk(program, class, &mut Vec::new(), &mut out);
+    out
+}
+
+fn class_decl<'p>(program: &'p Program, name: &str) -> Option<&'p ClassDecl> {
+    program.items.iter().find_map(|it| match it {
+        Item::Class(c) if c.name == name => Some(c),
+        _ => None,
+    })
+}
+
+/// True when `body` holds a statement-position `parent.constructor(…)` anywhere (nested in a block,
+/// `if`, loop, `using` or `try` too): the walk `checker::inline_parent_ctor` rewrites, read before it
+/// does, to set [`ClassDecl::ctor_forwards`].
+pub fn body_forwards(body: &[Stmt]) -> bool {
+    body.iter().any(stmt_forwards)
+}
+
+fn stmt_forwards(s: &Stmt) -> bool {
+    match s {
+        Stmt::Expr(e, _) | Stmt::Discard(e, _) => {
+            matches!(e, Expr::ParentCall { method, .. } if method == "constructor")
+        }
+        Stmt::Block(b, _) => body_forwards(b),
+        Stmt::If {
+            then_block,
+            else_block,
+            ..
+        } => body_forwards(then_block) || else_block.as_deref().is_some_and(body_forwards),
+        Stmt::For { body, .. } | Stmt::While { body, .. } | Stmt::Using { body, .. } => {
+            body_forwards(body)
+        }
+        Stmt::CFor {
+            init, step, body, ..
+        } => {
+            init.as_deref().is_some_and(stmt_forwards)
+                || step.as_deref().is_some_and(stmt_forwards)
+                || body_forwards(body)
+        }
+        Stmt::Try {
+            body,
+            catches,
+            finally_block,
+            ..
+        } => {
+            body_forwards(body)
+                || catches.iter().any(|c| body_forwards(&c.body))
+                || finally_block.as_deref().is_some_and(body_forwards)
+        }
+        Stmt::Destructure {
+            else_block: Some(eb),
+            ..
+        } => body_forwards(eb),
+        Stmt::VarDecl { .. }
+        | Stmt::Assign { .. }
+        | Stmt::Return { .. }
+        | Stmt::Throw { .. }
+        | Stmt::Destructure {
+            else_block: None, ..
+        }
+        | crate::stmt_leaves!() => false,
+    }
 }

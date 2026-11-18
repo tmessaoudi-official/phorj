@@ -15,9 +15,6 @@ pub(super) struct Composition {
     pub(super) init_sets: HashMap<String, Vec<(String, Expr)>>,
     /// The user traits: a trait never synthesizes an init-only `__construct` (its user carries them).
     pub(super) trait_names: HashSet<String>,
-    /// Classes with no constructor of their own that compose a trait constructor AND have other
-    /// initializers: their `__construct` is emitted from the plan (`emit_synth_construct`).
-    pub(super) trait_ctor_route: HashSet<String>,
     /// Every class with no constructor of its own that takes a trait constructor: it never
     /// synthesizes a zero-arg `__construct`, which would override that constructor (routed or not).
     pub(super) trait_ctor_users: HashSet<String>,
@@ -35,32 +32,10 @@ impl Transpiler {
                         .members
                         .iter()
                         .any(|m| matches!(m, ClassMember::Constructor { .. }));
-                    // A class with no constructor of its own takes a trait constructor, whose PHP
-                    // `__construct` runs only that trait's initializers; when the class's set holds
-                    // more, the class emits its own `__construct` from the plan instead.
+                    // A class with no constructor of its own that takes a trait constructor never
+                    // synthesizes a zero-arg `__construct` (it would override that constructor).
                     if !has_ctor && crate::ast::uses_trait_ctor(program, c) {
                         self.composition.trait_ctor_users.insert(c.name.clone());
-                        let ctor_trait_inits: usize = c
-                            .uses
-                            .iter()
-                            .filter_map(|u| {
-                                program.items.iter().find_map(|t| match t {
-                                    Item::Trait(td)
-                                        if td.name == u.name
-                                            && td.members.iter().any(|m| {
-                                                matches!(m, ClassMember::Constructor { .. })
-                                            }) =>
-                                    {
-                                        Some(td)
-                                    }
-                                    _ => None,
-                                })
-                            })
-                            .map(|td| crate::ast::own_initializers(&td.members).len())
-                            .sum();
-                        if set.len() > ctor_trait_inits {
-                            self.composition.trait_ctor_route.insert(c.name.clone());
-                        }
                     }
                     self.composition.init_sets.insert(c.name.clone(), set);
                 }
@@ -73,45 +48,7 @@ impl Transpiler {
                 _ => {}
             }
         }
-    }
-
-    /// Feature B's zero-arg `__construct` for a class with initializers and no constructor (moved from
-    /// `classes.rs`, Invariant 13).
-    pub(super) fn emit_init_only_construct(
-        &mut self,
-        c: &ClassDecl,
-        as_trait: bool,
-    ) -> Result<(), String> {
-        // Feature B: a class with expression field initializers but NO constructor needs a synthesized
-        // zero-arg `__construct` to run them (PHP property defaults can't be arbitrary expressions). Not
-        // for a decomposed trait body (`as_trait`) — its construction is emitted via `emit_synth_construct`.
-        // Plan row 4c item 4: never on a user trait — its initializers belong to the using class's set,
-        // so two traits cannot collide on `__construct` and a user's own constructor cannot drop them;
-        // never on a class that takes a trait constructor (`trait_ctor_users`; the routed ones emit theirs
-        // from the plan).
-        if !as_trait
-            && !self.composition.trait_names.contains(&c.name)
-            && !self.composition.trait_ctor_users.contains(&c.name)
-            && !c
-                .members
-                .iter()
-                .any(|m| matches!(m, ClassMember::Constructor { .. }))
-        {
-            let field_inits = self.init_set(c);
-            if !field_inits.is_empty() {
-                self.line("function __construct() {");
-                self.indent += 1;
-                self.push_scope();
-                for (fname, init) in &field_inits {
-                    let e = self.emit_expr(init)?;
-                    self.line(&format!("$this->{fname} = {e};"));
-                }
-                self.pop_scope();
-                self.indent -= 1;
-                self.line("}");
-            }
-        }
-        Ok(())
+        self.seed_init_chain(program); // DEC-575/585/586 (`init_chain.rs`)
     }
 
     /// The initializer set a class's (or a user trait's real) constructor prelude runs.

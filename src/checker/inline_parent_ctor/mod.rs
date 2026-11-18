@@ -16,27 +16,24 @@
 //! statement-only inside a constructor body (checker `E-PARENT-CTOR-STMT`/`-OUTSIDE`), so every
 //! occurrence is reachable here and the backends never see a `ParentCall{method:"constructor"}`.
 
-use crate::ast::{
-    own_field_initializers_with_traits, CatchClause, ClassMember, CtorParam, Expr, Item, Program,
-    Stmt,
-};
+mod snap;
+
+use crate::ast::{body_forwards, CatchClause, ClassMember, CtorParam, Expr, Item, Program, Stmt};
 use crate::token::Span;
-use std::collections::HashMap;
-
-/// Read-only per-class facts the inline needs while ctor bodies are mutated in place.
-struct ClassSnap {
-    /// Direct parents (`extends` order). Single inheritance this slice.
-    extends: Vec<String>,
-    /// This class's *own* constructor (params, body), if it declares one.
-    own_ctor: Option<(Vec<CtorParam>, Vec<Stmt>)>,
-    /// This class's expression field initializers: its traits', then its own (declaration order).
-    field_inits: Vec<(String, Expr)>,
-}
-
-type Snap = HashMap<String, ClassSnap>;
+use snap::{between, find_owner, resolve_target, snapshot, Snap};
 
 /// Inline every `parent.constructor(…)` forwarding statement (B1b). Returns the rewritten program.
 pub fn inline_parent_ctors(mut program: Program) -> Program {
+    // DEC-585: record which constructors forward BEFORE the calls are spliced away, so the backends'
+    // prelude (`ast::field_initializers`) still knows which ancestors the call initializes.
+    for item in &mut program.items {
+        if let Item::Class(c) = item {
+            c.ctor_forwards = c
+                .members
+                .iter()
+                .any(|m| matches!(m, ClassMember::Constructor { body, .. } if body_forwards(body)));
+        }
+    }
     let snap = snapshot(&program);
     for item in &mut program.items {
         if let Item::Class(c) = item {
@@ -49,32 +46,6 @@ pub fn inline_parent_ctors(mut program: Program) -> Program {
         }
     }
     program
-}
-
-/// Snapshot the read-only class facts before any in-place mutation (avoids a program-wide borrow
-/// conflict while a single class's ctor body is rewritten).
-fn snapshot(program: &Program) -> Snap {
-    let mut snap = Snap::new();
-    for item in &program.items {
-        if let Item::Class(c) = item {
-            let own_ctor = c.members.iter().find_map(|m| match m {
-                ClassMember::Constructor { params, body, .. } => {
-                    Some((params.clone(), body.clone()))
-                }
-                _ => None,
-            });
-            snap.insert(
-                c.name.clone(),
-                ClassSnap {
-                    extends: c.extends.clone(),
-                    own_ctor,
-                    // The owner's set includes its traits' initializers (plan row 4c item 4).
-                    field_inits: own_field_initializers_with_traits(program, c),
-                },
-            );
-        }
-    }
-    snap
 }
 
 /// Rewrite every statement-position `parent.constructor(…)` within `stmts` (and nested bodies). The
@@ -206,8 +177,15 @@ fn build_inline(
             ));
         }
     }
-    // ③ run the owner's own field initializers (PHP runs the invoked ctor class's prelude).
-    for (fname, init) in &owner_snap.field_inits {
+    // ③ initialize the forwarded ancestors (DEC-585): the target's chain, base-first, stopping at a
+    //    class whose own constructor forwards (its inlined body initializes what lies above it); then
+    //    any class between the target and `lexical` (a named-ancestor forward skips their constructors,
+    //    never their initializers: DEC-575).
+    for (fname, init) in snap[&target].chain_inits.iter().chain(
+        between(lexical, &target, snap)
+            .iter()
+            .flat_map(|c| &snap[c].field_inits),
+    ) {
         out.push(assign_this(fname, init.clone(), span));
     }
     // ④ the owner's constructor body, with its own `parent.constructor(…)` (the grandparent) inlined
@@ -217,28 +195,6 @@ fn build_inline(
     out.extend(owner_body);
 
     Stmt::Block(out, span)
-}
-
-/// The parent class `parent.constructor` (written in `lexical`) targets: the named `ancestor`, else the
-/// single direct parent. `None` only for a parentless class (checker `E-PARENT-NO-PARENT`).
-fn resolve_target(lexical: &str, ancestor: Option<&str>, snap: &Snap) -> Option<String> {
-    match ancestor {
-        Some(a) => Some(a.to_string()),
-        None => snap.get(lexical).and_then(|c| c.extends.first().cloned()),
-    }
-}
-
-/// The nearest class at or above `start` (single-parent chain) that declares its own constructor — the
-/// one PHP's inherited `__construct` would invoke. `None` if no constructor exists in the chain.
-fn find_owner(start: &str, snap: &Snap) -> Option<String> {
-    let mut cur = start.to_string();
-    loop {
-        let c = snap.get(&cur)?;
-        if c.own_ctor.is_some() {
-            return Some(cur);
-        }
-        cur = c.extends.first()?.clone();
-    }
 }
 
 /// A ctor param is promoted to a field iff it carries a visibility modifier (mirrors `construct.rs`).

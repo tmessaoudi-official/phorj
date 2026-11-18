@@ -53,7 +53,8 @@ fn an_inherited_static_names_its_owners_slot() {
 #[test]
 fn trait_initializers_run_in_the_using_classs_constructor() {
     // Item 4: a trait never synthesizes an init-only `__construct` (two such traits collide fatally,
-    // and a user's own constructor overrode it); the using class's constructor runs the set.
+    // and a user's own constructor overrode it); the using class runs the set, now through its own
+    // `__phorj_init_<C>` reached by the prelude's `__phorj_inits()` (DEC-575, row 4h).
     let out = php(
         "trait T { int k = 9; } trait R { int r = 4; } class U { use T; use R; } \
          class W { use T; int j; constructor(int j0) { this.j = j0; } }",
@@ -70,22 +71,25 @@ fn trait_initializers_run_in_the_using_classs_constructor() {
         "trait T must not construct:\n{out}"
     );
     assert!(
-        out.contains("$this->k = 9;\n        $this->r = 4;"),
+        out.contains(
+            "function __phorj_init_U(): void {\n        $this->k = 9;\n        $this->r = 4;"
+        ) && out.contains("function __construct() {\n        $this->__phorj_inits();"),
         "U's constructor runs both trait sets:\n{out}"
     );
     let w = out.split("class W {").nth(1).unwrap();
     assert!(
         w.contains(
-            "function __construct(int $j0) {\n        $this->k = 9;\n        $this->j = $j0;"
-        ),
+            "function __construct(int $j0) {\n        $this->__phorj_inits();\n        $this->j = $j0;"
+        ) && w.contains("function __phorj_init_W(): void {\n        $this->k = 9;"),
         "W's own constructor runs the trait set first:\n{out}"
     );
 }
 
 #[test]
-fn a_trait_constructor_user_keeps_it_unless_it_has_more_initializers() {
-    // Plain: the trait's `__construct` (with its own prelude) is the class's; a synthesized zero-arg
-    // `__construct` would override it.
+fn a_trait_constructor_user_keeps_it_and_its_prelude_runs_the_users_set() {
+    // The trait's `__construct` is the class's (a synthesized zero-arg `__construct` would override
+    // it); its prelude calls the virtual `__phorj_inits()`, so the user's whole set runs there, more
+    // initializers than the trait's own included (row 4h replaced the plan-built route of row 4c).
     let plain = php(
         "trait T { int k = 9; int m; constructor(int m0) { this.m = m0; } } class U { use T; }",
     );
@@ -100,15 +104,20 @@ fn a_trait_constructor_user_keeps_it_unless_it_has_more_initializers() {
         !u.contains("__construct"),
         "U keeps T's constructor:\n{plain}"
     );
-    // More initializers than the trait constructor runs: the class emits its own, from the plan.
     let more = php(
         "trait T { int k = 9; int m; constructor(int m0) { this.m = m0; } } trait R { int r = 4; } \
          class U { use T; use R; int j = 3; }",
     );
+    let u = more.split("final class U {").nth(1).unwrap();
     assert!(
-        more.contains(
-            "public function __construct(int $m0) {\n        $this->k = 9;\n        $this->r = 4;\n        $this->j = 3;\n        $this->m = $m0;"
-        ),
+        !u.contains("__construct"),
+        "U keeps T's constructor:\n{more}"
+    );
+    assert!(
+        more.contains("function __construct(int $m0) {\n        $this->__phorj_inits();\n        $this->m = $m0;")
+            && u.contains(
+                "function __phorj_init_U(): void {\n        $this->k = 9;\n        $this->r = 4;\n        $this->j = 3;"
+            ),
         "{more}"
     );
 }
@@ -125,7 +134,9 @@ fn a_synthesized_constructor_promotes_initializes_then_runs_bodies() {
     let m = out.split("final class M").nth(1).unwrap();
     assert!(
         m.contains(
-            "$this->a = $a;\n        $this->b = $b;\n        $this->x = 1;\n        $this->y = 2;\n        $this->x = $this->a + 10;"
+            "$this->a = $a;\n        $this->b = $b;\n        $this->__phorj_inits();\n        $this->x = $this->a + 10;"
+        ) && m.contains(
+            "function __phorj_inits(): void {\n        $this->__phorj_init_A();\n        $this->__phorj_init_B();"
         ),
         "{out}"
     );
@@ -133,7 +144,8 @@ fn a_synthesized_constructor_promotes_initializes_then_runs_bodies() {
         php("open class A { int x = 1; } open class B { int y = 2; } class M extends A, B {}");
     let a = only_init.split("class A implements IA {").nth(1).unwrap();
     assert!(
-        a.contains("public function __construct() {\n        $this->x = 1;"),
+        a.contains("public function __construct() {\n        $this->__phorj_inits();")
+            && only_init.contains("function __phorj_init_A(): void {\n        $this->x = 1;"),
         "{only_init}"
     );
 }
