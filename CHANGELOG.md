@@ -6,6 +6,11 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — Rust toolchain 1.98.1 → 1.100.0 (2026-11-19)
+
+`rust-toolchain.toml`, and `rust-version` in both manifests. No new lint fired under `warnings = "deny"` and clippy
+`deny` (all features, no default features, the wasm playground). Gate: nextest `--all-features` 3783/3783.
+
 ### Security — rusqlite 0.40.2 → 0.43.0 (bundled SQLite; RUSTSEC-2026-0459; 2026-11-19)
 
 `Core.Database` (default `database` feature) bundled a SQLite covered by RUSTSEC-2026-0459; only rusqlite 0.41+ ships

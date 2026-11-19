@@ -80,7 +80,7 @@ Prose to update on bumps: UNIFIED-SPEC dependency rows (rusqlite, fancy-regex), 
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 1 | Compatible refresh, floors, tool pins, advisories recorded | M | done | `38f312a4` gate green (nextest 3781/3781, clippy 0/0, release); VS Code lockfile is gitignored (fresh resolve already gets brace-expansion 5.0.13); KNOWN_ISSUES advisory list owed to step 3 (cargo-audit) | Cargo.toml Cargo.lock KNOWN_ISSUES.md |
-| 2 | Approved semver-incompatible bumps, one commit each | M | doing | fancy-regex 0.20.2: red pin first, 375/375 regex+corpus suites, three-leg probe agrees, panic gone; REGEX-DUP-GROUP-NAME queued (pre-existing), `4abc1f49`; rusqlite 0.43: database + differential suites 450/450, empty-SQL message pinned on both backends (0.40 already failed it, message only) | Cargo.toml Cargo.lock |
+| 2 | Approved semver-incompatible bumps, one commit each | M | doing | fancy-regex 0.20.2: red pin first, 375/375 regex+corpus suites, three-leg probe agrees, panic gone; REGEX-DUP-GROUP-NAME queued (pre-existing), `4abc1f49`; rusqlite 0.43: database + differential suites 450/450, empty-SQL message pinned on both backends (0.40 already failed it, message only), `e4a4f903`; Rust 1.100.0: no new lint, full gate 3783/3783 | Cargo.toml Cargo.lock |
 | 3 | cargo-audit on the final lockfile | S | todo | - | KNOWN_ISSUES.md |
 | 4 | Gate, push, CI | S | todo | - | - |
 <!-- /progress-block -->
