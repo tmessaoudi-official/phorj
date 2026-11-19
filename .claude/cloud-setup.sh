@@ -28,9 +28,9 @@ SURY_KEY_URL=https://packages.sury.org/php/apt.gpg
 SURY_REPO=https://packages.sury.org/php/
 KEYRING=/usr/share/keyrings/debsuryorg-archive-keyring.gpg
 PHP_PKGS=(php8.5-cli php8.5-bcmath php8.5-mbstring php8.5-sqlite3)
-NEXTEST_VER=0.9.149                                   # released 2026-10-20
+NEXTEST_VER=0.9.152                                   # sha256 below computed 2026-11-19
 NEXTEST_URL="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$NEXTEST_VER/cargo-nextest-$NEXTEST_VER-x86_64-unknown-linux-gnu.tar.gz"
-NEXTEST_SHA=32d1d8c0567b7a80bee2bad8bb09125c846da96bc009b2de11ec08557290c770
+NEXTEST_SHA=d039b43c3e0958441b6ad0a39c8884d018b3d2e8fb9928f209074b1100b5e17a
 
 say() { printf '%s | phorj-cloud-setup | %s | %s\n' "$(date -u +%FT%TZ)" "$1" "$2"; }
 timed() { local name=$1 t0=$SECONDS; shift; "$@"; say INFO "$name took $((SECONDS - t0))s"; }

@@ -48,7 +48,7 @@ name = "phg"
 path = "src/main.rs"
 
 # Phorj core is std-only. The exceptions are vetted, domain-scoped primitives where std has none and
-# rolling-your-own is the anti-pattern (14 crates across crypto/regex/signals/coroutines/JIT/SQL/mail/TLS/unicode). Each is behind
+# rolling-your-own is the anti-pattern (15 crates across crypto/regex/signals/coroutines/JIT/SQL/mail/TLS/unicode). Each is behind
 # a feature so the WASM playground builds without it (docs/specs/UNIFIED-SPEC.md#external-dependency-policy).
 [features]
 # `jit` is default (developer-ruled 2026-07-09): the shipped binary compiles hot functions to native
@@ -156,8 +156,8 @@ unicode-segmentation = { version = "1", optional = true }
 # shared and unchanged by the second consumer: rustls 0.23 compiles both roles unconditionally, so
 # the server side needed no additional feature and no additional crate (no PEM crate either — the
 # decoder is 40 lines in `src/serve/tls.rs`).
-rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12", "logging"], optional = true }
-webpki-roots = { version = "1.0.9", optional = true }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"], optional = true }
+webpki-roots = { version = "1.0.10", optional = true }
 # FOURTH external dependency (Amanieu d'Antras — author of hashbrown/parking_lot, in the Rust nursery;
 # stackful coroutines with miri-tested context switching). Powers green-thread task suspension (M6 W4):
 # each `spawn`ned task runs on its own stack and yields at `recv`/`join`/`yield`. std has no
@@ -172,7 +172,7 @@ corosensei = { version = "0.3", optional = true }
 # under a minimal feature set: blocking SMTP (NO tokio at the API), rustls TLS, RFC-correct MIME
 # builder, DKIM, sendmail pipe. Its `unsafe`/async internals stay inside the dependency (the
 # rusqlite/postgres criterion). Feature-gated (`mail`), non-default, non-wasm, spine-quarantined.
-lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder", "dkim", "sendmail-transport"], optional = true }
+lettre = { version = "0.11.24", default-features = false, features = ["smtp-transport", "rustls-tls", "builder", "dkim", "sendmail-transport"], optional = true }
 
 # EIGHTH external-dependency domain (embedded SQL, admitted 2026-07-03). Powers the `Core.DatabaseModule`
 # enhanced-PDO primitive (DEC-208) over SQLite. `bundled` compiles SQLite from vendored C source, so
@@ -194,7 +194,7 @@ postgres = { version = "0.19", optional = true }
 # protocol, no system libmysqlclient, no TLS/compression/chrono extras pulled. Its `unsafe` stays
 # internal to the dependency (the rusqlite/postgres criterion) — phorj's own crate stays unsafe-free.
 # Feature-gated (`database-mysql`), non-default, non-wasm, spine-quarantined like every DB driver.
-mysql = { version = "28.0.3", default-features = false, features = ["minimal-rust"], optional = true }
+mysql = { version = "28.0.4", default-features = false, features = ["minimal-rust"], optional = true }
 
 # SEVENTH external-dependency domain (native codegen, developer-authorized 2026-07-06). Cranelift
 # (Bytecode Alliance — the wasmtime code generator, fuzzed + production-hardened) is the JIT backend
