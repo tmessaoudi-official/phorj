@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — cranelift 0.136.6 → 0.137.3 (native JIT, 2026-11-19)
+
+No source change. The one cranelift fact the JIT's `unsafe` island relies on still holds: `JITModule` has no `Drop`
+impl, `free_memory(mut self)` is unchanged and `Memory::drop` is identical (diffed against the 0.136.6 source;
+citation updated in `src/jit/compile/mod.rs`). JIT, differential and conformance suites 493/493; `fibrec`, `intadd`,
+`floatloop`, `floatmul`, `floatarith` compute identical results on both builds. Perf OWED: the box was under external
+load (1-minute load ~25) when both builds were ready, so no before/after timing is claimed.
+
 ### Changed — Rust toolchain 1.98.1 → 1.100.0 (2026-11-19)
 
 `rust-toolchain.toml`, and `rust-version` in both manifests. No new lint fired under `warnings = "deny"` and clippy
