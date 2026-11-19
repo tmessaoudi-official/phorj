@@ -19,7 +19,10 @@ initializers of its own over an inherited constructor got a zero-arg `__construc
 emits `protected __phorj_init_<Class>()` per class and a virtual `__phorj_inits()` called from every constructor
 prelude (helper registry: 195). Example: `examples/guide/init-chain.phg`. Open: FORWARD-PRIVATE-INIT
 (KNOWN_ISSUES), and INIT-READ-BEFORE-SET: an initializer below a forwarding constructor that reads an ancestor's
-field still faults on every leg (DEC-587 rules it a check error, build queued). The `__phorj_inits()` helper was
+field still faults on every leg (DEC-587 rules it a check error, build queued). One shape ran before this fix and
+faults since: a subclass constructor that never forwards, over a parent initializer reading a promoted parameter
+(`open class A { int d = this.x * 2; constructor(public int x) {} } class B extends A { constructor() {} }`, then a
+bare `new B()`). The `__phorj_inits()` helper was
 ratified on 2026-11-19. Perf: OWED (no before/after measured; the box was loaded).
 
 ### Fixed — a subclass inherits its parent's property hooks (defect HOOK-INHERITANCE, P0, DEC-572, 2026-11-17)

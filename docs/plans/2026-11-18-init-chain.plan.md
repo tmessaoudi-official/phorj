@@ -112,5 +112,7 @@ full gate green; sabotage red; INIT-CHAIN out of the queue.
 - `src/transpile/classes.rs` (415) and `classes_synth.rs` (338) shrank in step 4 and are still over the soft cap.
 ### Known issues
 - `10a8480e` (`docs(plans, slice-state): ratify the 13 ASSUMED entries`) is local and unpushed; it goes out with this work's first push.
-- INIT-READ-BEFORE-SET (P0, DEC-587 ruled 2026-11-19, reject at check time): found by 6C round 1; build queued in the defect queue, not in this plan.
+- INIT-READ-BEFORE-SET (P0, DEC-587 ruled 2026-11-19, reject at check time): found by 6C round 1; build queued in the defect queue, not in this plan. 6C round 2 found one of its shapes is a behaviour change of this fix: `class B extends A { constructor() {} }` over `A`'s `int d = this.x * 2` with a promoted `x` ran on a bare `new B()` before `87a63ed6` (`fix: every class's field initializers run on construction`) and faults since.
+- Perf OWED (DEC-365): no native before/after (the pre-fix binary is gone; a worktree build at `10a8480e` on a quiet box pays it), and the PHP cost of the `__phorj_inits()` calls per construction is unmeasured.
+- The release binary predates `a83ba8bb`'s comment-only edit of `src/transpile/init_chain.rs`; no behaviour differs.
 - 6C round 1 (advisor) closed 2026-11-19: `__phorj_inits` ratified; DEC-575/585/586 status cells set BUILT; the `seed_init_chain` comment corrected (an unrelated class sharing a constructor-less trait gains only an empty dispatcher, three legs `4 1 t`); multi-parent forwarding and trait-constructor forwarding are rejected by the checker (probed).
