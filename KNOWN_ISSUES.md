@@ -2995,7 +2995,8 @@ The value tier (`Result<T, E>` + `?`) and the panic tier (`panic`/`todo`/`unreac
   fault path).
 - **`?`-unwrapped payloads are not specialized arithmetic operands on the VM** — the unwrapped `Ok`
   value types as `CTy::Other` (the same erased-generics operand limitation), so `f()? + 1` in a
-  let-init would run on the interpreter but the VM rejects the arithmetic; bind to a typed local.
+  let-init would run on the interpreter but the VM rejects the arithmetic; bind to a typed local. Now a defect-queue
+  entry (TRY-UNWRAP-OPERAND, P0 proposed 2026-11-19, `docs/plans/SLICE-STATE.md`): the VM rejects what the other legs run.
 
 ## Error model Slice 2b (M-faults) — deferred refinements
 

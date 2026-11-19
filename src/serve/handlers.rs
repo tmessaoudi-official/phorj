@@ -18,7 +18,7 @@ pub fn install_shutdown_handler() -> Arc<AtomicBool> {
 
 /// The checker's reified-operand side-table (`expr span → Ty`), threaded into [`compile_with`] so the
 /// VM specializes arithmetic operands exactly as the byte-identical `phg run` path does (Invariant 6).
-pub type Reified = std::collections::HashMap<usize, crate::types::Ty>;
+pub type Reified = crate::checker::Reified;
 
 /// A per-thread request handler: given the raw request bytes, invoke the served program's
 /// registered web handler, returning its value + captured stdout (or a runtime fault). It is

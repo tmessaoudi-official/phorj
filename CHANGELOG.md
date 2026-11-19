@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — a binding of an erased generic payload is an arithmetic operand on the VM (defect GENERIC-PAYLOAD-OPERAND, P0, 2026-11-19)
+
+`match (o) { Option.Some(v) => v * 2, Option.None() => 0 }` with `o` an `Option<int>` failed to compile on `phg run`
+(`` `v` is not numeric ``) while the tree-walker and PHP ran it: generics are erased before the compiler, so a variant
+payload typed `T` reached it as an unknown. The checker already declared each binding at its substituted type; it now
+records it (`Reified::pattern_binds`, keyed by the binding's span and checked by name), and the compiler uses it where
+its own type is unknown. Covers int, float and string payloads, user generic enums, nested `Option`, `Result`, guards
+and call arguments; a class or interface payload binding now types as its class and behaves exactly as a local of that
+type (`with`, hooks, interface dispatch: pinned on four legs). Regressions: `generic_payload_binding_is_an_arithmetic_operand`,
+`generic_payload_class_binding_keeps_its_runtime_class`; `examples/guide/generic-enums.phg` drops its typed-local workaround
+(`doubled 15`). Found on the way, queued: a lambda inside a `match` arm cannot capture the arm's binding on the VM, for
+any payload type (LAMBDA-CAPTURE-MATCH-BINDING).
+
 ### Fixed — an `if` expression of two classes keeps the class it picked on the VM (defect IF-CLASS-ARM-TYPE, P0, 2026-11-19)
 
 `var y = if (c) { new Kid(1) } else { new Par(2) }; var w = y with { x = 9 };` built a `Kid` from a `Par` on `phg run`

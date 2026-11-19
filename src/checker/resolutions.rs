@@ -15,7 +15,7 @@ pub type ResolutionsOut = Result<
         HashMap<usize, crate::ast::Expr>,
         HashMap<usize, crate::ast::Expr>,
         HashMap<usize, String>,
-        HashMap<usize, Ty>,
+        Reified,
         HashMap<usize, Ty>,
         HashMap<usize, crate::ast::Expr>,
         std::collections::HashSet<usize>,
@@ -29,6 +29,46 @@ pub type ResolutionsOut = Result<
     ),
     Vec<Diagnostic>,
 >;
+
+/// The checker's reified side-tables for the VM compiler (`compile_with`): every VM compile path threads
+/// this one value (Invariant 6), so a table added here reaches all of them.
+#[derive(Debug, Default, Clone)]
+pub struct Reified {
+    /// S2.1-broad: `Call`/`Member`/`Index` `span.start` → the concrete operand type the checker proved.
+    pub operands: HashMap<usize, Ty>,
+    /// GENERIC-PAYLOAD-OPERAND: a `match` binding's `span.start` → (its name, the payload type
+    /// `check_pattern` declared it with, `T` substituted). Separate from `operands` because a
+    /// synthesized binding may reuse a `Call`'s span (the `?.` UFCS receiver). Spans are unique across
+    /// files and preludes (`INJECTED_SPAN_BASE`, per-file windows); a binding checked twice with two
+    /// different types, or once as a non-operand (a type parameter), is recorded as `Ty::Error` (unknown).
+    pub pattern_binds: HashMap<usize, (String, Ty)>,
+}
+
+impl Checker {
+    /// Declare a `match` pattern binding and record its type for the VM compiler ([`Reified`]).
+    pub(super) fn declare_pattern_bind(&mut self, name: &str, ty: &Ty, span: Span) {
+        if span.len > 0 {
+            // A zero-length span is synthesized (`reflect`'s `synth_span`), shared by many bindings.
+            let ty = if Self::is_reifiable_operand(ty) {
+                ty.clone()
+            } else {
+                Ty::Error
+            };
+            let entry = (name.to_string(), ty);
+            let binds = &mut self.reified_operands.pattern_binds;
+            match binds.get_mut(&span.start) {
+                None => {
+                    binds.insert(span.start, entry);
+                }
+                // Never observed (0 in the 3774-test workspace run, 2026-11-19); a duplicate key
+                // needs a defined answer, and two disagreeing types must not pick one: unknown.
+                Some(old) if *old != entry => old.1 = Ty::Error,
+                Some(_) => {}
+            }
+        }
+        self.declare(name, ty.clone(), span);
+    }
+}
 
 pub fn check_resolutions(program: &Program) -> ResolutionsOut {
     check_resolutions_mode(program, false)

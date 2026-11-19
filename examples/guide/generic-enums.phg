@@ -46,11 +46,11 @@ function main(): void {
     // some 7
     Output.printLine(describe(none));
     // none
-    // A bound payload is *type-checked* at its concrete type (here `n: int`), so the front end accepts
-    // it anywhere an int is expected. It does carry the erased-generics limitation: a generic payload
-    // is `mixed` to the backend, so it is not a *specialized* arithmetic operand on the VM — to do math
-    // on it, return it into a typed local first (`int got = …; got + got`), exactly as with a generic
-    // class method result. String interpolation of the payload needs no such hint and works directly.
+    // A bound payload is *type-checked* at its concrete type (here `n: int`), and every backend uses
+    // that type: the payload is a real arithmetic operand even though `T` is erased.
+    int doubled = match (some) { Some(n) => n * 2 + 1, None() => 0 };
+    Output.printLine("doubled {doubled}");
+    // doubled 15
     var os = new Some("phorj");
     // Option<string>
     string label = match (os) { Some(s) => "label {s}", None() => "label none" };

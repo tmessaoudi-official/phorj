@@ -198,11 +198,11 @@ struct Compiler<'a> {
     /// `u.pick(7, 8) + 1` from that argument — the method analog of `FnMeta.generic_ret_from_param`
     /// (S2.1). Empty unless a generic method echoes a param, so non-generic programs are untouched.
     method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
-    /// Checker reified-operand side-table (S2.1-broad): `expr span.start → operand CTy` for
-    /// `Call`/`Member`/`Index` results. `ctype` consults this FIRST, so a generic method result / field
-    /// read / `List<T>` return specializes as the operand the checker proved (closing the interp↔VM
-    /// CTy-operand trap for erased-to-`mixed` results). Empty on the run-family `compile` path.
-    reified_operands: &'a HashMap<usize, CTy>,
+    /// Checker reified side-tables ([`reified::ReifiedCty`]): `Call`/`Member`/`Index` operand types
+    /// (S2.1-broad) and `match` binding payload types (GENERIC-PAYLOAD-OPERAND), each a fallback where
+    /// the compiler's own type is unknown — the interp↔VM CTy-operand trap for erased-to-`mixed`
+    /// results. Empty on the plain `compile` path.
+    reified_operands: &'a ReifiedCty,
     /// Program-wide `(class, method) → function index` table (slice B0). A non-overloaded static call
     /// `ClassName.method(args)` lowers to a dummy-receiver push + `Op::Call(idx)` via this index —
     /// the class is known at compile time, so no runtime dispatch is needed.
@@ -283,22 +283,16 @@ pub fn compile(program: &Program) -> Result<BytecodeProgram, Diagnostic> {
     compile_program(program).map_err(Diagnostic::compile)
 }
 
-/// Like [`compile`], but seeded with the checker's **reified-operand side-table** (S2.1-broad):
-/// `expr span.start -> Ty`. Each entry is converted to its operand [`CTy`] (dropping `Other`, so a
-/// non-operand result never overrides `ctype`'s normal resolution) and consulted FIRST in `ctype`, so a
-/// generic method result / field read specializes as the arithmetic operand the checker proved. Empty
-/// map ⇒ byte-identical to [`compile`] (the run-family `compile` path stays unchanged).
+/// Like [`compile`], but seeded with the checker's reified side-tables ([`crate::checker::Reified`]),
+/// converted once to operand [`CTy`]s (dropping `Other`, so a non-operand never overrides the
+/// compiler's own resolution): a generic method result, field read or erased `match` payload binding
+/// specializes as the arithmetic operand the checker proved. Empty tables ⇒ byte-identical to
+/// [`compile`].
 pub fn compile_with(
     program: &Program,
-    reified: &std::collections::HashMap<usize, crate::types::Ty>,
+    reified: &crate::checker::Reified,
 ) -> Result<BytecodeProgram, Diagnostic> {
-    let reified_ctys: std::collections::HashMap<usize, CTy> = reified
-        .iter()
-        .filter_map(|(&span, ty)| match ty_to_cty(ty) {
-            CTy::Other => None,
-            cty => Some((span, cty)),
-        })
-        .collect();
+    let reified_ctys = ReifiedCty::from_checker(reified);
     compile_program_with(program, &reified_ctys).map_err(Diagnostic::compile)
 }
 
@@ -478,11 +472,13 @@ mod match_bindings;
 mod matches;
 mod origin_alias;
 mod program;
+mod reified;
 mod statics;
 mod stmt;
 mod variants;
 use ctors::*;
 use program::*;
+use reified::ReifiedCty;
 use variants::{VariantIndex, VariantMeta};
 
 mod ctors;

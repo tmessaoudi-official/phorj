@@ -22,7 +22,7 @@ impl<'a> Compiler<'a> {
         class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
         method_rets: &'a HashMap<(String, String), CTy>,
         method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
-        reified_operands: &'a HashMap<usize, CTy>,
+        reified_operands: &'a ReifiedCty,
         methods: &'a HashMap<(String, String), usize>,
         method_overloads: &'a HashMap<(String, String), usize>,
         base_fn_idx: usize,

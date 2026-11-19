@@ -58,7 +58,7 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
 pub fn check_and_expand_reified(
     prog: &Program,
     diag_src: &str,
-) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
+) -> Result<(Program, crate::checker::Reified), String> {
     check_and_expand_reified_mode(prog, diag_src, false)
 }
 
@@ -97,7 +97,7 @@ fn check_and_expand_reified_mode(
     prog: &Program,
     diag_src: &str,
     test_mode: bool,
-) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
+) -> Result<(Program, crate::checker::Reified), String> {
     // DEC-239: expand the pipe operator out of the AST FIRST — before any other pass walks
     // expressions — so `Expr::Pipe`/`Expr::PipePlaceholder` exist only for the formatter and no
     // desugar/checker/backend ever sees them. Infallible (placeholder shape is parse-validated).
@@ -360,7 +360,7 @@ pub(super) fn parse_checked(src: &str) -> Result<Program, String> {
 #[allow(clippy::type_complexity)]
 pub(super) fn parse_checked_reified(
     src: &str,
-) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
+) -> Result<(Program, crate::checker::Reified), String> {
     let prog = lex_parse(src)?;
     check_and_expand_reified(&prog, src)
 }
@@ -379,7 +379,7 @@ pub fn parse_checked_program(src: &str) -> Result<Program, String> {
 #[allow(clippy::type_complexity)]
 pub fn parse_checked_program_reified(
     src: &str,
-) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
+) -> Result<(Program, crate::checker::Reified), String> {
     parse_checked_reified(src)
 }
 

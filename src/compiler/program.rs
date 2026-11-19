@@ -4,15 +4,15 @@
 use super::*;
 
 pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
-    compile_program_with(program, &HashMap::new())
+    compile_program_with(program, &ReifiedCty::default())
 }
 
-/// Compile a program seeded with the checker's reified-operand side-table (`expr span.start -> CTy`),
-/// consulted FIRST in `ctype` (S2.1-broad). `compile_program` delegates here with an empty map, so the
-/// run-family path is byte-identical.
+/// Compile a program seeded with the checker's reified side-tables ([`ReifiedCty`]), the fallbacks
+/// of `ctype` and `collect_bindings`. `compile_program` delegates here with empty tables, so the plain
+/// path is byte-identical.
 pub(super) fn compile_program_with(
     program: &Program,
-    reified: &HashMap<usize, CTy>,
+    reified: &ReifiedCty,
 ) -> Result<BytecodeProgram, String> {
     // Import map (leaf/alias → dotted module) for qualified-native resolution — see the
     // `Compiler::imports` field doc and `native::index_of_qualified`.

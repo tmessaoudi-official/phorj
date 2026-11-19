@@ -4718,6 +4718,113 @@ function main(): void {
     );
 }
 
+/// GENERIC-PAYLOAD-OPERAND (P0): a binding of an ERASED generic payload is an arithmetic operand on the
+/// VM. The compiler typed a variant field from the enum's `field_tags`, where `T` is erased to unknown,
+/// so `Option.Some(v) => v * 2` failed `` `v` is not numeric `` on `phg run` alone; the checker's
+/// substituted payload type is now handed to the compiler. Shapes: int, float, string, a user generic
+/// enum, nested, `Result`, a class payload, a guard using the binding, a call argument, and the binding as the whole
+/// arm (`match … + 1`). A lambda capturing a match binding fails on the VM for ANY payload (queue
+/// entry LAMBDA-CAPTURE-MATCH-BINDING), so it is not pinned here.
+#[test]
+fn generic_payload_binding_is_an_arithmetic_operand() {
+    agree_out_php(
+        r##"import Core.Output;
+import Core.Option;
+import Core.Result;
+enum Box<T> { Holds(T value), Empty }
+class Pt { constructor(public int x) {} }
+class OneError implements Error { constructor(public string message) {} }
+function twice(int n): int { return n * 2; }
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+  Option<int> o = new Option.Some(5);
+  int a = match (o) { Option.Some(v) => v * 2, Option.None() => 0 };
+  int b = match (o) { Option.Some(v) => v, Option.None() => 0 } + 1;
+  Output.printLine("opt {a} {b}");
+  Option<float> of = new Option.Some(1.5);
+  float f = match (of) { Option.Some(v) => v * 2.0, Option.None() => 0.0 };
+  Output.printLine("flt {f}");
+  Option<string> os = new Option.Some("hi");
+  string s = match (os) { Option.Some(v) => v + "!", Option.None() => "" };
+  Output.printLine("str {s}");
+  Box<int> bx = new Box.Holds(7);
+  int c = match (bx) { Box.Holds(x) => x + 1, Box.Empty() => 0 };
+  Output.printLine("box {c}");
+  Option<Option<int>> oo = new Option.Some(new Option.Some(9));
+  int d = match (oo) { Option.Some(Option.Some(v)) => v - 1, default => 0 };
+  Output.printLine("nest {d}");
+  Option<Pt> op = new Option.Some(new Pt(3));
+  int e = match (op) { Option.Some(p) => p.x * 4, Option.None() => 0 };
+  Output.printLine("cls {e}");
+  Result<int, OneError> r = new Result.Success(11);
+  int g = match (r) { Result.Success(v) => v + 1, Result.Failure(err) => 0 };
+  Output.printLine("res {g}");
+  int h = match (o) { Option.Some(v) when v + 1 > 5 => v * 10, Option.Some(v) => v, Option.None() => 0 };
+  Output.printLine("guard {h}");
+  int k = match (o) { Option.Some(v) => twice(v + 1) - v, Option.None() => 0 };
+  Output.printLine("call {k}");
+}
+"##,
+        "opt 10 6\nflt 3\nstr hi!\nbox 8\nnest 8\ncls 12\nres 12\nguard 50\ncall 7\n",
+        "GENERIC-PAYLOAD-OPERAND erased generic payload binding",
+    );
+}
+
+/// GENERIC-PAYLOAD-OPERAND: a class or interface payload binding now types as its declared class (it
+/// was unknown); it must behave exactly as a local of that type — `with` on a `Par`-typed binding
+/// holding a `Kid` keeps `Kid`, the runtime class's hooks run, an interface method dispatches, and an
+/// exact class's `with` and method calls specialize.
+#[test]
+fn generic_payload_class_binding_keeps_its_runtime_class() {
+    agree_out_php(
+        r##"import Core.Output;
+import Core.Option;
+interface Named { function nm(): string; }
+open class Par implements Named {
+  constructor(public mutable int x) {}
+  public open function who(): string { return "par"; }
+  public function nm(): string { return "P{this.x}"; }
+  mutable string tag = "t";
+  string label {
+    get => "par:" + this.tag;
+    set(string v) { this.tag = v; }
+  }
+}
+class Kid extends Par {
+  constructor(public mutable int x) {}
+  public function who(): string { return "kid"; }
+  string label {
+    get => "kid:" + this.tag;
+    set(string v) { this.tag = v + "!"; }
+  }
+}
+class Solo { constructor(public int y) {} public function dbl(): int { return this.y * 2; } }
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+  Par k1 = new Kid(1);
+  Option<Par> op = new Option.Some(k1);
+  var v = match (op) { Option.Some(b) => b, Option.None() => new Par(0) };
+  var w = match (op) { Option.Some(b) => b with { x = 9 }, Option.None() => new Par(0) };
+  Output.printLine("with {w.who()} {w.x} {w instanceof Kid}");
+  v.label = "z";
+  int vx = match (op) { Option.Some(b) => b.x + 1, Option.None() => 0 };
+  string lb = match (op) { Option.Some(b) => b.label + b.who() + b.nm(), Option.None() => "" };
+  Output.printLine("hook {v.label} {vx} {lb}");
+  Named k4 = new Kid(4);
+  Option<Named> on = new Option.Some(k4);
+  string s = match (on) { Option.Some(n) => n.nm() + "/" + n.nm(), Option.None() => "" };
+  Output.printLine("iface {s}");
+  Option<Solo> os = new Option.Some(new Solo(6));
+  int d = match (os) { Option.Some(q) => q.dbl() + q.y, Option.None() => 0 };
+  var sw = match (os) { Option.Some(q) => q with { y = 2 }, Option.None() => new Solo(0) };
+  Output.printLine("solo {d} {sw.dbl()}");
+}
+"##,
+        "with kid 9 true\nhook kid:z! 2 kid:z!kidP1\niface P4/P4\nsolo 18 4\n",
+        "GENERIC-PAYLOAD-OPERAND class payload binding",
+    );
+}
+
 #[test]
 fn s8_trait_method_reuse_is_byte_identical() {
     // M-RT S8 T1: a class composes a trait via `use`; the trait's method is flattened in and dispatches

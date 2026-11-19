@@ -77,7 +77,7 @@ impl Checker {
             overload_resolutions: HashMap::new(),
             return_overload_methods: HashMap::new(),
             method_fn_decls: Vec::new(),
-            reified_operands: HashMap::new(),
+            reified_operands: Reified::default(),
             variant_resolutions: HashMap::new(),
             invoke_call_targets: HashMap::new(),
             to_string_targets: HashMap::new(),

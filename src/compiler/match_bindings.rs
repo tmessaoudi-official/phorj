@@ -76,11 +76,17 @@ impl Compiler<'_> {
         out: &mut Vec<MatchBinding>,
     ) -> Result<(), String> {
         match pat {
-            Pattern::Binding { name, .. } => out.push(MatchBinding {
+            // GENERIC-PAYLOAD-OPERAND: an erased payload (`T` → `Other`) takes the type the checker
+            // declared the binding with, so `Option.Some(v) => v * 2` is an operand on the VM.
+            Pattern::Binding { name, span } => out.push(MatchBinding {
                 name: name.clone(),
                 match_slot: m_slot,
                 path: path.to_vec(),
-                ty: cur_ty,
+                ty: match cur_ty {
+                    CTy::Other => self.reified_operands.binding(span.start, name),
+                    known => Some(known),
+                }
+                .unwrap_or(CTy::Other),
             }),
             Pattern::Variant {
                 name,

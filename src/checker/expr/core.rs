@@ -33,6 +33,7 @@ impl Checker {
         ) && Self::is_reifiable_operand(&ty)
         {
             self.reified_operands
+                .operands
                 .insert(Self::expr_span(expr).start, ty.clone());
         }
         self.depth -= 1;

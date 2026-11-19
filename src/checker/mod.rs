@@ -80,7 +80,7 @@ mod resolutions;
 mod resolve;
 mod stmt;
 mod throws;
-pub use resolutions::{check_resolutions, check_resolutions_mode};
+pub use resolutions::{check_resolutions, check_resolutions_mode, Reified};
 
 // Stateless helpers live in `common`; this glob re-exposes them to `mod.rs`'s own bodies AND
 // (transitively, via each cluster's `use super::*`) to every sibling cluster file.
@@ -643,13 +643,13 @@ pub struct Checker {
     /// such a method needs a `<Type>` selector (C1, like free functions without a sink) or it is
     /// `E-OVERLOAD-NO-CONTEXT`; the selector path mangles per return before any backend.
     return_overload_methods: HashMap<(String, String), Vec<(Ty, String)>>,
-    /// S2.1-broad: per-expression *reified operand type*, keyed by the expression's `span.start`, for
-    /// `Call`/`Member`/`Index` nodes whose checker-resolved `Ty` is concrete. The VM compiler's `ctype`
-    /// consults this FIRST so a generic method result (`box.get() + 1`), field read, or `List<T>`/`Map`
-    /// return specializes as the operand the checker proved — closing the interp↔VM "CTy-operand trap"
-    /// for results erased to `mixed`. The checker is authoritative on the runtime type, so the override
-    /// is sound; `CTy::Other` entries are dropped at the compile boundary (never override fn/class).
-    reified_operands: HashMap<usize, Ty>,
+    /// S2.1-broad: per-expression *reified operand type* (`Call`/`Member`/`Index` `span.start` → `Ty`), and
+    /// (GENERIC-PAYLOAD-OPERAND) each `match` binding's substituted payload type ([`Reified`]). The VM
+    /// compiler's `ctype` falls back to them where its own type is unknown, so a generic method result
+    /// (`box.get() + 1`), field read, `List<T>`/`Map` return, or `Option.Some(v) => v * 2` specializes as
+    /// the operand the checker proved — the interp↔VM "CTy-operand trap" for results erased to `mixed`.
+    /// The checker is authoritative on the runtime type; `CTy::Other` entries are dropped at the boundary.
+    reified_operands: Reified,
     /// DEC-329.3: resolved VARIANT USES, `span.start` → owning enum (feeds `qualify_variants`).
     variant_resolutions: HashMap<usize, String>,
     /// DEC-239: contextual pipe-lambda parameter resolutions — the checker-inferred `Ty` of each

@@ -322,7 +322,7 @@ impl Checker {
         use crate::ast::Pattern;
         match pat {
             Pattern::Wildcard(_) => {}
-            Pattern::Binding { name, span } => self.declare(name, scrut.clone(), *span),
+            Pattern::Binding { name, span } => self.declare_pattern_bind(name, scrut, *span),
             Pattern::Int(_, span) => self.expect_prim(scrut, &Ty::Int, *span),
             Pattern::Float(_, span) => self.expect_prim(scrut, &Ty::Float, *span),
             Pattern::Decimal { span, .. } => self.expect_prim(scrut, &Ty::Decimal, *span),
