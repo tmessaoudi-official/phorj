@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — a lambda in a `match` arm can capture the arm's binding on the VM (defect LAMBDA-CAPTURE-MATCH-BINDING, P0, 2026-11-19)
+
+`match (s) { Shape.Sq(n) => List.sum(List.map([1, 2], function(int i) => i + n)), Shape.Dot() => 0 }` printed `13` on the
+tree-walker and PHP and failed `compile error: undefined variable `n`` on `phg run`, for any payload type: a lambda's
+captures were looked up as locals only, and a match binding is a path from the `$match` slot. A binding is now captured
+by value, re-extracted when the closure is made, and typed as the binding (`src/compiler/expr/lambda.rs`). Regression
+`a_lambda_captures_a_match_arm_binding`: an int capture, a binding beside a local, two same-typed bindings, a nested
+lambda, a nested and a struct pattern, a block body, a closure escaping its arm, a guard, `this` plus a binding, two
+capturing lambdas in one arm; sabotage: without the binding branch it fails `undefined variable`, with the capture push
+order reversed it fails `expected int, found string`. Programs that ran before compile to the same bytecode (only the
+capture filter changed, for names that were not captured at all). Perf: no change to an existing program.
+
 ### Changed — CI: PHP 8.6 gates, 8.7-dev canary, zig 0.17.1 (2026-11-19)
 
 - New gating job `gate-php86`: the full `cargo test --workspace` with the PHP oracle on PHP 8.6 (GA 2026-11-19). The

@@ -23,16 +23,26 @@ impl Compiler<'_> {
     ) -> Result<(), String> {
         // 1. Compute free variables of the lambda body.
         let all_free = free_vars(params, body);
-        // 2. Filter to only variables that resolve to a local in the *enclosing* scope
-        //    (names that are top-level functions are resolved statically at call time and
-        //    don't need to be captured — `compile_call` handles them via `Op::Call`).
-        let captures: Vec<(usize, String)> = all_free
+        // 2. Filter to only variables that resolve in the *enclosing* scope: a `match`-arm binding
+        //    first (it shadows a local, as in `eval_ident` and `Expr::Ident`'s compile), then a local.
+        //    A binding is not a local but a path from the `$match` slot, so it is captured by value,
+        //    re-extracted at closure creation (LAMBDA-CAPTURE-MATCH-BINDING). Names that are
+        //    top-level functions are resolved statically at call time and are not captured —
+        //    `compile_call` handles them via `Op::Call`.
+        let captures: Vec<(Capture, String)> = all_free
             .into_iter()
             .filter_map(|name| {
+                if let Some((m_slot, path)) = self.resolve_binding(&name) {
+                    // `resolve_binding` found it in `match_bindings`, which `binding_cty` reads too.
+                    let ty = self
+                        .binding_cty(&name)
+                        .expect("a resolved match binding has a type");
+                    return Some((Capture::Binding(m_slot, path, ty), name));
+                }
                 // Only capture locals; top-level functions, variants, and classes are not.
                 self.resolve_local(&name)
                     .filter(|_| !self.fns.contains_key(&name))
-                    .map(|slot| (slot, name))
+                    .map(|slot| (Capture::Local(slot), name))
             })
             .collect();
         // `this`-capture (Phase 1 closures slice): when the body references `this` (directly or
@@ -88,12 +98,12 @@ impl Compiler<'_> {
             sub.this_slot = Some(0);
             sub.cur_class = self.cur_class.clone();
         }
-        for (_, cap_name) in &captures {
-            // The capture's type comes from the enclosing scope's local.
-            let slot = self
-                .resolve_local(cap_name)
-                .expect("capture must resolve in enclosing scope");
-            let ty = self.locals[slot].ty.clone();
+        for (cap, cap_name) in &captures {
+            // The capture's type comes from the enclosing scope: the local's, or the binding's.
+            let ty = match cap {
+                Capture::Local(slot) => self.locals[*slot].ty.clone(),
+                Capture::Binding(_, _, ty) => ty.clone(),
+            };
             sub.add_local(cap_name, ty);
         }
         for p in params {
@@ -146,10 +156,21 @@ impl Compiler<'_> {
                 line,
             );
         }
-        for (slot, _) in &captures {
-            self.emit(Op::GetLocal(*slot), line);
+        for (cap, _) in &captures {
+            match cap {
+                Capture::Local(slot) => self.emit(Op::GetLocal(*slot), line),
+                Capture::Binding(m_slot, path, _) => self.emit_load_path(*m_slot, path, line),
+            }
         }
         self.emit(Op::MakeClosure(fn_idx), line);
         Ok(())
     }
+}
+
+/// Where a lambda capture's value comes from in the enclosing scope.
+enum Capture {
+    /// A local or parameter slot.
+    Local(usize),
+    /// A `match`-arm binding: the `$match` slot, the payload path to re-extract, and its type.
+    Binding(usize, Vec<PathSeg>, CTy),
 }

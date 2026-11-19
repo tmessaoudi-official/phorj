@@ -4723,8 +4723,8 @@ function main(): void {
 /// so `Option.Some(v) => v * 2` failed `` `v` is not numeric `` on `phg run` alone; the checker's
 /// substituted payload type is now handed to the compiler. Shapes: int, float, string, a user generic
 /// enum, nested, `Result`, a class payload, a guard using the binding, a call argument, and the binding as the whole
-/// arm (`match … + 1`). A lambda capturing a match binding fails on the VM for ANY payload (queue
-/// entry LAMBDA-CAPTURE-MATCH-BINDING), so it is not pinned here.
+/// arm (`match … + 1`). A lambda capturing a match binding is pinned by
+/// `a_lambda_captures_a_match_arm_binding` (LAMBDA-CAPTURE-MATCH-BINDING).
 #[test]
 fn generic_payload_binding_is_an_arithmetic_operand() {
     agree_out_php(
@@ -4822,6 +4822,69 @@ function main(): void {
 "##,
         "with kid 9 true\nhook kid:z! 2 kid:z!kidP1\niface P4/P4\nsolo 18 4\n",
         "GENERIC-PAYLOAD-OPERAND class payload binding",
+    );
+}
+
+/// LAMBDA-CAPTURE-MATCH-BINDING (P0): a lambda inside a `match` arm that names the arm's binding
+/// failed on `phg run` with `undefined variable` for any payload type, because a capture was looked
+/// up with `resolve_local` only and a binding is not a local (it is re-extracted from the `$match`
+/// slot along its payload path). Shapes: an int capture; a binding beside a local, two same-typed
+/// bindings and a nested lambda, each weighted by position so a capture slot swap changes the
+/// output; a nested pattern (`Some(v)` inside a payload) and a struct pattern (a field path); a
+/// block body; a closure that escapes its arm; a guard; `this` plus a binding in a method; two
+/// capturing lambdas in one arm. A binding never shares its name with an enclosing local
+/// (`E-SHADOW-LOCAL`) or a top-level function, and a lambda cannot read a bare field
+/// (`E-BARE-FIELD`), so those orders need no case.
+#[test]
+fn a_lambda_captures_a_match_arm_binding() {
+    agree_out_php(
+        r##"import Core.Output;
+import Core.List;
+import Core.Option;
+import Core.String;
+enum Shape { Sq(int n), Dot }
+enum Two { Ab(int a, int b) }
+enum Pair { Two(Option<int> a, string tag) }
+class Pt {
+  constructor(public int x) {}
+  public function scaled(Shape s): int {
+    return match (s) { Shape.Sq(n) => List.sum(List.map([1, 2], function(int i) => i * n + this.x)), Shape.Dot() => 0 };
+  }
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+  Shape s = new Shape.Sq(5);
+  int a = match (s) { Shape.Sq(n) => List.sum(List.map([1, 2], function(int i) => i + n)), Shape.Dot() => 0 };
+  Output.printLine("lam {a}");
+  int base = 7;
+  int b = match (s) { Shape.Sq(n) => List.sum(List.map([1], function(int i) => n * 1000 + base * 10 + i)), Shape.Dot() => 0 };
+  Output.printLine("mix {b}");
+  Two t = new Two.Ab(3, 4);
+  int ab = match (t) { Two.Ab(a2, b2) => List.sum(List.map([1], function(int i) => a2 * 100 + b2 * 10 + i)) };
+  Output.printLine("two {ab}");
+  Pair p = new Pair.Two(new Option.Some(7), "t");
+  int c = match (p) { Pair.Two(Option.Some(v), tag) => List.sum(List.map([1, 2], function(int i) => i * v * 10 + tag.length())), default => 0 };
+  Output.printLine("nest {c}");
+  int d = match (s) { Shape.Sq(n) => List.sum(List.map([1, 2], function(int i) => List.sum(List.map([10], function(int j) => j * 100 + i * 10 + n)))), Shape.Dot() => 0 };
+  Output.printLine("inner {d}");
+  int e = match (s) { Shape.Sq(n) => List.sum(List.map([3], function(int i): int { int u = i * n; return u + 1; })), Shape.Dot() => 0 };
+  Output.printLine("block {e}");
+  var f = match (s) { Shape.Sq(n) => function(int i): int => i * n, Shape.Dot() => function(int i): int => 0 };
+  int fv = f(4);
+  Output.printLine("later {fv}");
+  int g = match (s) { Shape.Sq(n) when List.sum(List.map([1], function(int i) => i + n)) > 5 => n, Shape.Sq(n) => 0 - n, Shape.Dot() => 0 };
+  Output.printLine("guard {g}");
+  int h = new Pt(1).scaled(s);
+  Output.printLine("this {h}");
+  int two = match (s) { Shape.Sq(n) => List.sum(List.map([1], function(int i) => i + n)) * 100 + List.sum(List.map([2], function(int i) => i * n)), Shape.Dot() => 0 };
+  Output.printLine("pair {two}");
+  Pt pt = new Pt(6);
+  int st = match (pt) { Pt { x } => List.sum(List.map([1, 2], function(int i) => i * x)), default => 0 };
+  Output.printLine("struct {st}");
+}
+"##,
+        "lam 13\nmix 5071\ntwo 341\nnest 212\ninner 2040\nblock 16\nlater 20\nguard 5\nthis 17\npair 610\nstruct 18\n",
+        "LAMBDA-CAPTURE-MATCH-BINDING lambda captures an arm binding",
     );
 }
 
