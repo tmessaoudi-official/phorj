@@ -24,7 +24,8 @@ early, php dies with SIGPIPE, and under `pipefail` a valid oracle is rejected ~1
 measured, DEC-456), and capability-checks even an inherited `PHORJ_PHP`, so a stale export from a
 long-lived shell is announced and ignored rather than trusted. **CI does NOT source it** — the
 workflows set only `PHORJ_REQUIRE_PHP=1` and rely on the test-side `PHORJ_PHP`-or-`php` fallback
-present in 12 test files, with `setup-php` supplying an 8.5+bcmath build; that is correct today but
+present in 12 test files, with `setup-php` supplying a bcmath build: 8.5 in `gate` (the floor) and 8.6 in
+`gate-php86`, both gating, plus 8.7-dev in the non-gating `oracle-nightly` (developer ruling 2026-11-19). That
 is a SECOND resolution path, so a change here is not automatically a change there. The two paths also
 resolve DIFFERENT PCRE2 builds — PHP 8.5's bundled 10.44 here, ubuntu-24.04's system 10.42 on CI (inferred from CI's behaviour; `php:8.3-cli` in Docker reproduces it) — so a
 `preg_*` behaviour PCRE2 changed between them passes locally and reds CI (DEC-522: `{,n}`); a pin on
@@ -32,3 +33,9 @@ such a behaviour must hold on both, or the construct is refused on every leg. No
 a patch version — `scripts/validate-infra.sh` enforces that over every tracked shell script and
 workflow (a variable-built path is a resolver, not a pin, and is deliberately not flagged), and
 `scripts/test-validate-infra.sh` (run by pre-push) keeps the check itself from going dark.
+
+**A PHP-side expectation must hold on every gating PHP, not only the floor.** The transpiled PHP is version-stable
+when it passes its arguments explicitly (`trimAscii` emits `trim($s, " \t\n\r\0\x0B")`), but `tests/lift_roundtrip.rs`
+runs the ORIGINAL PHP source on whichever PHP the job installs, so a PHP default that changes between 8.5 and 8.6 reds
+`gate-php86` alone. First case: 8.6 added `\f` to `trim()`'s default set (DEC-588, PENDING). Compare
+`/stack/tools/phpbrew/php/php-8.5.*` against `php-8.6.*` before adding a fixture that leans on a PHP default.
