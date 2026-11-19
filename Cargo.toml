@@ -217,7 +217,7 @@ regex = { version = "1", optional = true }
 # the linear engine deliberately omits. It delegates the regular subset to `regex` and runs the rest on a
 # backtracking VM with a STEP BUDGET (`backtrack_limit`) that raises a typed fault instead of hanging,
 # so ReDoS stays opt-in and bounded. `Regex.compile` is untouched (linear, ReDoS-immune by construction).
-fancy-regex = { version = "0.19", optional = true }
+fancy-regex = { version = "0.20.2", optional = true }
 
 # THIRD external dependency (developer-authorized, 2026-06-29). Powers `phg serve` graceful shutdown
 # (SIGINT/SIGTERM). std has NO signal API, and the only std-native alternative is a hand-rolled

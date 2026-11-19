@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `Regex.compileBacktracking` no longer crashes or disagrees with PHP on three patterns (fancy-regex 0.19.2 → 0.20.2, 2026-11-19)
+
+Found by probing the 0.20.1 changelog's fixes on the 0.19.2 release binary before the bump. `^(?:(\1|a)b){2}$` (a
+back-reference inside the group it names) PANICKED both native legs (`slice index starts at 2 but ends at 1`, exit
+101), a breach of the no-crash contract; PHP prints `true`. `^(a(?i)b)c$` on `aBC` (an inline flag leaking out of its
+group) and `^(?=x|(x))\1x$` on `xx` (backtracking into a positive lookahead) printed `true` natively and `false` on PHP.
+All three now agree with PHP on the VM, `--no-jit` and the tree-walker. Regression:
+`backtracking_behaviours_changed_by_fancy_regex_0_20_agree_with_php` (red on 0.19.2 for the stated reason, green on
+0.20.2), plus three more 0.20.1 fixes that already agreed. No source change was needed (the API this repo uses did not
+move). Still open, found probing: a pattern with two groups of the same name (`(?<a>x)|(?<a>y)`) is accepted natively
+and refused by PHP, on 0.19.2 as on 0.20.2 (defect queue REGEX-DUP-GROUP-NAME).
+
 ### Fixed — a binding of an erased generic payload is an arithmetic operand on the VM (defect GENERIC-PAYLOAD-OPERAND, P0, 2026-11-19)
 
 `match (o) { Option.Some(v) => v * 2, Option.None() => 0 }` with `o` an `Option<int>` failed to compile on `phg run`

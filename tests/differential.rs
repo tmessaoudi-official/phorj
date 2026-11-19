@@ -7105,6 +7105,32 @@ fn backtracking_behaviours_changed_by_the_fancy_regex_upgrade_agree_with_php() {
     }
 }
 
+/// The fancy-regex 0.19.2 → 0.20.2 upgrade (2026-11-19) fixed behaviours where the native legs
+/// disagreed with PHP or crashed (each listed in fancy-regex's 0.20.1 changelog, each checked on the
+/// 0.19.2 release binary first): an inline flag leaked out of its group (`flags`: native `true`, PHP
+/// `false`); a positive lookahead was backtracked into (`look`: same split); a back-reference inside
+/// the group it names PANICKED both native legs (`selfref`: `slice index starts at 2 but ends at 1`,
+/// exit 101, a no-crash breach). The other rows already agreed and pin the remaining 0.20.1 fixes.
+#[test]
+fn backtracking_behaviours_changed_by_fancy_regex_0_20_agree_with_php() {
+    for (pat, subject, expected) in [
+        (r"^(a(?i)b)c$", "aBC", "false"),
+        (r"^(?=x|(x))\1x$", "xx", "false"),
+        (r"^(?:(\1|a)b){2}$", "abab", "true"),
+        (r"^(a)?b(?(1)c)$", "b", "true"),
+        (r"^(?:a|(?=b)){2,}b$", "ab", "true"),
+        (r"(?<=ab|c)d", "abd", "true"),
+    ] {
+        agree_out_php(
+            &regex_prog(&format!(
+                "var re = Regex.compileBacktracking(r\"{pat}\");\n    Output.printLine(\"{{Regex.matches(re, \\\"{subject}\\\")}}\");"
+            )),
+            &format!("{expected}\n"),
+            &format!("fancy-regex 0.20 pin `{pat}` on `{subject}`"),
+        );
+    }
+}
+
 /// Round-4 correctness R4 / safety F3 — the disclosed PHP-leg limitation: a catastrophic pattern that
 /// stays inside the REGULAR subset runs in linear time on both native constructors (fancy-regex
 /// delegates it; no budget is involved) but PCRE backtracks and trips its limit. The PHP helper names
