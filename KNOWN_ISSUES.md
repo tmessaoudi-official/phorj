@@ -834,10 +834,18 @@ Two more notes on the same row:
   lowered method is written at the top of `Tenure.phg`, while the function it names lives in
   `TenureFunctions.phg`. The note names the function, so it can be found.
 
-## DEP-ADVISORIES — two RustSec advisories remain after the 2026-09-29 dependency refresh, none with a reachable fix
+## DEP-ADVISORIES — three RustSec advisories remain after the 2026-11-19 dependency refresh, none with a reachable fix
 
-`cargo audit` (cargo-audit 0.22.2, advisory DB fetched 2026-09-29, run on `Cargo.lock` at `655282f1`) reports
-one vulnerability and one warning [Verified: `cargo audit --json` → `RUSTSEC-2023-0071`, `RUSTSEC-2025-0052`].
+`cargo audit` (cargo-audit 0.23.0, advisory DB fetched 2026-11-19, run on `Cargo.lock` after the 2026-11-19 refresh,
+312 crates) reports one vulnerability and two warnings [Verified: `RUSTSEC-2023-0071`, `RUSTSEC-2025-0052`,
+`RUSTSEC-2026-0441`; an OSV batch query over the 310 registry crates returns the same three].
+
+**Cleared 2026-11-19** (`docs/plans/2026-11-19-dependency-refresh.plan.md`): an OSV query over the pre-refresh lock
+listed 11 crates; the refresh cleared eight, none of which had been recorded here. `rustls` 0.23.45 (RUSTSEC-2026-0346
+to -0349, floor now 0.23.46), `rustls-webpki` (RUSTSEC-2026-0382), `webpki-roots` (RUSTSEC-2026-0381, floor 1.0.10),
+`lettre` 0.11.23 (RUSTSEC-2026-0560 to -0565, floor 0.11.24), `tokio` (RUSTSEC-2026-0386), `ctutils`
+(RUSTSEC-2026-0385, in the default build), `rustix` (RUSTSEC-2026-0486) by the compatible lock refresh; the bundled
+SQLite of `libsqlite3-sys` 0.38.2 (RUSTSEC-2026-0459, default `database` feature) by rusqlite 0.40 → 0.43.
 The 2026-09-13 upgrade cleared two yanked-crate warnings (`chacha20` 0.10.1 → 0.10.2 under `postgres`; `mysql`
 28.0.0 → 28.0.2), and the 2026-09-29 refresh cleared the `lru` and `rustls` advisories (below). What is left, each
 gated behind a NON-default feature:
@@ -861,6 +869,9 @@ gated behind a NON-default feature:
   `lettre` dependency that phorj does not enable; it is never compiled
   (`cargo tree --workspace --all-features --target all -i async-std` finds no path). Nothing to do
   unless a `lettre` feature that needs it is switched on.
+- **RUSTSEC-2026-0441 — `pin-utils` 0.1.1, unmaintained** (new in the advisory DB since 2026-09-29). Listed in
+  `Cargo.lock` only as a dependency of that same uncompiled `async-std` (`cargo tree --workspace --all-features
+  --target all -i pin-utils` prints nothing). Same disposition as `async-std`.
 
 Re-run `cargo audit` after any `cargo update`; it is not in CI (developer ruling 2026-09-13).
 
