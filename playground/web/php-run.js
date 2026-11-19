@@ -1,7 +1,7 @@
 // Run a transpiled Phorj program on a php-wasm instance.
 //
 // Why this is not just `php.run(code)`: php-wasm's `run()` hands `?>` + code to `pib_run`
-// (php-wasm 0.1.0, `PhpBase._run`), so a script that opens with `<?php\ndeclare(strict_types=1);`
+// (php-wasm 0.1.0, `PhpBase._run`; fixed upstream in 0.2.0, this module kept until its removal lands on its own), so a script that opens with `<?php\ndeclare(strict_types=1);`
 // reaches PHP with a close tag ahead of the `declare`, and PHP refuses it:
 //   Fatal error: strict_types declaration must be the very first statement in the script
 // Every program `phg transpile` emits opens that way (DEC-401), so every example failed.

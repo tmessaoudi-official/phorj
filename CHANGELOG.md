@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — editor and playground dependencies (2026-11-19)
+
+- VS Code: `vscode-languageclient` ^10.1.2 → ^11.0.0. Same CommonJS `./node` export and engine (`vscode ^1.91.0`); the
+  four calls the extension makes (`new LanguageClient(id, name, server, client)`, `TransportKind.stdio`, `start`,
+  `stop`) are declared unchanged in 11.0.0. Not run inside VS Code here. The `minimatch` advisory remains: 11.0.0 still
+  requires `minimatch ^10.2.6`.
+- Playground: php-wasm 0.1.0 → 0.2.0 (same PHP 8.4.1, 32-bit ints, bcmath). 0.2.0 fixes the upstream `run()` bug that
+  `web/php-run.js` works around; the workaround still passes and stays until its removal lands on its own, and the
+  test's canary now asserts the fix. `node playground/tests/php-run.test.mjs`: all checks pass on 0.2.0.
+- Playground: CodeMirror bundle rebuilt (same `codemirror` 6.0.2; `view` 6.43.15, `language` 6.13.1, `lint` 6.9.8,
+  `@lezer/lr` 1.4.12, …). Served locally before and after: the editor mounts and takes input.
+- CI: `wasm-pack` v0.15.1 and `cargo-nextest` 0.9.152 pins (recorded in the lock-refresh commit).
+
 ### Changed — cranelift 0.136.6 → 0.137.3 (native JIT, 2026-11-19)
 
 No source change. The one cranelift fact the JIT's `unsafe` island relies on still holds: `JITModule` has no `Drop`

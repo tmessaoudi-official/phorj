@@ -1,11 +1,11 @@
 // Regression test for the playground's PHP leg: transpiled Phorj opens with
 // `<?php\ndeclare(strict_types=1);` (DEC-401), which php-wasm's own `run()` rejects because it
 // prefixes `?>` ("strict_types declaration must be the very first statement"). Executes the REAL
-// php-wasm (0.1.0, the version main.js pins) against the REAL `phg transpile` output.
+// php-wasm (0.2.0, the version main.js pins) against the REAL `phg transpile` output.
 //
-// Run:  PHG=target/release/phg PHP_WASM_DIR=<dir holding node_modules/php-wasm@0.1.0> \
+// Run:  PHG=target/release/phg PHP_WASM_DIR=<dir holding node_modules/php-wasm@0.2.0> \
 //         node playground/tests/php-run.test.mjs
-// Without PHP_WASM_DIR it installs php-wasm@0.1.0 into a temp dir (needs network).
+// Without PHP_WASM_DIR it installs php-wasm@0.2.0 into a temp dir (needs network).
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,7 +22,7 @@ let wasmDir = process.env.PHP_WASM_DIR;
 if (!wasmDir) {
   wasmDir = mkdtempSync(join(tmpdir(), "php-wasm-"));
   execFileSync("npm", ["init", "-y"], { cwd: wasmDir, stdio: "ignore" });
-  execFileSync("npm", ["i", "--ignore-scripts", "php-wasm@0.1.0"], { cwd: wasmDir, stdio: ["ignore", "ignore", "inherit"] });
+  execFileSync("npm", ["i", "--ignore-scripts", "php-wasm@0.2.0"], { cwd: wasmDir, stdio: ["ignore", "ignore", "inherit"] });
 }
 const req = createRequire(join(wasmDir, "noop.js"));
 const { PhpNode } = await import(pathToFileURL(req.resolve("php-wasm/PhpNode.mjs")).href);
@@ -63,10 +63,11 @@ if (phg) check("the hand-written SHAPE equals the real transpiler output", hello
 else console.log("note: no phg binary — using the hand-written SHAPE (set PHG to also check the real transpiler)");
 check("program opens with the strict_types declaration", /^<\?php\s*\ndeclare\(strict_types=1\);/.test(hello), JSON.stringify(hello.slice(0, 60)));
 
-// 1. The bug, reproduced: php-wasm's own run() rejects it. If this stops failing, php-wasm fixed it
-//    upstream and php-run.js can be deleted — the test says so instead of passing silently.
+// 1. The upstream bug: php-wasm 0.1.0's own run() rejected it (the `?>` prefix). 0.2.0 fixed it
+//    (2026-11-19: `php.run` prints the program's output), so php-run.js is now redundant; it stays
+//    until its removal lands as its own change. If this starts failing, the bug came back.
 const viaRun = await exec((p, c) => p.run(c), hello);
-check("php.run(code) still hits the strict_types fatal (the bug this module works around)", viaRun.includes("strict_types declaration must be the very first statement"), JSON.stringify(viaRun));
+check("php.run(code) runs the transpiled program (fixed upstream in php-wasm 0.2.0)", viaRun === "hello\n", JSON.stringify(viaRun));
 
 // 2. The fix.
 const viaFix = await exec(runOnPhpWasm, hello);
