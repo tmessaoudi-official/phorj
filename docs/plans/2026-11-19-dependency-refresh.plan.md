@@ -90,6 +90,7 @@ Prose to update on bumps: UNIFIED-SPEC dependency rows (rusqlite, fancy-regex), 
 ### Needs research
 ### Fragile
 ### Known issues
+- cranelift 0.136.6 → 0.137.3 perf is OWED (core 7 was 62% idle, load 18, at 22:17 on 2026-11-19). The before/after release binaries are kept in `var/perf-owed/cranelift-0.136-vs-0.137/` (gitignored) for `fibrec`, `intadd`, `floatloop`, `floatmul`, `floatarith`, interleaved and pinned to core 7, on a quiet box.
 - CI on `bb3f65d2`: everything green (8.5 gate, 8.7-dev canary, zig 0.17.1 cross-build, release with all four platforms, playground deploy) except the new gating `gate-php86`: one failure, `tests/lift_roundtrip.rs` `trim_default_set`, because PHP 8.6 strips a form feed in `trim()` by default (DEC-588 PENDING, queue TRIM-DEFAULT-SET-PHP86). Left red on purpose: changing which set `trimAscii` strips, or whether the job gates, is the developer's call.
 - Local oracle php-8.5.13 NOT built: the version comes from `/stack/.env` (`GLOBAL_STACK_PHP8_5_VERSION=8.5.12`, its `@todo env-update` line) and the `/stack` phpbrew container, which is shared infrastructure outside this repo; the developer bumps it there. No phorj edit is needed afterwards (`scripts/toolchain.env` globs `php-8.5.*` newest-first).
 - `playground/web/php-run.js` is redundant since php-wasm 0.2.0 fixed `run()` upstream; its removal is a separate change (needs the deployed playground's PHP pane checked).
