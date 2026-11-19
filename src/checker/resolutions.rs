@@ -60,8 +60,9 @@ impl Checker {
                 None => {
                     binds.insert(span.start, entry);
                 }
-                // Never observed (0 in the 3774-test workspace run, 2026-11-19); a duplicate key
-                // needs a defined answer, and two disagreeing types must not pick one: unknown.
+                // Never observed end to end (0 in the 3774-test `--no-capture` workspace run, 2026-11-19);
+                // a duplicate key needs a defined answer, and two disagreeing types must not pick one:
+                // unknown. Pinned by `pattern_bind_tests` below.
                 Some(old) if *old != entry => old.1 = Ty::Error,
                 Some(_) => {}
             }
@@ -129,5 +130,50 @@ pub fn check_resolutions_mode(program: &Program, test_mode: bool) -> Resolutions
         ))
     } else {
         Err(c.errors)
+    }
+}
+
+#[cfg(test)]
+mod pattern_bind_tests {
+    //! The recording rule of [`Checker::declare_pattern_bind`]. No end-to-end program checks one
+    //! binding twice (0 re-records in the 2026-11-19 workspace run), so the rule is pinned here.
+    use super::*;
+
+    fn record(binds: &[(&str, Ty, usize)]) -> HashMap<usize, (String, Ty)> {
+        let mut c = Checker::new();
+        c.push_scope();
+        for (name, ty, len) in binds {
+            let span = Span {
+                start: 5,
+                len: *len,
+                line: 1,
+                col: 1,
+            };
+            c.declare_pattern_bind(name, ty, span);
+        }
+        c.reified_operands.pattern_binds
+    }
+
+    #[test]
+    fn a_recheck_with_the_same_type_keeps_it() {
+        let got = record(&[("v", Ty::Int, 1), ("v", Ty::Int, 1)]);
+        assert_eq!(got.get(&5), Some(&("v".to_string(), Ty::Int)));
+    }
+
+    #[test]
+    fn a_recheck_with_another_type_records_unknown() {
+        let got = record(&[("v", Ty::Int, 1), ("v", Ty::String, 1)]);
+        assert_eq!(got.get(&5), Some(&("v".to_string(), Ty::Error)));
+    }
+
+    #[test]
+    fn a_type_parameter_records_unknown() {
+        let got = record(&[("v", Ty::Param("T".to_string()), 1)]);
+        assert_eq!(got.get(&5), Some(&("v".to_string(), Ty::Error)));
+    }
+
+    #[test]
+    fn a_zero_length_span_records_nothing() {
+        assert!(record(&[("v", Ty::Int, 0)]).is_empty());
     }
 }

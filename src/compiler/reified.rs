@@ -47,3 +47,32 @@ impl ReifiedCty {
         (n == name).then(|| ty.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Ty;
+
+    fn table(name: &str, ty: Ty) -> ReifiedCty {
+        let mut r = crate::checker::Reified::default();
+        r.pattern_binds.insert(7, (name.to_string(), ty));
+        ReifiedCty::from_checker(&r)
+    }
+
+    #[test]
+    fn a_binding_type_is_returned_only_for_its_own_name() {
+        let t = table("v", Ty::Int);
+        assert!(t.binding(7, "v") == Some(CTy::Int));
+        assert!(t.binding(7, "w").is_none());
+    }
+
+    #[test]
+    fn a_binding_type_is_returned_only_at_its_own_span() {
+        assert!(table("v", Ty::Int).binding(8, "v").is_none());
+    }
+
+    #[test]
+    fn an_unknown_binding_type_is_dropped() {
+        assert!(table("v", Ty::Error).binding(7, "v").is_none());
+    }
+}
