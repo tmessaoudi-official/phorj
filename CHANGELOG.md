@@ -17,7 +17,9 @@ and call arguments; a class or interface payload binding now types as its class 
 type (`with`, hooks, interface dispatch: pinned on four legs). Regressions: `generic_payload_binding_is_an_arithmetic_operand`,
 `generic_payload_class_binding_keeps_its_runtime_class`; `examples/guide/generic-enums.phg` drops its typed-local workaround
 (`doubled 15`). Found on the way, queued: a lambda inside a `match` arm cannot capture the arm's binding on the VM, for
-any payload type (LAMBDA-CAPTURE-MATCH-BINDING).
+any payload type (LAMBDA-CAPTURE-MATCH-BINDING), and `?`-unwrapped values are still not operands on the VM
+(TRY-UNWRAP-OPERAND). Perf OWED: no before/after was measured; a program that already ran may now get typed ops for a
+generic payload binding, with identical output.
 
 ### Fixed — an `if` expression of two classes keeps the class it picked on the VM (defect IF-CLASS-ARM-TYPE, P0, 2026-11-19)
 

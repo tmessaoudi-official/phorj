@@ -12,6 +12,7 @@
 
 ## Decisions Log
 - [2026-11-19 15:12] ASSUMED (review): plan gate (autonomous, away window): checker records each match binding's substituted type in a dedicated span+name map inside the reified value; the compiler uses it only where its own type is Other. No ruling needed: the VM is brought to the oracle (Invariant 2). Alternatives: merge into reified_operands (collides: the ufcs synthesized binding reuses a Call span); materialize a type into Pattern::Binding (touches every Pattern constructor).
+- [2026-11-19 17:05] ASSUMED (review): close-out: keep the plan file and write the ledger, as the developer ruled for the INIT-CHAIN plan ('Keep + ledger'); 6C closed at round 2 (advisor: round-1 items closed, phg build verified).
 
 ## Formal Plan
 
@@ -39,7 +40,7 @@
 | 1 | Failing three-leg differential test | S | done | red on the VM only (`` `v` is not numeric ``), tree-walker prints the expected 9 lines; the lambda shape moved out (fails for any payload, queued LAMBDA-CAPTURE-MATCH-BINDING) | tests/differential.rs |
 | 2 | Checker records binding types | S | done | `Reified { operands, pattern_binds }`; `declare_pattern_bind` at the one `check_pattern` binding site; grandfathered files kept flat | src/checker/resolutions.rs src/checker/matches.rs src/checker/mod.rs src/checker/plumbing.rs src/checker/expr/core.rs src/cli/pipeline.rs src/serve/handlers.rs |
 | 3 | Compiler consumes them | S | done | `ReifiedCty` (new `src/compiler/reified.rs`) replaces the bare map on every compile path; `collect_bindings` uses it where its own type is unknown; both new tests green | src/compiler/reified.rs src/compiler/match_bindings.rs src/compiler/mod.rs src/compiler/program.rs src/compiler/emit.rs src/compiler/ctors.rs |
-| 4 | Double-record, class-payload and VM-path checks | S | done | instrumented workspace run: 3774 passed, 0 double records; class/interface payload probe identical on VM, `--no-jit`, tree-walker, PHP (pinned as a test); `run`, `serve`, `benchmark`, `disassemble`, playground thread the table, `phg test` is tree-walker only, plain `compile` only in test helpers | - |
+| 4 | Double-record, class-payload and VM-path checks | S | done | instrumented workspace run: 3774 passed, 0 double records; class/interface payload probe identical on VM, `--no-jit`, tree-walker, PHP (pinned as a test); `run`, `serve`, `benchmark`, `disassemble`, playground thread the table (all ten `compile_with` callers pass the checker's table), `phg build` binary of `guide/generic-enums.phg` prints `doubled 15` (6C r2), `phg test` is tree-walker only, plain `compile` only in test helpers | - |
 | 5 | Sabotage, example, SSOT, gate | S | done | full all-features gate green (nextest 3774/3774, clippy x2 0, fmt, size-gate 54/0, release); no record: red (`v` is not numeric); no fallback: red; no name check and the disagreement rule had no end-to-end trigger (0 re-records, counted on stderr of a `--no-capture` workspace run), so 6C round 1 added unit tests (`checker::resolutions::pattern_bind_tests`, `compiler::reified::tests`): the name-check, disagreement, type-parameter and zero-length mutants each redden exactly their own test, restored byte-exact; example `doubled 15` on three legs | examples/guide/generic-enums.phg examples/README.md docs/plans/SLICE-STATE.md CHANGELOG.md KNOWN_ISSUES.md |
 <!-- /progress-block -->
 ### Blocked
