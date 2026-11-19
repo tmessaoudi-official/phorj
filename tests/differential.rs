@@ -4662,7 +4662,8 @@ function main(): void {
 /// being `Par` (`pk`), a field of such a value staying an operand (`field`), a throwing branch deferring to
 /// the other (`thr`), a numeric `if` staying specialized (`num`), two `if`s in one expression (`two`), and
 /// the true condition (`kid`), an erased generic call as the other branch (`gen`), and a class arm beside an erased `Option` payload
-/// binding, which types as `Other` (`om` in a `match`, `oi` in an `if`): a class beside an unknown gives `Other`.
+/// binding, which types as `Other` (`om` in a `match`, `oi` in an `if`): a class beside an unknown gives `Other`. `amb`: a field of such an `Other` value stays an operand while an
+/// unrelated class declares a `float x` and a same-named method of another type.
 #[test]
 fn if_expression_of_two_classes_types_as_other() {
     agree_out_php(
@@ -4671,6 +4672,7 @@ import Core.Option;
 class OneError implements Error { constructor(public string message) {} }
 open class Par { constructor(public int x) {} public open function who(): string { return "par"; } }
 class Kid extends Par { constructor(public int x) {} public function who(): string { return "kid"; } }
+class Pt { constructor(public float x) {} public function n(): float { return this.x * 0.5; } public function who(): int { return 0; } }
 function flag(int n): bool { return n > 0; }
 function id<T>(T v): T { return v; }
 function pick(int n): Par throws OneError {
@@ -4693,6 +4695,8 @@ function main(): void {
   var oi = if (c) { new Kid(1) } else { match (op) { Option.Some(v) => v, Option.None() => new Par(0) } };
   var oiw = oi with { x = 5 };
   Output.printLine("oi {oiw.who()} {oiw.x}");
+  int amb = y.x * 3 + om.x + 1;
+  Output.printLine("amb {amb} {new Pt(3.0).x + 0.5} {new Pt(2.0).n() + 1.0}");
   var pk = if (flag(1)) { new Par(3) } else { new Kid(4) };
   var pw = pk with { x = 8 };
   Output.printLine("pk {pw.who()} {pw.x}");
@@ -4709,7 +4713,7 @@ function main(): void {
   Output.printLine("two {two}");
 }
 "##,
-        "with par 9 false par\ngen par 6\nom par 4\noi par 5\npk par 8\nkid kid 5\nfield 3\nthr kid 7\nnum 3\ntwo 12\n",
+        "with par 9 false par\ngen par 6\nom par 4\noi par 5\namb 9 3.5 2\npk par 8\nkid kid 5\nfield 3\nthr kid 7\nnum 3\ntwo 12\n",
         "IF-CLASS-ARM-TYPE if expression of two classes",
     );
 }
