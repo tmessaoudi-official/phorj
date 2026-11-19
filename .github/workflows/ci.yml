@@ -159,11 +159,40 @@ jobs:
       - name: "cargo test — JIT lib tests (no PHP)"
         run: "cargo test -p phorj --features jit --lib jit::"
 
+  gate-php86:
+    # The same test run on PHP 8.6 (GA 2026-11-19), GATING: the transpile floor stays 8.5 (the `gate`
+    # job), and 8.6 must pass too, so an 8.6 incompatibility in transpiled output blocks the push
+    # (developer ruling 2026-11-19, docs/plans/2026-11-19-dependency-refresh.plan.md). A separate job
+    # rather than a matrix on `gate`, so the `gate` check keeps its name.
+    name: gate on PHP 8.6 (test + PHP oracle)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+      - name: Install PHP 8.6
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.6'
+          extensions: bcmath
+      - name: Install llvm-objcopy (llvm-tools)
+        run: |
+          rustup component add llvm-tools
+          OBJ="$(find "$(rustc --print sysroot)" -name 'llvm-objcopy' | head -n1)"
+          test -n "$OBJ" || { echo "llvm-objcopy not found in sysroot"; exit 1; }
+          echo "PHORJ_OBJCOPY=$OBJ" >> "$GITHUB_ENV"
+      - name: cargo test (PHP oracle enforced, 8.6)
+        env:
+          PHORJ_REQUIRE_PHP: '1'
+        run: cargo test --workspace --no-fail-fast
+
   oracle-nightly:
-    # Non-gating canary: run the PHP oracle against the in-development 8.6 so bleeding-edge breakage
-    # surfaces early. continue-on-error keeps a flaky/unavailable dev build from failing CI — the 8.5
-    # `gate` job above is the reproducible source of truth.
-    name: oracle on 8.6-dev (non-gating)
+    # Non-gating canary: run the PHP oracle against the in-development 8.7 (php-src master) so
+    # bleeding-edge breakage surfaces early. continue-on-error keeps a flaky/unavailable dev build from
+    # failing CI — the 8.5 `gate` and 8.6 `gate-php86` jobs are the reproducible source of truth.
+    name: oracle on 8.7-dev (non-gating)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -172,12 +201,12 @@ jobs:
         run: rustup show
       - name: Cache cargo registry + target
         uses: Swatinem/rust-cache@v2
-      - name: Install PHP 8.6 (dev)
+      - name: Install PHP 8.7 (dev)
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.6'
+          php-version: '8.7'
           extensions: bcmath
-      - name: cargo test --test differential (PHP oracle, 8.6-dev)
+      - name: cargo test --test differential (PHP oracle, 8.7-dev)
         env:
           PHORJ_REQUIRE_PHP: '1'
         run: cargo test --test differential
@@ -216,8 +245,10 @@ jobs:
       # `zig` on PATH is required.
       - name: Install Zig
         run: |
-          ZIG_VERSION=0.16.0
+          ZIG_VERSION=0.17.1
+          ZIG_SHA256=3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a
           curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz
+          echo "${ZIG_SHA256}  /tmp/zig.tar.xz" | sha256sum -c -
           mkdir -p "$HOME/zig"
           tar -xf /tmp/zig.tar.xz -C "$HOME/zig" --strip-components=1
           echo "$HOME/zig" >> "$GITHUB_PATH"

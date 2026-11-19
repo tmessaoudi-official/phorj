@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — CI: PHP 8.6 gates, 8.7-dev canary, zig 0.17.1 (2026-11-19)
+
+- New gating job `gate-php86`: the full `cargo test --workspace` with the PHP oracle on PHP 8.6 (GA 2026-11-19). The
+  transpile floor stays 8.5 (`gate`); both must pass (developer ruling 2026-11-19).
+- The non-gating `oracle-nightly` canary moves from 8.6 (now GA) to 8.7-dev.
+- zig 0.16.0 → 0.17.1, sha256-checked, in `ci.yml` and `stub-registry.yml`; `mlugg/setup-zig@v2` (deprecated node20
+  runtime) replaced by the same direct install `ci.yml` uses.
+
 ### Changed — editor and playground dependencies (2026-11-19)
 
 - VS Code: `vscode-languageclient` ^10.1.2 → ^11.0.0. Same CommonJS `./node` export and engine (`vscode ^1.91.0`); the
