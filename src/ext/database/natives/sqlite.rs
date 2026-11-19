@@ -177,11 +177,7 @@ fn collect_rows(rows: &mut rusqlite::Rows, cols: &[String]) -> Result<Vec<Value>
 
 /// The selection-ordered column names of a prepared statement.
 fn col_names(prepared: &rusqlite::Statement) -> Vec<String> {
-    prepared
-        .column_names()
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect()
+    prepared.column_names().map(|s| s.to_string()).collect()
 }
 
 /// Prepare `sql`, bind `binds`, and execute a write on `conn`, returning the affected-row count.

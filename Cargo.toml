@@ -179,7 +179,7 @@ lettre = { version = "0.11.24", default-features = false, features = ["smtp-tran
 # there is no system-libsqlite3 build dependency. rusqlite's `unsafe` is the SQLite C-FFI boundary,
 # internal to the crate (like argon2/corosensei/cranelift) — phorj's own crate stays unsafe-free.
 # Native-only: no SQLite on wasm32. Feature-gated (`database`), spine-quarantined (Tier-3 fixture-tested).
-rusqlite = { version = "0.40", optional = true, features = ["bundled"] }
+rusqlite = { version = "0.43", optional = true, features = ["bundled"] }
 
 # EIGHTH domain, second driver (Postgres, DEC-208 slice I). The SYNC `postgres` crate (sfackler) speaks
 # the native Postgres wire protocol in pure Rust — NO libpq / system dependency, and with TLS left off

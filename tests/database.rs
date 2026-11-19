@@ -23,6 +23,43 @@ fn db_example_runs_on_both_backends() {
     assert_eq!(cmd_run(&src).expect("basic.phg runs on the VM"), tree);
 }
 
+/// rusqlite 0.43 (2026-11-19) refuses empty, blank and comment-only SQL with its own message. On 0.40
+/// the same statements already failed, as a catchable `DatabaseError` reading "bad parameter or other API
+/// misuse" (probed on the release binary before the bump); the failure is unchanged, the message is now
+/// the reason. Pinned so a future bump that lets such SQL run silently, or panics on it, is caught.
+#[test]
+fn db_empty_or_comment_only_sql_is_a_catchable_database_error() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Database.Connection;
+import Core.Database.DatabaseError;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+function tryExec(Connection db, string sql): void {
+    try {
+        int n = db.prepare(sql).exec();
+        Output.printLine("ran {n}");
+    } catch (DatabaseError e) {
+        Output.printLine(e.message);
+    }
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    try {
+        Connection db = new Connection("sqlite::memory:");
+        tryExec(db, "");
+        tryExec(db, "   ");
+        tryExec(db, "-- nothing");
+        tryExec(db, "/* nothing */");
+        tryExec(db, "CREATE TABLE t(x INTEGER)");
+    } catch (DatabaseError e) {
+        Output.printLine("open {e.message}");
+    }
+}"#;
+    let msg = "Core.Database: SQL is empty or comment only\n";
+    both(src, &format!("{msg}{msg}{msg}{msg}ran 0\n"));
+}
+
 // ── DEC-208 S2: typed-generic hydration (`queryInto` / `queryOneInto`) ───────────────────────────
 
 /// Assert that a program produces `expected` on BOTH backends (interpreter reference + VM), byte-

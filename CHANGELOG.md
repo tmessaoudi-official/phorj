@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Security — rusqlite 0.40.2 → 0.43.0 (bundled SQLite; RUSTSEC-2026-0459; 2026-11-19)
+
+`Core.Database` (default `database` feature) bundled a SQLite covered by RUSTSEC-2026-0459; only rusqlite 0.41+ ships
+the fixed `libsqlite3-sys`. 0.41–0.43 also fix use-after-free paths in APIs this repo does not call (sessions,
+`column_metadata`, vtab filters). One user-visible change: empty, blank and comment-only SQL now fails with the
+`DatabaseError` message `Core.Database: SQL is empty or comment only`. It already failed on 0.40, as a catchable
+`DatabaseError` reading `bad parameter or other API misuse`, so no program that ran stops running. Pinned on both
+backends by `db_empty_or_comment_only_sql_is_a_catchable_database_error`. `Statement::column_names` now yields an
+iterator (one-line adaptation in `src/ext/database/natives/sqlite.rs`). Native-only module: no PHP leg.
+
 ### Fixed — `Regex.compileBacktracking` no longer crashes or disagrees with PHP on three patterns (fancy-regex 0.19.2 → 0.20.2, 2026-11-19)
 
 Found by probing the 0.20.1 changelog's fixes on the 0.19.2 release binary before the bump. `^(?:(\1|a)b){2}$` (a
