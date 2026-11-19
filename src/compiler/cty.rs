@@ -397,9 +397,8 @@ impl Compiler<'_> {
             // A range materializes to `List<int>`, so its compile-type is `List(Int)` — carrying the
             // element type lets `(0..n)[i] + 1` (or a range bound to a `var`, then indexed) specialize.
             Expr::Range { .. } => Ok(CTy::List(Box::new(CTy::Int))),
-            // Both `if` branches share a type (checker-guaranteed); infer it from the then-branch so
-            // `var x = if (c) { 1 } else { 2 }` specializes arithmetic on `x` (like `Match`).
-            // A throwing then-branch (DEC-532) defers to the else-branch.
+            // Both `if` branches vote (`match_bindings::join_arm_ctys`, like `Match`), so `var x = if (c)
+            // { 1 } else { 2 }` specializes on `x`, two classes give `Other`; a throwing branch defers.
             // DEC-535: when the condition narrows a local, each arm is typed under ITS narrowing, and
             // the arms must AGREE — the checker types the expression as the wider arm, so a
             // disagreement is `Other`, never one arm's guess.
@@ -412,10 +411,14 @@ impl Compiler<'_> {
                 if self.prim_narrowings(cond, true).is_empty()
                     && self.prim_narrowings(cond, false).is_empty()
                 {
-                    return match **then_expr {
-                        Expr::Throw { .. } => self.ctype(else_expr),
-                        _ => self.ctype(then_expr),
-                    };
+                    // IF-CLASS-ARM-TYPE: both branches vote, as `match` arms do (R9-K1).
+                    let branches: [&Expr; 2] = [then_expr, else_expr];
+                    return match_bindings::join_arm_ctys(
+                        branches
+                            .iter()
+                            .filter(|b| !matches!(**b, Expr::Throw { .. }))
+                            .map(|b| self.ctype(b)),
+                    );
                 }
                 let e = self.ctype_narrowed(else_expr, cond, false);
                 if let Expr::Throw { .. } = **then_expr {

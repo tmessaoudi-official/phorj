@@ -4654,6 +4654,66 @@ function main(): void {
     );
 }
 
+/// IF-CLASS-ARM-TYPE (defect queue, P0): an `if` expression whose branches are of two classes types as
+/// `Other` on the VM, never as the then-branch's class. Before the fix `ctype` took the then-branch alone,
+/// so `if (c) { new Kid(1) } else { new Par(2) }` typed as the exact class `Kid` and `y with { x = 9 }` built
+/// a `Kid` from a `Par` on `phg run` only (`with kid 9` where the tree-walker and PHP print `with par 9`).
+/// The R9-K1 `match` twin is `match_binding_is_an_arithmetic_operand`. Pinned alongside: the then-branch
+/// being `Par` (`pk`), a field of such a value staying an operand (`field`), a throwing branch deferring to
+/// the other (`thr`), a numeric `if` staying specialized (`num`), two `if`s in one expression (`two`), and
+/// the true condition (`kid`), an erased generic call as the other branch (`gen`), and a class arm beside an erased `Option` payload
+/// binding, which types as `Other` (`om` in a `match`, `oi` in an `if`): a class beside an unknown gives `Other`.
+#[test]
+fn if_expression_of_two_classes_types_as_other() {
+    agree_out_php(
+        r##"import Core.Output;
+import Core.Option;
+class OneError implements Error { constructor(public string message) {} }
+open class Par { constructor(public int x) {} public open function who(): string { return "par"; } }
+class Kid extends Par { constructor(public int x) {} public function who(): string { return "kid"; } }
+function flag(int n): bool { return n > 0; }
+function id<T>(T v): T { return v; }
+function pick(int n): Par throws OneError {
+  var p = if (flag(n)) { throw new OneError("neg") } else { new Kid(n) };
+  return p with { x = 7 };
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+  bool c = flag(0);
+  var y = if (c) { new Kid(1) } else { new Par(2) };
+  var w = y with { x = 9 };
+  Output.printLine("with {w.who()} {w.x} {w instanceof Kid} {y.who()}");
+  var g = if (c) { new Kid(1) } else { id(new Par(2)) };
+  var gw = g with { x = 6 };
+  Output.printLine("gen {gw.who()} {gw.x}");
+  Option<Par> op = new Option.Some(new Par(2));
+  var om = match (op) { Option.None() => new Kid(0), Option.Some(v) => v };
+  var omw = om with { x = 4 };
+  Output.printLine("om {omw.who()} {omw.x}");
+  var oi = if (c) { new Kid(1) } else { match (op) { Option.Some(v) => v, Option.None() => new Par(0) } };
+  var oiw = oi with { x = 5 };
+  Output.printLine("oi {oiw.who()} {oiw.x}");
+  var pk = if (flag(1)) { new Par(3) } else { new Kid(4) };
+  var pw = pk with { x = 8 };
+  Output.printLine("pk {pw.who()} {pw.x}");
+  var yk = if (flag(1)) { new Kid(1) } else { new Par(2) };
+  var wk = yk with { x = 5 };
+  Output.printLine("kid {wk.who()} {wk.x}");
+  int field = y.x + 1;
+  Output.printLine("field {field}");
+  try { Output.printLine("thr {pick(0).who()} {pick(0).x}"); } catch (OneError e) { Output.printLine("no"); }
+  var n = if (c) { 1 } else { 2 };
+  int num = n + 1;
+  Output.printLine("num {num}");
+  int two = if (c) { new Kid(1) } else { new Par(2) }.x + if (flag(1)) { new Kid(10) } else { new Par(20) }.x;
+  Output.printLine("two {two}");
+}
+"##,
+        "with par 9 false par\ngen par 6\nom par 4\noi par 5\npk par 8\nkid kid 5\nfield 3\nthr kid 7\nnum 3\ntwo 12\n",
+        "IF-CLASS-ARM-TYPE if expression of two classes",
+    );
+}
+
 #[test]
 fn s8_trait_method_reuse_is_byte_identical() {
     // M-RT S8 T1: a class composes a trait via `use`; the trait's method is flattened in and dispatches

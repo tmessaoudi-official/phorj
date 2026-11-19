@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — an `if` expression of two classes keeps the class it picked on the VM (defect IF-CLASS-ARM-TYPE, P0, 2026-11-19)
+
+`var y = if (c) { new Kid(1) } else { new Par(2) }; var w = y with { x = 9 };` built a `Kid` from a `Par` on `phg run`
+when `c` was false (`with kid 9`), while the tree-walker and PHP printed `with par 9`: the compiler typed an `if`
+expression as its then-branch alone, and an exact class makes `with` construct that class. Both branches now vote
+through the join `match` already used (R9-K1), and the join itself was tightened: a class arm beside an arm of unknown
+compile type (an erased `Option` payload binding) gives an unknown type too, closing the same divergence in a `match`
+(`match (op) { Option.None() => new Kid(0), Option.Some(v) => v }` with `op` holding a `Par`). Regression:
+`if_expression_of_two_classes_types_as_other`; example line in `examples/guide/runtime-class-dispatch.phg`.
+
 ### Fixed — every class's field initializers run on construction (defect INIT-CHAIN, P0, DEC-575/585/586, 2026-11-18)
 
 Constructing a subclass now runs every ancestor's field initializers, base-first, each class's traits then its own,

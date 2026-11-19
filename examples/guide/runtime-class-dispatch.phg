@@ -61,6 +61,11 @@ function main(): void {
     Animal c = new Animal("Tom");
     Output.printLine(c.introduce());
     // I am Tom
+    // An `if` choosing between two classes is the class it picks at run time, `with` included.
+    var pick = if (c.name == "Rex") { new Dog("x") } else { new Animal("Kit") };
+    var copy = pick with { name = "Kit2" };
+    Output.printLine("{copy.kind()} {copy.name}");
+    // animal Kit2
     Pet p = new Cat();
     p.nick = "Tom";
     Pet q = new Pet();

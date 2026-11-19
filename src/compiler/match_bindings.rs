@@ -34,22 +34,11 @@ impl Compiler<'_> {
         arms: &[MatchArm],
     ) -> Result<CTy, String> {
         let scrut = self.ctype(scrutinee).unwrap_or(CTy::Other); // as `compile_match` types it
-        let mut first: Option<Result<CTy, String>> = None;
-        let mut seen: Vec<CTy> = Vec::new();
-        for arm in arms
-            .iter()
-            .filter(|a| !matches!(a.body, Expr::Throw { .. }))
-        {
-            let t = self.ctype_arm(arm, &scrut);
-            if let Ok(ty) = &t {
-                if seen.iter().any(|s| !cty_compatible(s, ty)) {
-                    return Ok(CTy::Other);
-                }
-                seen.push(ty.clone());
-            }
-            first.get_or_insert(t);
-        }
-        first.unwrap_or(Ok(CTy::Other))
+        join_arm_ctys(
+            arms.iter()
+                .filter(|a| !matches!(a.body, Expr::Throw { .. }))
+                .map(|arm| self.ctype_arm(arm, &scrut)),
+        )
     }
 
     /// `ctype` of one arm's body with the arm's bindings in the overlay. The bindings are collected
@@ -151,6 +140,39 @@ impl Compiler<'_> {
         }
         Ok(())
     }
+}
+
+/// The `CTy` of a value chosen among alternative arms — a `match`'s non-throwing arms (R9-K1) or an
+/// un-narrowed `if`'s non-throwing branches (IF-CLASS-ARM-TYPE): the first arm's, unless two arms are
+/// incompatible, or a class arm sits beside an unknown one, which give `Other`. The checker unifies
+/// `Kid` and `Par` (or `Kid` and an erased generic call returning `Par`) to the wider class, so taking
+/// one arm's class would compile an exact-class `with` or hook for a value of another class. An unknown
+/// beside a scalar still votes for nothing (`1` beside `f()` keeps `Int`), and a first arm whose
+/// `ctype` errors keeps the error, as before.
+pub(in crate::compiler) fn join_arm_ctys(
+    arms: impl IntoIterator<Item = Result<CTy, String>>,
+) -> Result<CTy, String> {
+    let mut first: Option<Result<CTy, String>> = None;
+    let mut seen: Vec<CTy> = Vec::new();
+    for t in arms {
+        if let Ok(ty) = &t {
+            let class_beside_unknown = |a: &CTy, b: &CTy| {
+                matches!(
+                    (a, b),
+                    (CTy::Class(_), CTy::Other) | (CTy::Other, CTy::Class(_))
+                )
+            };
+            if seen
+                .iter()
+                .any(|s| !cty_compatible(s, ty) || class_beside_unknown(s, ty))
+            {
+                return Ok(CTy::Other);
+            }
+            seen.push(ty.clone());
+        }
+        first.get_or_insert(t);
+    }
+    first.unwrap_or(Ok(CTy::Other))
 }
 
 /// Whether two arm types can describe the same value: equal, or unknown (`Other`) on one side at any
