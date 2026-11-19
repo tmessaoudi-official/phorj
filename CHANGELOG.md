@@ -18,7 +18,9 @@ it: a constructor that forwards with `parent.constructor(…)` initializes its a
 initializers of its own over an inherited constructor got a zero-arg `__construct` that overrode it. The PHP leg now
 emits `protected __phorj_init_<Class>()` per class and a virtual `__phorj_inits()` called from every constructor
 prelude (helper registry: 195). Example: `examples/guide/init-chain.phg`. Open: FORWARD-PRIVATE-INIT
-(KNOWN_ISSUES).
+(KNOWN_ISSUES), and INIT-READ-BEFORE-SET: an initializer below a forwarding constructor that reads an ancestor's
+field still faults on every leg (DEC-587 rules it a check error, build queued). The `__phorj_inits()` helper was
+ratified on 2026-11-19. Perf: OWED (no before/after measured; the box was loaded).
 
 ### Fixed — a subclass inherits its parent's property hooks (defect HOOK-INHERITANCE, P0, DEC-572, 2026-11-17)
 

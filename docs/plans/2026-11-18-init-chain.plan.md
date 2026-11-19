@@ -29,7 +29,10 @@
 - [2026-11-18 11:25] AGREED: DEC-585 (developer, AskUserQuestion): prelude unless forwarded. A constructor with no `parent.constructor(…)` statement, or an inherited constructor plan, runs the whole chain's initializers base-first in its prelude; a forwarding statement keeps running the forwarded ancestors' initializers at the call, as today. Rejected: literal prelude (faults the `d = this.x * 2` program); Java-strict (new E-code).
 - [2026-11-18 11:25] AGREED: DEC-586 (developer, AskUserQuestion): a diamond's shared base runs its initializers once per arm, like the constructor plan. Rejected: once in linearized order.
 - [2026-11-18 11:28] AGREED: plan gate: the developer approved all 6 steps as written (AskUserQuestion, 'Go, build all 6 steps'); 3C was self-graded with disclosure (advisor rate-limited)
-- [2026-11-18 12:34] ASSUMED (review): PHP leg uses a virtual protected __phorj_inits() per class of an initializing hierarchy (calling each chain class's __phorj_init_<C>), called from every constructor prelude, instead of the plan's literal per-prelude __phorj_init_<C> call list: an inherited parent constructor must run the SUBCLASS's chain in the native order (promote, inits, body), which a static call list in the parent's constructor cannot. New helper classified bucket 2 (195). Alternatives: emit each subclass's __construct from the plan (copies parent bodies into every subclass).
+- [2026-11-18 12:34] AGREED (ratified ASSUMED, developer 2026-11-19, AskUserQuestion): PHP leg uses a virtual protected __phorj_inits() per class of an initializing hierarchy (calling each chain class's __phorj_init_<C>), called from every constructor prelude, instead of the plan's literal per-prelude __phorj_init_<C> call list: an inherited parent constructor must run the SUBCLASS's chain in the native order (promote, inits, body), which a static call list in the parent's constructor cannot. New helper classified bucket 2 (195). Alternatives: emit each subclass's __construct from the plan (copies parent bodies into every subclass).
+- [2026-11-19 13:07] AGREED: (ratified ASSUMED, developer 2026-11-19, AskUserQuestion, Invariant 16): the PHP leg's virtual protected __phorj_inits() dispatcher per class of an initializing hierarchy, called from every constructor prelude, ratified as built. PHP cost of the extra calls per construction is unmeasured (OWED, row 6). Rejected: per-class __construct emitted from the plan (copies parent bodies); leaving it ASSUMED.
+- [2026-11-19 13:07] AGREED: DEC-587 RULED (developer 2026-11-19, AskUserQuestion, Invariant 15): an instance initializer that reads a field not yet set at its point in the chain is rejected at check time with a new E-code (c1: grandchild under a forwarding constructor; c1d: own forwarding constructor, DEC-585 (b) order; s1: non-forwarding own constructor over a promoted parent field). s1b and DEC-585 (c) keep running. Rejected: Java order below a forward (s1 still faults, reverses DEC-585 (b)); keep the fault; leave PENDING. Build queued as INIT-READ-BEFORE-SET.
+- [2026-11-19 13:07] AGREED: INIT-READ-BEFORE-SET graded P0 (developer 2026-11-19, AskUserQuestion; rubric: the default engine faults on a program that checks clean); ruled by DEC-587 the same day, so it blocks (rule 1). Plan gate for the 6C close: go, all 6 steps.
 
 ## Formal Plan
 
@@ -55,7 +58,7 @@ forwarding inliner runs `inits_for(P)` at a call into direct parent `P`.
 2. **Native fix**: rewrite `field_initializers` as `inits_for` (above), plus a `forwards(ctor_body)` helper that
    walks nested statements for a `parent.constructor` statement (`if`, `try`, blocks). Both native legs pick it up
    unchanged (`compiler/ctors.rs`, `interpreter/engine.rs` read the list).
-3. **Inliner** (`src/checker/inline_parent_ctor.rs`): step ③ runs `inits_for(P)` instead of the owner's own set, so a
+3. **Inliner** (`src/checker/inline_parent_ctor/mod.rs`, a single file until this step split it): step ③ runs `inits_for(P)` instead of the owner's own set, so a
    middle class with initializers and no constructor is no longer skipped; `find_owner` and the snapshot count a
    composed trait constructor as the class's constructor (q2).
 4. **PHP leg** (new code in a new file `src/transpile/init_chain.rs`; `classes.rs` 419 and `classes_synth.rs` 341 are
@@ -96,10 +99,10 @@ full gate green; sabotage red; INIT-CHAIN out of the queue.
 |---|------|------|-------|----------|-------|
 | 1 | Failing differential cases, red for the stated reason | M | done | 10 cases red before the fix (no field x, PHP fatal); 5 kept shapes pinned | tests/differential.rs |
 | 2 | Native: field_initializers becomes inits_for | S | done | init_chain_classes + ClassDecl::ctor_forwards; both native legs green on all cases | src/ast/field_inits.rs |
-| 3 | Inliner: inits_for at the call, trait-ctor owner | S | done | chain_inits + between(); trait ctor counted (q2); split into mod.rs + snap.rs | src/checker/inline_parent_ctor.rs |
+| 3 | Inliner: inits_for at the call, trait-ctor owner | S | done | chain_inits + between(); trait ctor counted (q2); split into mod.rs + snap.rs | src/checker/inline_parent_ctor/mod.rs src/checker/inline_parent_ctor/snap.rs |
 | 4 | PHP: __phorj_init_ per class, plan-built ctor | M | done | init_chain.rs: virtual __phorj_inits; q1 fixed; v1 is queue entry FORWARD-PRIVATE-INIT | src/transpile/** |
 | 5 | Example, spec, KNOWN_ISSUES, CHANGELOG, SSOT | S | done | examples/guide/init-chain.phg three legs identical; lift case inherited_property_defaults | examples/** docs/** KNOWN_ISSUES.md CHANGELOG.md |
-| 6 | Gate, perf before/after, sabotage | S | done | gate 3771/3771 all-features; perf parity under load (best-of-9 397 vs 397 ms, quiet re-measure OWED); two sabotages red | - |
+| 6 | Gate, perf before/after, sabotage | S | done | gate 3771/3771 all-features; two sabotages red; perf OWED: no native before/after (the pre-fix binary is gone; the 397 vs 397 ms best-of-9 ran on a saturated core and settles nothing), PHP cost of the extra calls per construction unmeasured | - |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
@@ -108,4 +111,6 @@ full gate green; sabotage red; INIT-CHAIN out of the queue.
 ### Fragile
 - `src/transpile/classes.rs` (415) and `classes_synth.rs` (338) shrank in step 4 and are still over the soft cap.
 ### Known issues
-- `10a8480e` (the ratification commit) is local and unpushed; it goes out with this work's first push.
+- `10a8480e` (`docs(plans, slice-state): ratify the 13 ASSUMED entries`) is local and unpushed; it goes out with this work's first push.
+- INIT-READ-BEFORE-SET (P0, DEC-587 ruled 2026-11-19, reject at check time): found by 6C round 1; build queued in the defect queue, not in this plan.
+- 6C round 1 (advisor) closed 2026-11-19: `__phorj_inits` ratified; DEC-575/585/586 status cells set BUILT; the `seed_init_chain` comment corrected (an unrelated class sharing a constructor-less trait gains only an empty dispatcher, three legs `4 1 t`); multi-parent forwarding and trait-constructor forwarding are rejected by the checker (probed).

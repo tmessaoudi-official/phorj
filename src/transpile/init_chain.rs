@@ -17,8 +17,10 @@ use super::*;
 pub(super) struct InitChain {
     /// Per class: the classes of its chain that have a set of their own, in call order.
     calls: HashMap<String, Vec<String>>,
-    /// Classes and traits of a hierarchy in which some chain is non-empty (joined through `extends`, and
-    /// through every user of a trait constructor): they define `__phorj_inits` and their preludes call it.
+    /// Classes and traits of a hierarchy in which some chain is non-empty (joined through `extends` and
+    /// through every trait a class uses): they define `__phorj_inits` and their preludes call it. Only a
+    /// trait constructor needs the trait join (its prelude is shared by every user); through a trait with
+    /// no constructor it only adds an inert empty `__phorj_inits()` and its call.
     needing: HashSet<String>,
     /// Classes whose constructor plan is empty (`ast::ctor_plan`): only they synthesize a zero-arg
     /// `__construct`; any other class inherits or declares one that takes arguments.

@@ -156,7 +156,24 @@ constructor as its class's. The PHP leg emits `protected __phorj_init_<Class>()`
 constructor runs the subclass's chain in the native order and a `private` field is set in its own class's scope; the
 zero-arg `__construct` that overrode an inherited constructor is gone. Regressions:
 `init_chain_runs_every_class_initializers`, `init_chain_keeps_the_forwarding_and_diamond_shapes` (the kept shapes
-pinned), example `examples/guide/init-chain.phg`. Left open: FORWARD-PRIVATE-INIT below.
+pinned), example `examples/guide/init-chain.phg`. Left open: FORWARD-PRIVATE-INIT and INIT-READ-BEFORE-SET below.
+"Base-first down the chain" does not mean every ancestor is initialized before every initializer: under a constructor
+that forwards, the classes from it down run their sets in the prelude and the forwarded ancestors only at the call
+(DEC-585), so an initializer below that point cannot read an ancestor's field (INIT-READ-BEFORE-SET, DEC-587).
+
+## INIT-READ-BEFORE-SET — an initializer reads a field not yet set, checks clean, and faults on every leg (found 2026-11-18)
+
+`open class A { int a = 1; constructor(int z) {} } open class B extends A { int b = 2; constructor() {
+parent.constructor(5); } } class C extends B { int c = this.a + 10; }`, then `new C()`: both native legs fault ``no
+field `a` on `C` ``, PHP fatals (`Typed property A::$a must not be accessed before initialization`) [Verified: release
+binary at `87a63ed6`, PHP 8.5 oracle, 2026-11-19]. `C` inherits `B`'s forwarding constructor, so `C`'s set runs in the
+prelude and `A`'s only at `B`'s forward (with printing initializers: `B.init C.init B.pre A.init A.body B.body`). The
+same with `C`'s own forwarding constructor, and with `class B extends A { constructor() {} }` over `open class A { int d
+= this.x * 2; constructor(public int x) {} }` (``no field `x` on `B` ``: `B` never forwards, so the promotion never
+runs). Pre-existing in kind: before `87a63ed6` these shapes faulted on a missing field too [Inferred: the pre-fix rule
+ran only the plan owner's set, per the INIT-CHAIN entry above]. **DEC-587 RULED by the developer, 2026-11-19: reject
+at check time** with a new E-code; the inherited-plan shape (`class B extends A { int e = 1; }`, `new B(3)` prints
+`3 6 1`) and DEC-585 (c) keep running. Queue: P0, build queued.
 
 ## FORWARD-PRIVATE-INIT — a `private` ancestor field initialized through `parent.constructor(…)` fails in PHP (found 2026-11-18)
 

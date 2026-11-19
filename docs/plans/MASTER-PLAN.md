@@ -91,7 +91,7 @@
 | DEC-572 | Property hooks are inherited like methods, as in PHP; a write through a class without the hook calls the inherited setter (KNOWN_ISSUES HOOK-INHERITANCE) | RULED (a) 2026-10-26 — plan row 4e, BUILT 2026-11-17 |
 | DEC-573 | A bare name never reads a field: one matching only a subclass's field is the top-level function on every leg (KNOWN_ISSUES BARE-NAME-SUBCLASS) | RULED (a) 2026-10-26 — plan row 4g |
 | DEC-574 | A multi-parent class's parent static is the parent's one shared slot, as in single inheritance; PHP emits a decomposed parent's statics public (row 4c close panel; KNOWN_ISSUES STATIC-COMPOSITION-PARITY item 2) | RULED (a) 2026-10-27 — built in plan row 4c |
-| DEC-575 | Every class's field initializers run on construction, base-first down the chain, each class's traits then its own (KNOWN_ISSUES INIT-CHAIN) | RULED (a) 2026-10-27 — plan row 4h |
+| DEC-575 | Every class's field initializers run on construction, base-first down the chain, each class's traits then its own (KNOWN_ISSUES INIT-CHAIN) | RULED (a) 2026-10-27 — plan row 4h, BUILT 2026-11-18 |
 | DEC-576 | Computed static initializers run per class in program order: its traits' statics, then its own (row 4c close panel round 2) | RULED (a) 2026-10-27 — built in plan row 4c |
 
 ## 0.11 THE NORTH STAR — mirror rows (DEC-578 … DEC-580)

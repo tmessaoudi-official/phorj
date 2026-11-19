@@ -716,7 +716,10 @@ EVERY class of the chain, base-first, in the constructor prelude (after promotio
 plan row 4h, 2026-11-18). A constructor that forwards with `parent.constructor(…)` initializes its ancestors at the
 call instead (DEC-585), and a diamond's shared base runs once per arm, like its constructor (DEC-586). Single source:
 `ast::field_initializers` / `ast::init_chain_classes`; PHP: `__phorj_init_<Class>()` per class plus the virtual
-`__phorj_inits()` called from every constructor prelude.
+`__phorj_inits()` called from every constructor prelude. So "every class, base-first" holds only above a
+forwarding constructor: an initializer that reads a field not yet set at its point in the chain (below a forward, or
+under a constructor that never forwards over a promoted parent field) faults today on every leg and is ruled a check
+error (DEC-587, RULED 2026-11-19, build queued as INIT-READ-BEFORE-SET).
 
 ### Area B — overloaded static methods — BUILT
 
