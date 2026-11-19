@@ -719,7 +719,8 @@ call instead (DEC-585), and a diamond's shared base runs once per arm, like its 
 `__phorj_inits()` called from every constructor prelude. So "every class, base-first" holds only above a
 forwarding constructor: an initializer that reads a field not yet set at its point in the chain (below a forward, or
 under a constructor that never forwards over a promoted parent field) faults today on every leg and is ruled a check
-error (DEC-587, RULED 2026-11-19, build queued as INIT-READ-BEFORE-SET).
+error (DEC-587, RULED 2026-11-19, build queued as INIT-READ-BEFORE-SET). The check covers `this.f` reads; a read
+through a method (`this.getA()`) stays a runtime fault.
 
 ### Area B — overloaded static methods — BUILT
 

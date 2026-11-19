@@ -175,7 +175,8 @@ read of `d` or `x` (a bare `new B()`) ran before it, because `B`'s own construct
 (DEC-585's prelude now runs `A`'s initializer) [Verified: faults on all three legs at `87a63ed6`, 2026-11-19;
 Inferred for the pre-fix run: `git show 10a8480e:src/ast/field_inits.rs`, a class with its own constructor returned
 only its own set; the pre-fix binary is gone]. A read through a method (`int c = this.getA() + 10;` under the first
-hierarchy) faults the same way, and is outside DEC-587's `this.f` wording: the build states whether it covers it. **DEC-587 RULED by the developer, 2026-11-19: reject
+hierarchy) faults the same way and stays a runtime fault: DEC-587 covers `this.f` reads only (scope ruled by the
+developer, 2026-11-19). **DEC-587 RULED by the developer, 2026-11-19: reject
 at check time** with a new E-code; the inherited-plan shape (`class B extends A { int e = 1; }`, `new B(3)` prints
 `3 6 1`) and DEC-585 (c) keep running. Queue: P0, build queued.
 
