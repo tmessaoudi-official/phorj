@@ -12,6 +12,7 @@
 
 ## Decisions Log
 - [2026-11-19 14:09] ASSUMED (review): plan gate (autonomous, away window): fix IF-CLASS-ARM-TYPE with one join shared by match and if, widened so a class arm beside an unknown (Other) arm gives Other in match too (an R9-K1 residual found by probe: om kid 4 on the VM). No ruling needed: the VM is brought to the oracle (Invariant 2). Alternatives: if-only fix (leaves the match residual); treat Other as incompatible with everything (loses scalar specialization, e.g. 1 beside f()).
+- [2026-11-19 15:03] ASSUMED (review): close-out: keep the plan file and write the ledger, as the developer ruled for the INIT-CHAIN plan the same day ("Keep + ledger"); pushed through `fbbe45a0` (`test: pin a field of a mixed-class value beside an ambiguous member`); next defect GENERIC-PAYLOAD-OPERAND (INIT-READ-BEFORE-SET needs an E-code name, an Invariant-15 question, PENDING in autonomous mode). Alternatives: delete the plan (loses the sabotage evidence).
 
 ## Formal Plan
 
