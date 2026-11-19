@@ -4888,6 +4888,47 @@ function main(): void {
     );
 }
 
+/// LAMBDA-CAPTURE-MATCH-BINDING: a captured class-typed binding keeps its runtime class (field read,
+/// method call, a virtual `who()` resolving to the subclass), and a binding named like a static of
+/// the enclosing class is the binding inside the lambda, as on the tree-walker and PHP (the checker
+/// accepts that name; a const cannot collide, being SCREAMING_SNAKE while a binding is lowercase).
+#[test]
+fn a_lambda_captures_a_class_binding_and_one_named_like_a_static() {
+    agree_out_php(
+        r##"import Core.Output;
+import Core.List;
+import Core.Option;
+enum Shape { Sq(int n), Dot }
+open class Par {
+  constructor(public int x) {}
+  public open function who(): string { return "par"; }
+  public function twice(): int { return this.x * 2; }
+}
+class Kid extends Par {
+  constructor(public int x) {}
+  public function who(): string { return "kid"; }
+}
+class Cfg {
+  public static int scale = 3;
+  public static function viaStatic(Shape s): int {
+    return match (s) { Shape.Sq(scale) => List.sum(List.map([1], function(int i) => i + scale)), Shape.Dot() => 0 };
+  }
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+  Par k = new Kid(4);
+  Option<Par> o = new Option.Some(k);
+  int a = match (o) { Option.Some(b) => List.sum(List.map([1, 2], function(int i) => i * b.x + b.twice())), Option.None() => 0 };
+  string w = match (o) { Option.Some(b) => List.map([1], function(int i): string => b.who()).first() ?? "", Option.None() => "" };
+  Output.printLine("cls {a} {w}");
+  Output.printLine("static {Cfg.viaStatic(new Shape.Sq(5))}");
+}
+"##,
+        "cls 28 kid\nstatic 6\n",
+        "LAMBDA-CAPTURE-MATCH-BINDING class binding and static-named binding",
+    );
+}
+
 #[test]
 fn s8_trait_method_reuse_is_byte_identical() {
     // M-RT S8 T1: a class composes a trait via `use`; the trait's method is flattened in and dispatches
