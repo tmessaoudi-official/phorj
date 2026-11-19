@@ -823,7 +823,18 @@ echo $var;"#,
         ),
     ];
 
+    // Every fixture runs even after one fails, and the failing labels are listed together: a
+    // panic at the first one left every later fixture unexercised on PHP 8.6 while DEC-588 (8.6's
+    // `trim()` default set) kept `gate-php86` red on `trim_default_set`.
+    let mut failed = Vec::new();
     for (label, php_src) in cases {
-        roundtrip(&php, label, php_src);
+        if std::panic::catch_unwind(|| roundtrip(&php, label, php_src)).is_err() {
+            failed.push(label);
+        }
     }
+    assert!(
+        failed.is_empty(),
+        "{} lift round-trip fixture(s) failed (each panic is printed above): {failed:?}",
+        failed.len()
+    );
 }
