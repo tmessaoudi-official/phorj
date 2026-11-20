@@ -8,6 +8,8 @@
 > emits `array_slice($argv ?? [], 1)` at the call site, and a PHP function does not see the global `$argv`.
 
 ## Decisions Log
+- [2026-11-20 14:35] ASSUMED (review): PHP_PROGRAM_ARGS = array_slice($GLOBALS['argv'] ?? [], 1), one constant for the twin and the main(List<string>) bootstrap so they cannot read different variables. Basis: measured on PHP 8.5 and 8.6 (scripts/dk --php 8.6) with an empty stderr; advisor() 3C round 1.
+- [2026-11-20 14:35] ASSUMED (review): 6C round 1 (advisor): shipped binary probed (true on php -n); twin sweep found no other bare global ($__a and $e are bound in their own closures); README Core.Env drift fixed; the gap that hid this (no gate runs Process programs under PHP) recorded as OWED in the SLICE-STATE cursor.
 
 ## Formal Plan
 
@@ -26,7 +28,7 @@
 |---|------|------|-------|----------|-------|
 | 1 | Failing test | S | done | `process_arguments_inside_a_function_match_on_the_php_leg` red: PHP printed `matches Process.arguments() = false` | tests/cli_argv.rs |
 | 2 | One shared expression | S | done | 114 targeted tests green (`cli_argv`, `process`, the transpile unit tests) | src/native/process.rs src/native/mod.rs src/transpile/program_emit.rs |
-| 3 | Sabotage, SSOT, gate | S | done | the constant reverted to `$argv` reddens the test under `PHORJ_REQUIRE_PHP=1` (`lambda 0`, not skipped), restored green; full gate (nextest all-features 3800 passed 2 skipped, clippy x2, fmt, size-gate 54/0, release) | examples/process/README.md CHANGELOG.md docs/plans/SLICE-STATE.md |
+| 3 | Sabotage, SSOT, gate | S | done | the constant reverted to `$argv` reddens the test under `PHORJ_REQUIRE_PHP=1` (`lambda 0`, not skipped), restored green; full gate (nextest all-features 3800 passed 2 skipped, clippy x2, fmt, size-gate 54/0, release); release binary: transpiled `main-args.phg` under `php -n … alpha beta` prints `matches Process.arguments() = true` | examples/process/README.md CHANGELOG.md docs/plans/SLICE-STATE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input

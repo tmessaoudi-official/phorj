@@ -1,15 +1,15 @@
-# Process & environment (`Core.Process` / `Core.Env`)
+# Process & environment (`Core.Process` / `Core.Environment`)
 
 These are Phorj's first **ambient-environment** natives — their result depends on the *process*
 (its command-line arguments and environment variables), not the program text.
 
 ```phorj
 import Core.Process;
-import Core.Env;
+import Core.Environment;
 
 Process.arguments() -> List<string> // program arguments (everything after `--`)
-Env.get(name: string) -> string?    // one environment variable, or null if unset
-Env.all() -> Map<string, string>    // every environment variable, sorted by key
+Environment.get(name: string) -> string? // one environment variable, or null if unset
+Environment.all() -> Map<string, string> // every environment variable, sorted by key
 ```
 
 A program that just needs its arguments can take them as `main`'s single `List<string>` parameter
@@ -50,7 +50,7 @@ VM, and the transpiled PHP must print exactly the same bytes (`tests/differentia
 here — the PHP leg runs in a *separate* `php` process whose `$argv`/`getenv()` need not match the Rust
 process, and the output isn't a fixed golden anyway (it depends on your machine).
 
-So programs that import `Core.Process` / `Core.Env` are **quarantined**: the differential skips them
+So programs that import `Core.Process` / `Core.Environment` are **quarantined**: the differential skips them
 (detected via the `pure: bool` marker on each native), and they are tested instead under a *controlled*
 environment in [`tests/process.rs`](../../tests/process.rs), which sets the args/env it asserts on. The
 the both-backends half still holds (both Rust backends share one process) — only the PHP oracle is opted out.
@@ -62,7 +62,7 @@ the both-backends half still holds (both Rust backends share one process) — on
 - **Standalone binaries.** `phg build`-produced executables read the real process `argv`, so
   `Process.args()` works exactly as in a normal program.
 - **Read-only.** There is no `putenv` — environment mutation is out of scope (matching the read-only
-  stance of reflection). `Env.all()` is sorted by key for a stable result.
+  stance of reflection). `Environment.all()` is sorted by key for a stable result.
 - **Transpiled PHP.** `Process.arguments()` and `main`'s parameter → `array_slice($GLOBALS['argv'] ?? [], 1)` (a
-  PHP function does not see `$argv`); `Env.get` → `getenv` coerced to
-  `null`; `Env.all` → `getenv()` + `ksort`.
+  PHP function does not see `$argv`); `Environment.get` → `getenv` coerced to
+  `null`; `Environment.all` → `getenv()` + `ksort`.

@@ -4031,7 +4031,8 @@ one known-colliding file carries a deliberate padding line + pointer here.
 
 **FIXED 2026-11-20 (with R9-G-1):** `examples/process/README.md` (signature, prose and the walkthrough
 output, which the example prints as `matches Process.arguments() = true`) and the `E-MAIN-SIGNATURE` explain
-text now say `Process.arguments()`. Historical text follows.
+text now say `Process.arguments()`; the same README's `Core.Env` / `Env.get` / `Env.all` now read `Core.Environment`
+(PROCESS-ARGS-PHP-SCOPE follow-up). Historical text follows.
 
 `examples/process/README.md` and the `E-UNKNOWN-IDENT`-adjacent explain text still say
 `Process.args()`, but the shipped native is `Core.Process.arguments()` (the runnable example uses
