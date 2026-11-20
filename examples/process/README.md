@@ -28,7 +28,8 @@ $ echo $?
 
 Arguments are read as UTF-8 text. One that is not (raw bytes such as `$'\xff'`) is refused before the
 program starts, with one line on stderr naming its position and exit code 1, never a crash (R9-G-1); the same
-holds for a binary built with `phg build`.
+holds for a binary built with `phg build`. An environment variable whose name or value is not UTF-8 is left out of
+`Environment.all()`, and `Environment.get` answers `null` for it (R9-G-2).
 
 Run [`args-env.phg`](args-env.phg) and pass arguments after the `--` terminator:
 

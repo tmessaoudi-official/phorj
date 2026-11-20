@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `Environment.all()` leaves out a non-UTF-8 variable instead of panicking (defect R9-G-2, P1, 2026-11-20)
+
+`Environment.all()` panicked on every leg (exit 101) when any environment variable's key or value was not valid
+UTF-8 (`env $'BADVAR=\xff' phg run …`), because it collected `std::env::vars()`. It now reads `vars_os()` and leaves
+such a pair out, so it agrees with `Environment.get`, which already answered `null` for that variable. Whether to read
+such input lossily, or through a bytes API, is DEC-590 (PENDING). Regression
+`a_non_utf8_environment_variable_is_left_out_of_all_on_every_leg` (three legs, a cleared environment, a bad value and a
+bad key); sabotage: the panicking reader, a lossy key or a lossy value fails it. Plan:
+`docs/plans/2026-11-20-nonutf8-env.plan.md`.
+
 ### Fixed — a non-UTF-8 command-line argument is refused, never a panic (defect R9-G-1, P1, 2026-11-20)
 
 Every `phg` verb, and every binary `phg build` produces from this tree, panicked (exit 101) when an argument was not valid UTF-8

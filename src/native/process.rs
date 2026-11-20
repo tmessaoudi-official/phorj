@@ -64,7 +64,12 @@ fn env_get(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn env_all(_args: &[Value], _: &mut String) -> Result<Value, String> {
     // Sorted by key (Q4): OS env iteration order is unspecified, so a stable order makes the result
     // deterministic within the Rust backends (these are quarantined from the PHP oracle anyway).
-    let mut pairs: Vec<(String, String)> = std::env::vars().collect();
+    // A key or value that is not UTF-8 is left out (R9-G-2): `std::env::vars()` panicked on it, and
+    // `get` already answers `null` for such a variable, so `all()` and `get()` agree on every key.
+    // Whether to read it lossily instead is DEC-590 (PENDING).
+    let mut pairs: Vec<(String, String)> = std::env::vars_os()
+        .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
+        .collect();
     pairs.sort_by(|a, b| a.0.cmp(&b.0));
     let map: Vec<(HKey, Value)> = pairs
         .into_iter()
