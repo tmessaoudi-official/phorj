@@ -1,7 +1,8 @@
 //! R9-G-1: a non-UTF-8 command-line argument is refused with one line on stderr and exit 1 — never a
 //! panic (exit 101). `argv[0]` (the name `phg` was invoked by) is only a label and is read lossily.
 //! R9-G-2: a non-UTF-8 environment variable (key or value) is left out of `Environment.all()`, as
-//! `Environment.get` already answers `null` for it, on every leg (DEC-590 PENDING asks whether to read it lossily).
+//! `Environment.get` already answers `null` for it, on the three native legs. The PHP leg passes the raw bytes through
+//! (`getenv`), a disclosed split (KNOWN_ISSUES "NONUTF8-PROCESS-INPUT"); DEC-590 (PENDING) decides it.
 #![cfg(unix)]
 
 use std::ffi::OsStr;
@@ -87,7 +88,7 @@ function main(): void {
 "#;
 
 #[test]
-fn a_non_utf8_environment_variable_is_left_out_of_all_on_every_leg() {
+fn a_non_utf8_environment_variable_is_left_out_of_all_on_the_native_legs() {
     let dir = std::env::temp_dir().join(format!("phorj_env_utf8_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("envprobe.phg");

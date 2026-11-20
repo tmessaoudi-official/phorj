@@ -2,6 +2,15 @@
 
 > Commit hashes cited below from the 2026-10-25..29 cloud branch (`216af26c` = `909a5045`, `3b61324c` = `098d72d9` on `master`, and any other) resolve through `docs/research/2026-10-29-ccr-resign-map.md`.
 
+## NONUTF8-PROCESS-INPUT — the native and PHP legs disagree on a non-UTF-8 argument or environment variable (found 2026-11-20)
+
+The native legs (`run`, `--no-jit`, `--tree-walker`, a built binary) refuse a non-UTF-8 command-line argument before the
+program starts (R9-G-1: one stderr line, exit 1) and leave a non-UTF-8 environment variable out of `Environment.all()`,
+where `Environment.get` answers `null` (R9-G-2). The transpiled PHP passes such input through as raw bytes: `$argv`
+carries the argument and `getenv()` keeps the variable (measured with `scripts/dk php -n`, 2026-11-20). `Process` and
+`Environment` programs are quarantined from the differential (impure), so no gate sees the split. Which behaviour every
+leg should have (keep it out, read it lossily, or a bytes API) is DEC-590, PENDING (Invariant 15).
+
 ## DEV-PRERELEASE-FROM-BRANCH — a pushed branch can move the `dev` tag and its prerelease (found 2026-11-07)
 
 Found by the DEC-577 6C panel (security lens). `release.yml` publish-dev and `stub-registry.yml` primary-and-publish

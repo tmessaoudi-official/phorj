@@ -8,11 +8,13 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed — `Environment.all()` leaves out a non-UTF-8 variable instead of panicking (defect R9-G-2, P1, 2026-11-20)
 
-`Environment.all()` panicked on every leg (exit 101) when any environment variable's key or value was not valid
+`Environment.all()` panicked on the three native legs (exit 101) when any environment variable's key or value was not valid
 UTF-8 (`env $'BADVAR=\xff' phg run …`), because it collected `std::env::vars()`. It now reads `vars_os()` and leaves
 such a pair out, so it agrees with `Environment.get`, which already answered `null` for that variable. Whether to read
-such input lossily, or through a bytes API, is DEC-590 (PENDING). Regression
-`a_non_utf8_environment_variable_is_left_out_of_all_on_every_leg` (three legs, a cleared environment, a bad value and a
+such input lossily, or through a bytes API, is DEC-590 (PENDING). The transpiled PHP still passes the raw bytes
+through (`getenv`, and `$argv` for an argument), so the native and PHP legs disagree on such input: disclosed in
+KNOWN_ISSUES (NONUTF8-PROCESS-INPUT). Regression
+`a_non_utf8_environment_variable_is_left_out_of_all_on_the_native_legs` (`run`, `--no-jit`, `--tree-walker`, a cleared environment, a bad value and a
 bad key); sabotage: the panicking reader, a lossy key or a lossy value fails it. Plan:
 `docs/plans/2026-11-20-nonutf8-env.plan.md`.
 
