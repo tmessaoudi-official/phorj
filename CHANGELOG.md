@@ -14,7 +14,8 @@ the checker's unwrapped `Success` type never reached it. The checker now records
 its own `Reified::propagates` map (a synthesized `?` may share its inner call's span), and `ctype` reads it where its
 own answer is unknown. Regression `try_unwrapped_var_is_an_arithmetic_operand`: int, float and string payloads, two
 `?` in one function, a parameter operand, a class and a list payload, a method and a lambda body, a typed local and
-throws mode; sabotage: without the record, or without the `ctype` key, it fails `` `h` is not numeric ``; the
+throws mode; `try_unwrapped_var_keeps_its_runtime_behaviour` pins the programs that already ran (a subclass payload
+through `with` and hooks, interface, optional, bool, string, float and list payloads, a bare `T`); sabotage: without the record, or without the `ctype` key, it fails `` `h` is not numeric ``; the
 disagreement rule and the `is_empty` guard each redden their unit test. Example line in `examples/guide/result.phg`.
 Plan: `docs/plans/2026-11-20-try-unwrap-operand.plan.md`.
 

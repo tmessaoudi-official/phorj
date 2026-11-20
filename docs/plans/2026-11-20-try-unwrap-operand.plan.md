@@ -12,6 +12,7 @@
 
 ## Decisions Log
 - [2026-11-20 10:56] ASSUMED (review): plan gate (autonomous, away window): the checker records the unwrapped type of a Result-mode `?` let-initializer in a dedicated `Reified::propagates` map keyed by the `?` node's span (its own map, not `operands`, because `desugar_db` synthesizes `?` nodes with a shared `self.sp()` span that may equal an inner call's; a span recorded twice with different types becomes unknown, the `pattern_binds` rule); the compiler's `ctype` fallback reads it only where its own answer is `Other`. Basis: advisor() 3C round 1.
+- [2026-11-20 11:34] ASSUMED (review): 6C round 1 (advisor): pinned the already-running shapes as a second differential test; the getopt collision it surfaced is queued as PHP-BUILTIN-FN-COLLISION (P1 proposed), not fixed in this row (defects-first: its own row).
 
 ## Formal Plan
 
@@ -33,13 +34,17 @@
 | 1 | Failing three-leg differential test | S | done | `try_unwrapped_var_is_an_arithmetic_operand` red on the VM only (`` `h` is not numeric ``); the tree-walker printed the pinned 9 lines | tests/differential.rs |
 | 2 | Checker records the unwrapped type | S | done | `Reified::propagates` + `record_propagate` (span len 0 skipped, disagreement → unknown); one site after the Result-mode arms of `check_var_decl` | src/checker/resolutions.rs src/checker/stmt/var_decl.rs |
 | 3 | Compiler consumes it | S | done | `ReifiedCty::propagate`; `is_empty` covers both tables; `ctype` fallback keys `Expr::Propagate`; targeted run 27/27 green | src/compiler/reified.rs src/compiler/cty.rs |
-| 4 | Sabotage, example, SSOT, gate | S | doing | four mutants, each compiling and red on its own assertion (no record and no `ctype` key: `` `h` is not numeric ``; no disagreement rule and `is_empty` on operands only: their unit tests), restored 31/31; `examples/guide/result.phg` `bumped`: old release binary `` `x` is not numeric ``, fixed build `ok 41` | examples/guide/result.phg examples/README.md KNOWN_ISSUES.md CHANGELOG.md docs/plans/SLICE-STATE.md |
+| 4 | Sabotage, example, SSOT, gate | S | done | four mutants, each compiling and red on its own assertion (no record and no `ctype` key: `` `h` is not numeric ``; no disagreement rule and `is_empty` on operands only: their unit tests), restored 31/31; full all-features gate green (nextest 3789 passed 2 skipped, clippy all-features and no-default, fmt, size-gate 54/0, release); release binary re-probed on 4 legs (repro and `result.phg`) | examples/guide/result.phg examples/README.md KNOWN_ISSUES.md CHANGELOG.md docs/plans/SLICE-STATE.md |
+| 5 | Already-running shapes (6C round 1) | S | done | `try_unwrapped_var_keeps_its_runtime_behaviour`: subclass payload (`with`, hooks, `instanceof`), interface, optional, bool, string, float, list, scalars outside arithmetic, a bare `T` in `pass<T>`; 4 legs agree on the release binary; found PHP-BUILTIN-FN-COLLISION (queued) | tests/differential.rs docs/plans/SLICE-STATE.md |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
 ### Needs research
 ### Fragile
 ### Known issues
+- Found probing, not this defect: PHP-BUILTIN-FN-COLLISION (P1 proposed, queued in SLICE-STATE): a user `function getOpt`
+  transpiles to a PHP fatal `Cannot redeclare`, because `BUILTIN_FUNCTIONS` (`src/php_names.rs`) is a curated 155 of the
+  353 single-word PHP internal functions.
 - Perf OWED (Invariant 11): a program that already ran with a `var x = f()?` used outside arithmetic (interpolation,
   comparison) may now get typed ops instead of generic ones [Inferred: same mechanism as GENERIC-PAYLOAD-OPERAND];
   no before/after measured.

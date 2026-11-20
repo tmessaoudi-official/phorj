@@ -4884,6 +4884,115 @@ function main(): void {
     );
 }
 
+/// TRY-UNWRAP-OPERAND: programs that already ran now type their `var x = f()?` local, so it must behave
+/// exactly as before outside arithmetic — a subclass payload keeps its runtime class through `with`, hooks
+/// and `instanceof`; an interface payload dispatches; an optional, a bool, a string, a float and a list
+/// payload read as before; a bare `T` payload in a generic function stays unknown and still runs.
+#[test]
+fn try_unwrapped_var_keeps_its_runtime_behaviour() {
+    agree_out_php(
+        r##"import Core.Output;
+import Core.Result;
+
+interface Named { function nm(): string; }
+open class Par implements Named {
+  constructor(public mutable int x) {}
+  public open function who(): string { return "par"; }
+  public function nm(): string { return "P{this.x}"; }
+  mutable string tag = "t";
+  string label {
+    get => "par:" + this.tag;
+    set(string v) { this.tag = v; }
+  }
+}
+class Kid extends Par {
+  constructor(public mutable int x) {}
+  public function who(): string { return "kid"; }
+  string label {
+    get => "kid:" + this.tag;
+    set(string v) { this.tag = v + "!"; }
+  }
+}
+function getPar(): Result<Par, string> { Par k = new Kid(1); return new Result.Success(k); }
+function usePar(): Result<string, string> {
+  var p = getPar()?;
+  var w = p with { x = 9 };
+  p.label = "z";
+  return new Result.Success("{p.who()} {w.who()} {w.x} {w instanceof Kid} {p.label} {p.x + 1}");
+}
+function getNamed(): Result<Named, string> { Named k = new Kid(4); return new Result.Success(k); }
+function useNamed(): Result<string, string> {
+  var n = getNamed()?;
+  return new Result.Success(n.nm() + "/" + n.nm());
+}
+function fetchOpt(bool some): Result<int?, string> {
+  int? seven = 7;
+  int? none = null;
+  if (some) { return new Result.Success(seven); }
+  return new Result.Success(none);
+}
+function useOpt(bool some): Result<string, string> {
+  var o = fetchOpt(some)?;
+  int d = o ?? -1;
+  int e = (o ?? 0) + 1;
+  return new Result.Success("{d} {e}");
+}
+function getI(): Result<int, string> { return new Result.Success(3); }
+function twice(int n): int { return n * 2; }
+function useI(): Result<string, string> {
+  var i = getI()?;
+  return new Result.Success("i={i} eq={i == 3} lt={i < 5} call={twice(i)}");
+}
+function getB(bool v): Result<bool, string> { return new Result.Success(v); }
+function useB(bool v): Result<string, string> {
+  var b = getB(v)?;
+  if (b) { return new Result.Success("yes"); }
+  return new Result.Success("no {!b}");
+}
+function getS(): Result<string, string> { return new Result.Success("ab"); }
+function useS(): Result<string, string> {
+  var s = getS()?;
+  return new Result.Success("{s} {s == "ab"} {s + "c"}");
+}
+function getF(): Result<float, string> { return new Result.Success(1.5); }
+function useF(): Result<string, string> {
+  var f = getF()?;
+  return new Result.Success("{f} {f == 1.5} {f > 1.0}");
+}
+function pass<T>(Result<T, string> r): Result<T, string> {
+  var v = r?;
+  return new Result.Success(v);
+}
+function useT(): Result<string, string> {
+  int a = match (pass(getI())) { Result.Success(v) => v + 1, Result.Failure(e) => 0 };
+  return new Result.Success("t {a}");
+}
+function getL(): Result<List<int>, string> { return new Result.Success([1, 2, 3]); }
+function useL(): Result<string, string> {
+  var l = getL()?;
+  return new Result.Success("{l[1]} {l[0] + l[2]}");
+}
+function show(Result<string, string> r): string {
+  return match (r) { Result.Success(v) => v, Result.Failure(e) => "err " + e };
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+  Output.printLine(show(usePar()));
+  Output.printLine(show(useNamed()));
+  Output.printLine(show(useOpt(true)) + " | " + show(useOpt(false)));
+  Output.printLine(show(useI()));
+  Output.printLine(show(useB(true)) + " | " + show(useB(false)));
+  Output.printLine(show(useS()));
+  Output.printLine(show(useF()));
+  Output.printLine(show(useT()));
+  Output.printLine(show(useL()));
+}
+"##,
+        "kid kid 9 true kid:z! 2\nP4/P4\n7 8 | -1 1\ni=3 eq=true lt=true call=6\nyes | no true\nab true abc\n1.5 true true\nt 4\n2 4\n",
+        "TRY-UNWRAP-OPERAND already-running shapes",
+    );
+}
+
 /// GENERIC-PAYLOAD-OPERAND: a class or interface payload binding now types as its declared class (it
 /// was unknown); it must behave exactly as a local of that type — `with` on a `Par`-typed binding
 /// holding a `Kid` keeps `Kid`, the runtime class's hooks run, an interface method dispatches, and an
