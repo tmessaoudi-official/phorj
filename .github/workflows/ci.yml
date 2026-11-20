@@ -5,6 +5,12 @@ name: CI
 # suite — and additionally sets PHORJ_REQUIRE_PHP=1 so the PHP oracle in tests/differential.rs
 # FAILS (never silently skips) if transpiled PHP diverges from the interpreter/VM. The
 # `cross-build` job exercises `phg build --target` parity across the four Phase-2 cross targets.
+#
+# Every job but two runs in the toolchain image docker/Dockerfile defines, the one every local gate and git hook runs
+# in (docs/plans/2026-11-19-dockerize.plan.md): one PHP build, one PCRE2, one Rust, so a local green and a CI green
+# mean the same thing. `.github/actions/phorj-image` builds it from the Actions layer cache; each step is
+# `scripts/dk <command>`. The two exceptions: `unsafe-island` (a grep, no toolchain) and `oracle-nightly` (PHP 8.7-dev
+# has no official image; non-gating).
 
 # `ccr-*`, `claude/**` and `cloud/**` are cloud-session branches (DEC-569, DEC-577): cloud work never
 # lands on master, so CI runs the gate on them on GitHub's runners, independently of the cloud box (whose
@@ -33,58 +39,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
-      # rustup honours rust-toolchain.toml (the pinned channel there + rustfmt + clippy components).
-      # `rustup show` installs that pinned toolchain and its components on first use, so the
-      # CI lints are byte-for-byte the ones a local commit faces — no floating-stable drift.
-      - name: Install pinned Rust toolchain
-        run: rustup show
-
-      - name: Cache cargo registry + target
-        uses: Swatinem/rust-cache@v2
-
-      # The PHP oracle needs a real `php`. 8.5 is the transpile floor — testing against the floor is
-      # the strict gate (testing only on a newer build would let an 8.5-incompatible construct slip
-      # through); `gate-php86` below runs the same tests on 8.6, because a PHP default can change between
-      # minors (8.6 added `\f` to `trim()`'s default set, DEC-588). Transpiled output uses core functions
-      # (intdiv / fmod / range / strpos / explode / echo) plus BCMath for `decimal` (M-NUM). The oracle
-      # runs `php -n` (hermetic), which disables ini-loaded shared extensions, so the harness loads
-      # bcmath explicitly via `-d extension=bcmath` — `extensions: bcmath` here installs that `.so`.
-      - name: Install PHP
-        uses: shivammathur/setup-php@v2
+      # The image carries the toolchain rust-toolchain.toml pins, PHP 8.5 (the transpile floor) with bcmath,
+      # llvm-objcopy (the host `phg build` tests: without it built_binary_keeps_stdout_written_before_a_fault
+      # fails by design, DEC-530) and cargo-nextest. Testing against the floor is the strict gate; `gate-php86`
+      # below runs the same tests on 8.6, because a PHP default can change between minors (DEC-588).
+      - uses: ./.github/actions/phorj-image
         with:
-          php-version: '8.5'
-          extensions: bcmath
-
+          cache-key: gate
       - name: cargo fmt --check
-        run: cargo fmt --check
-
+        run: scripts/dk cargo fmt --check
       - name: cargo clippy --workspace --all-targets -- -D warnings
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      # The host `phg build` tests need llvm-objcopy: without it three tests/build.rs tests and
-      # src/bundle/elf.rs's elf_reader_finds_added_section skip silently, and
-      # built_binary_keeps_stdout_written_before_a_fault fails by design (DEC-530: it must not pass by
-      # skipping). Its absence kept this job red from 2026-09-24 to 2026-09-28. Same step as the
-      # cross-build job below: the toolchain's llvm-tools component ships a version-matched copy, and
-      # PHORJ_OBJCOPY points the build at it.
-      - name: Install llvm-objcopy (llvm-tools)
-        run: |
-          rustup component add llvm-tools
-          OBJ="$(find "$(rustc --print sysroot)" -name 'llvm-objcopy' | head -n1)"
-          test -n "$OBJ" || { echo "llvm-objcopy not found in sysroot"; exit 1; }
-          echo "PHORJ_OBJCOPY=$OBJ" >> "$GITHUB_ENV"
-
-      # PHORJ_REQUIRE_PHP=1 turns a missing or non-working php into a test FAILURE — this is the
-      # enforcement CI adds on top of the local hook (which runs the oracle only when php happens
-      # to be on PATH). This line is what "locks in" M7. --workspace also gates the playground crate.
+        run: scripts/dk cargo clippy --workspace --all-targets -- -D warnings
+      # PHORJ_REQUIRE_PHP=1 turns a missing or non-working php into a test FAILURE: this line is what "locks in" M7.
+      # --workspace also gates the playground crate. --no-fail-fast: cargo test stops at the first failing test
+      # BINARY by default, so one red test in tests/build.rs once hid 43 later binaries (2026-09-24..28).
       - name: cargo test (PHP oracle enforced)
         env:
           PHORJ_REQUIRE_PHP: '1'
-        # --no-fail-fast: cargo test stops at the first failing test BINARY by default, so one red
-        # test in tests/build.rs hid 43 later binaries (differential.rs, the PHP oracle, among them)
-        # on every run from 2026-09-24 to 2026-09-28. The job still fails; every failure is reported.
-        run: cargo test --workspace --no-fail-fast
+        run: scripts/dk cargo test --workspace --no-fail-fast
 
   perf-gate:
     # Lane 2 W1: block a gross VM performance regression. scripts/perf-gate.sh gates on `vm_speedup`
@@ -98,14 +70,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Install pinned Rust toolchain
-        run: rustup show
-      - name: Cache cargo registry + target
-        uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/phorj-image
+        with:
+          cache-key: release
       - name: Build release binary
-        run: cargo build --release --bin phg
+        run: scripts/dk cargo build --release --bin phg
       - name: Run perf gate
-        run: bash scripts/perf-gate.sh
+        run: scripts/dk bash scripts/perf-gate.sh
 
   unsafe-island:
     # Domain #7 (native codegen / JIT) will carry phorj's only first-party `unsafe`, confined to
@@ -134,65 +105,47 @@ jobs:
     # job is kept as an explicit-feature belt-and-braces run (it survives any future change to the
     # default set, so src/jit/ can never silently drop out of CI — the structural false-green
     # pattern this project keeps guarding against). `-p phorj` (not --workspace)
-    # because the playground member has no `jit` feature.
-    #
-    # clippy runs `--all-targets` under the feature, so it COMPILES every target (incl. the integration
-    # tests) — full compile-rot coverage for the feature. The test step is deliberately SCOPED to the
-    # JIT lib tests (`--lib jit::`) and installs NO PHP: the full suite's conformance/differential
-    # integration tests transpile Phorj to PHP and run it under `php`, which needs the 8.5 transpile
-    # floor the `gate` job installs via setup-php. Running them here (no PHP) would pick up the runner's
-    # stale system php and fail on 8.4+ transpiled syntax (e.g. property hooks) — that PHP-oracle
-    # coverage is the `gate` job's job, not this one. The JIT lib tests are self-contained: they
-    # cross-check JIT output against the in-process VM oracle, which the `gate` job validates against
-    # real PHP, so the transitive byte-identity chain holds without PHP here.
+    # because the playground member has no `jit` feature. clippy runs `--all-targets` under the feature, so it
+    # COMPILES every target; the test step is scoped to the JIT lib tests (`--lib jit::`), which cross-check JIT
+    # output against the in-process VM oracle that the `gate` job validates against real PHP.
     name: jit (Cranelift feature build + test)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Install pinned Rust toolchain
-        run: rustup show
-      - name: Cache cargo registry + target
-        uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/phorj-image
+        with:
+          cache-key: jit
       - name: cargo clippy -p phorj --features jit --all-targets -- -D warnings
-        run: cargo clippy -p phorj --features jit --all-targets -- -D warnings
+        run: scripts/dk cargo clippy -p phorj --features jit --all-targets -- -D warnings
       # Quoted: the `jit::` test filter ends in a colon, which an unquoted YAML scalar parses as a
       # mapping key ("mapping values are not allowed here"). Runs ONLY the src/jit/ lib tests.
-      - name: "cargo test — JIT lib tests (no PHP)"
-        run: "cargo test -p phorj --features jit --lib jit::"
+      - name: "cargo test — JIT lib tests"
+        run: "scripts/dk cargo test -p phorj --features jit --lib jit::"
 
   gate-php86:
     # The same test run on PHP 8.6 (GA 2026-11-19), GATING: the transpile floor stays 8.5 (the `gate`
     # job), and 8.6 must pass too, so an 8.6 incompatibility in transpiled output blocks the push
     # (developer ruling 2026-11-19, docs/plans/2026-11-19-dependency-refresh.plan.md). A separate job
-    # rather than a matrix on `gate`, so the `gate` check keeps its name.
+    # rather than a matrix on `gate`, so the `gate` check keeps its name. Same Dockerfile, PHP_MINOR=8.6.
     name: gate on PHP 8.6 (test + PHP oracle)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Install pinned Rust toolchain
-        run: rustup show
-      - name: Cache cargo registry + target
-        uses: Swatinem/rust-cache@v2
-      - name: Install PHP 8.6
-        uses: shivammathur/setup-php@v2
+      - uses: ./.github/actions/phorj-image
         with:
-          php-version: '8.6'
-          extensions: bcmath
-      - name: Install llvm-objcopy (llvm-tools)
-        run: |
-          rustup component add llvm-tools
-          OBJ="$(find "$(rustc --print sysroot)" -name 'llvm-objcopy' | head -n1)"
-          test -n "$OBJ" || { echo "llvm-objcopy not found in sysroot"; exit 1; }
-          echo "PHORJ_OBJCOPY=$OBJ" >> "$GITHUB_ENV"
+          php-minor: '8.6'
+          cache-key: gate86
       - name: cargo test (PHP oracle enforced, 8.6)
         env:
           PHORJ_REQUIRE_PHP: '1'
-        run: cargo test --workspace --no-fail-fast
+        run: scripts/dk --php 8.6 cargo test --workspace --no-fail-fast
 
   oracle-nightly:
     # Non-gating canary: run the PHP oracle against the in-development 8.7 (php-src master) so
     # bleeding-edge breakage surfaces early. continue-on-error keeps a flaky/unavailable dev build from
     # failing CI — the 8.5 `gate` and 8.6 `gate-php86` jobs are the reproducible source of truth.
+    # DECLARED EXCEPTION to the docker rule (docs/plans/2026-11-19-dockerize.plan.md): php-src master has no
+    # official image, so this job alone installs its toolchain on the runner.
     name: oracle on 8.7-dev (non-gating)
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -213,56 +166,15 @@ jobs:
         run: cargo test --test differential
 
   cross-build:
+    # The image carries the four cross targets, llvm-objcopy (embeds the `.phorj` section into the cross-built stub,
+    # src/bundle/cross.rs), zig (the cross linker, sha-checked) and cargo-zigbuild.
     name: cross-build (phg build --target parity)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
-      - name: Install pinned Rust toolchain
-        run: rustup show
-
-      - name: Add cross targets
-        run: >
-          rustup target add
-          x86_64-unknown-linux-musl
-          aarch64-unknown-linux-gnu
-          aarch64-unknown-linux-musl
-          x86_64-pc-windows-gnu
-
-      # llvm-objcopy embeds the `.phorj` section into the cross-built stub (src/bundle/cross.rs).
-      # The toolchain's llvm-tools component ships a version-matched copy; PHORJ_OBJCOPY points the
-      # build at it (the binary is not on PATH under that name otherwise).
-      - name: Install llvm-objcopy (llvm-tools)
-        run: |
-          rustup component add llvm-tools
-          OBJ="$(find "$(rustc --print sysroot)" -name 'llvm-objcopy' | head -n1)"
-          test -n "$OBJ" || { echo "llvm-objcopy not found in sysroot"; exit 1; }
-          echo "PHORJ_OBJCOPY=$OBJ" >> "$GITHUB_ENV"
-
-      # Zig is the cross-linker cargo-zigbuild drives. Installed directly from the official, pinned
-      # STABLE release rather than a setup action: the mirror-based actions default to an *ephemeral*
-      # nightly (0.16.0-dev had rotated off every mirror → 404) and used a stale filename ordering.
-      # A pinned stable release at ziglang.org/download/<ver>/ is permanent + deterministic; only
-      # `zig` on PATH is required.
-      - name: Install Zig
-        run: |
-          ZIG_VERSION=0.17.1
-          ZIG_SHA256=3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a
-          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz
-          echo "${ZIG_SHA256}  /tmp/zig.tar.xz" | sha256sum -c -
-          mkdir -p "$HOME/zig"
-          tar -xf /tmp/zig.tar.xz -C "$HOME/zig" --strip-components=1
-          echo "$HOME/zig" >> "$GITHUB_PATH"
-
-      - name: Verify zig
-        run: zig version
-
-      - name: Install cargo-zigbuild
-        run: cargo install --locked cargo-zigbuild
-
-      - name: Cache cargo registry + target
-        uses: Swatinem/rust-cache@v2
-
+      - uses: ./.github/actions/phorj-image
+        with:
+          cache-key: cross
       # build.rs already exercises x86_64-musl (native exec) and windows-gnu (PE round-trip).
       # This smoke covers the two aarch64 targets it does not run, so a broken aarch64 build still
       # surfaces. --cap-lints=warn mirrors cross.rs so target-specific lints don't trip the deny gate.
@@ -272,12 +184,10 @@ jobs:
         run: |
           for t in aarch64-unknown-linux-gnu aarch64-unknown-linux-musl; do
             echo "::group::zigbuild $t"
-            cargo zigbuild --release --bin phg --target "$t"
+            scripts/dk cargo zigbuild --release --bin phg --target "$t"
             echo "::endgroup::"
           done
-
-      # The real cross-parity tests: now that cargo-zigbuild, the targets, and llvm-objcopy are all
-      # present, tests/build.rs executes (instead of skipping) the musl native-exec and windows PE
-      # round-trip assertions.
+      # The real cross-parity tests: cargo-zigbuild, the targets and llvm-objcopy are all in the image, so
+      # tests/build.rs executes (instead of skipping) the musl native-exec and windows PE round-trip assertions.
       - name: cargo test --test build -- --test-threads=1 (cross parity)
-        run: cargo test --test build -- --test-threads=1
+        run: scripts/dk cargo test --test build -- --test-threads=1

@@ -1,0 +1,42 @@
+name: phorj toolchain image
+description: >
+  Build (from the Actions layer cache) and load the image docker/Dockerfile defines, the same one every local gate
+  runs in (docs/plans/2026-11-19-dockerize.plan.md), and restore the cargo registry and target/ caches it uses.
+  Later steps run `scripts/dk <command>`; DK_NO_BUILD=1 tells dk the image is already built.
+inputs:
+  php-minor:
+    description: PHP minor the image is built on (8.5 = the floor, 8.6 = gate-php86)
+    default: "8.5"
+  cache-key:
+    description: Distinguishes the target/ cache of jobs that build different things
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: docker/setup-buildx-action@v4
+    - name: Build the toolchain image (PHP ${{ inputs.php-minor }})
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: docker/Dockerfile
+        build-args: PHP_MINOR=${{ inputs.php-minor }}
+        tags: phorj-dev:php${{ inputs.php-minor }}
+        load: true
+        cache-from: type=gha,scope=phorj-dev-${{ inputs.php-minor }}
+        cache-to: type=gha,mode=max,scope=phorj-dev-${{ inputs.php-minor }}
+    - name: Restore cargo registry + target
+      uses: actions/cache@v6
+      with:
+        path: |
+          ${{ runner.temp }}/cargo-home
+          target
+        key: phorj-${{ inputs.cache-key }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'docker/Dockerfile') }}
+        restore-keys: phorj-${{ inputs.cache-key }}-
+    - name: Point scripts/dk at the cache and the loaded image
+      shell: bash
+      run: |
+        mkdir -p "$RUNNER_TEMP/cargo-home"
+        {
+          echo "PHORJ_CARGO_CACHE=$RUNNER_TEMP/cargo-home"
+          echo "DK_NO_BUILD=1"
+        } >> "$GITHUB_ENV"

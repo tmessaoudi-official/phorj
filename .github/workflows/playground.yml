@@ -37,41 +37,28 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # rust-toolchain.toml pins the channel and declares the wasm32 target; rustup honours both.
-      - name: Add wasm target
-        run: rustup target add wasm32-unknown-unknown
-
-      # Pinned release asset, checksum-verified. The rustwasm.github.io installer script hardcodes
-      # 0.13.1, and the project moved to github.com/wasm-bindgen/wasm-pack.
-      - name: Install wasm-pack
-        env:
-          WASM_PACK_VERSION: v0.15.1
-          WASM_PACK_SHA256: 410101009739b9d01c7d5affaaad6e9c9a24b4cba6791a4805db8e89b9bf7af2
-        run: |
-          name="wasm-pack-${WASM_PACK_VERSION}-x86_64-unknown-linux-musl"
-          curl -fsSL -o wasm-pack.tar.gz \
-            "https://github.com/wasm-bindgen/wasm-pack/releases/download/${WASM_PACK_VERSION}/${name}.tar.gz"
-          echo "${WASM_PACK_SHA256}  wasm-pack.tar.gz" | sha256sum -c -
-          tar -xzf wasm-pack.tar.gz
-          install -m 0755 "${name}/wasm-pack" "$HOME/.cargo/bin/wasm-pack"
-          wasm-pack --version
+      # The toolchain image (docker/Dockerfile) carries the pinned Rust with its wasm32 target, wasm-pack
+      # (sha-checked), node and python3: the same image every local gate runs in.
+      - uses: ./.github/actions/phorj-image
+        with:
+          cache-key: playground
 
       # MAX_CALL_DEPTH is 4096 (src/limits.rs); the default 1 MiB wasm stack would overflow on deep
       # recursion, so bump the shadow stack. (The native path uses a 256 MiB thread for the same reason.)
       # --cap-lints=warn mirrors the cross-build job in ci.yml: target-specific lints (e.g. dead code
       # behind `#[cfg(unix)]` excluded on wasm32) must not trip the core crate's `warnings = "deny"` gate.
       - name: Build wasm
-        run: wasm-pack build playground --target web --release --out-dir web/pkg
+        run: scripts/dk wasm-pack build playground --target web --release --out-dir web/pkg
         env:
           RUSTFLAGS: "-C link-arg=-zstack-size=33554432 --cap-lints=warn"
 
       # The PHP pane runs the emitted PHP under php-wasm; nothing else executed it, which let the
       # strict_types fatal (DEC-401) ship for weeks. Real php-wasm 0.2.0, no phg binary needed.
       - name: Test the php-wasm run path
-        run: node playground/tests/php-run.test.mjs
+        run: scripts/dk node playground/tests/php-run.test.mjs
 
       - name: Generate examples
-        run: python3 playground/web/gen_examples.py
+        run: scripts/dk python3 playground/web/gen_examples.py
 
       - name: Assemble dist/
         run: |
