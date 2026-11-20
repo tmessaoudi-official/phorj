@@ -292,6 +292,37 @@ fn built_binary_refuses_a_non_utf8_argument() {
     );
 }
 
+/// R9-G-1: a built binary hands the program every argument after its own name (the `skip(1)` of
+/// `program_args_or_exit`), and `main`'s `int` return is the exit status.
+#[test]
+fn built_binary_passes_its_arguments_to_the_program() {
+    if !objcopy_available() {
+        return;
+    }
+    let out_bin = std::env::temp_dir().join(format!("phorj_built_args_{}", std::process::id()));
+    let _ = std::fs::remove_file(&out_bin);
+    let build = Command::new(BIN)
+        .args([
+            "build",
+            "examples/process/main-args.phg",
+            "-o",
+            out_bin.to_str().unwrap(),
+        ])
+        .output()
+        .expect("spawn build");
+    assert!(build.status.success());
+    let out = Command::new(&out_bin)
+        .args(["a", "é"])
+        .output()
+        .expect("run built");
+    let _ = std::fs::remove_file(&out_bin);
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "argc = 2\narg: a\narg: é\nmatches Process.arguments() = true\n"
+    );
+    assert_eq!(out.status.code(), Some(2));
+}
+
 #[test]
 fn build_rejects_ill_typed_program() {
     let bad = std::env::temp_dir().join(format!("phorj_bad_{}.phg", std::process::id()));

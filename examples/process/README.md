@@ -7,13 +7,13 @@ These are Phorj's first **ambient-environment** natives — their result depends
 import Core.Process;
 import Core.Env;
 
-Process.args() -> List<string>      // program arguments (everything after `--`)
+Process.arguments() -> List<string> // program arguments (everything after `--`)
 Env.get(name: string) -> string?    // one environment variable, or null if unset
 Env.all() -> Map<string, string>    // every environment variable, sorted by key
 ```
 
 A program that just needs its arguments can take them as `main`'s single `List<string>` parameter
-instead of calling `Process.args()` — see [`main-args.phg`](main-args.phg), which also returns its
+instead of calling `Process.arguments()` — see [`main-args.phg`](main-args.phg), which also returns its
 argument count as the process **exit code** (Batch-1 B). Both surfaces read the same argv:
 
 ```console
@@ -21,10 +21,14 @@ $ phg run examples/process/main-args.phg -- alpha beta
 argc = 2
 arg: alpha
 arg: beta
-matches Process.args() = true
+matches Process.arguments() = true
 $ echo $?
 2
 ```
+
+Arguments are read as UTF-8 text. One that is not (raw bytes such as `$'\xff'`) is refused before the
+program starts, with one line on stderr naming its position and exit code 1, never a crash (R9-G-1); the same
+holds for a binary built with `phg build`.
 
 Run [`args-env.phg`](args-env.phg) and pass arguments after the `--` terminator:
 

@@ -4018,7 +4018,11 @@ injected module's `Span.start` into a per-module high offset window at injection
 stay original for diagnostics), so prelude and user span keys can never meet. Until then the
 one known-colliding file carries a deliberate padding line + pointer here.
 
-## Doc drift: `Process.args()` vs the live `Process.arguments()` (panel-found backlog, 2026-07-17)
+## ✅ FIXED — Doc drift: `Process.args()` vs the live `Process.arguments()` (panel-found backlog, 2026-07-17)
+
+**FIXED 2026-11-20 (with R9-G-1):** `examples/process/README.md` (signature, prose and the walkthrough
+output, which the example prints as `matches Process.arguments() = true`) and the `E-MAIN-SIGNATURE` explain
+text now say `Process.arguments()`. Historical text follows.
 
 `examples/process/README.md` and the `E-UNKNOWN-IDENT`-adjacent explain text still say
 `Process.args()`, but the shipped native is `Core.Process.arguments()` (the runnable example uses

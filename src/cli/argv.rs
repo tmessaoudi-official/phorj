@@ -36,25 +36,22 @@ pub fn program_args_or_exit() -> Vec<String> {
     args_or_exit().into_iter().skip(1).collect()
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::utf8_argv;
     use std::ffi::OsString;
 
-    #[cfg(unix)]
     fn os(b: &[u8]) -> OsString {
         use std::os::unix::ffi::OsStringExt;
         OsString::from_vec(b.to_vec())
     }
 
-    #[cfg(unix)]
     #[test]
     fn the_first_non_utf8_argument_after_the_program_name_is_reported() {
         let got = utf8_argv([os(b"phg"), os(b"check"), os(b"a\xff"), os(b"\xfe")]);
         assert_eq!(got, Err((2, os(b"a\xff"))));
     }
 
-    #[cfg(unix)]
     #[test]
     fn the_program_name_is_read_lossily_and_text_passes_through() {
         let got = utf8_argv([os(b"ph\xffg"), os("é".as_bytes()), os(b"")]);

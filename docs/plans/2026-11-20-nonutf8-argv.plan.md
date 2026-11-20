@@ -7,12 +7,13 @@
 > path and the CLI dispatcher) call `std::env::args()`, which panics on a non-Unicode argument.
 
 ## Decisions Log
-- [2026-11-20 12:41] ASSUMED (review): a non-UTF-8 argument after `argv[0]` is refused with one stderr line and exit 1 (what `phg check /nonexistent.phg` returns; T-6's no-crash contract), never mapped lossily: a lossy file name names a different file, and a lossy `Process.args()` value would be a new language behaviour (the developer's call, to be asked together with R9-G-2's environment variables). `argv[0]` is only a label and is read lossily. Basis: advisor() 3C round 1.
+- [2026-11-20 12:41] ASSUMED (review): a non-UTF-8 argument after `argv[0]` is refused with one stderr line and exit 1 (what `phg check /nonexistent.phg` returns; T-6's no-crash contract), never mapped lossily: a lossy file name names a different file, and a lossy `Process.arguments()` value would be a new language behaviour (the developer's call, to be asked together with R9-G-2's environment variables). `argv[0]` is only a label and is read lossily. Basis: advisor() 3C round 1.
+- [2026-11-20 13:05] ASSUMED (review): 6C round 1 (advisor): the artifact's skip(1) had no test that could fail; added built_binary_passes_its_arguments_to_the_program (main-args.phg built, run with a and é, stdout and exit 2 pinned; a no-skip(1) mutant reddens it). CHANGELOG narrowed: prebuilt cross stubs from the registry still panic until republished. Closed the KNOWN_ISSUES Process.args() doc drift in the same README and explain text.
 
 ## Formal Plan
 
 1. **Failing tests first**: `tests/cli_argv.rs` (unix; trailing argument, file name, program argument after `--`
-   refused with exit 1, empty stdout, no `panicked`; control: `é` and an emoji reach `Process.args()` with a
+   refused with exit 1, empty stdout, no `panicked`; control: `é` and an emoji reach `Process.arguments()` with a
    non-UTF-8 `argv[0]`); `tests/build.rs` `built_binary_refuses_a_non_utf8_argument`.
 2. **Fix**: `src/cli/argv.rs` (`utf8_argv`, pure and unit-tested; `args_or_exit`, `program_args_or_exit`); both
    `src/main.rs` call sites swap in one line each (the file is at 498 of 500).
@@ -29,9 +30,11 @@
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- Whether `Process.args()` and `Environment.all()` should take a non-UTF-8 value lossily (U+FFFD) instead of
+- Whether `Process.arguments()` and `Environment.all()` should take a non-UTF-8 value lossily (U+FFFD) instead of
   refusing or dropping it: one question for R9-G-1 and R9-G-2, recorded before R9-G-2 starts.
 ### Needs research
 ### Fragile
 - `src/main.rs` is at 498 lines (hard cap 500).
 ### Known issues
+- Prebuilt cross-build stubs (downloaded by a distributed `phg` for `phg build --target`) were published before
+  this fix and still panic on a non-UTF-8 argument until republished (the registry dispatch is the developer's).

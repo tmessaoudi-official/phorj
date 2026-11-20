@@ -89,7 +89,7 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              It returns `void` (exit code 0) or `int` (the process exit code). Examples:\n\
              `function main(): void { … }`, `function main(): int { return 0; }`,\n\
              `function main(List<string> args): int { return args.length; }`. The same argv is also\n\
-             available anywhere via `Core.Process.args()`.\n\n\
+             available anywhere via `Core.Process.arguments()`.\n\n\
              The entry may also be a class `static` method named `main` (Java-style):\n\
              `class App { static function main(): int { return 0; } }` — same signature rules.\n"
         }

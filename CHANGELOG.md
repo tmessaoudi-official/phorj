@@ -8,14 +8,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Fixed — a non-UTF-8 command-line argument is refused, never a panic (defect R9-G-1, P1, 2026-11-20)
 
-Every `phg` verb, and every binary `phg build` produces, panicked (exit 101) when an argument was not valid UTF-8
+Every `phg` verb, and every binary `phg build` produces from this tree, panicked (exit 101) when an argument was not valid UTF-8
 (`phg check $'a\xff.phg'`, or raw bytes after `--`), because both argument reads used `std::env::args()`. They now
 go through `cli::args_or_exit` (`src/cli/argv.rs`): the first such argument is refused with one stderr line naming
 its position and its escaped bytes (`error: argument 1 is not valid UTF-8: "a\xFF.phg" …`) and exit 1, the code a
 missing file gets. It is not mapped lossily: U+FFFD would name a different file or hand the program an argument it
 was not given. `argv[0]` is only a label and is read lossily, so a `phg` reached through a non-UTF-8 path still
 runs. Regressions `tests/cli_argv.rs` and `built_binary_refuses_a_non_utf8_argument`; sabotage: reverting either
-call site, or reading `argv[0]` strictly, fails them. Plan: `docs/plans/2026-11-20-nonutf8-argv.plan.md`.
+call site, dropping the program name from a built binary's arguments, or reading `argv[0]` strictly, fails them.
+A cross build (`phg build --target`) from a distributed `phg` embeds a prebuilt stub downloaded from the release
+registry; stubs published before this fix still panic until they are republished. Also fixed: the docs said
+`Process.args()`, the native is `Process.arguments()` (KNOWN_ISSUES doc-drift entry). Plan:
+`docs/plans/2026-11-20-nonutf8-argv.plan.md`.
 
 ### Security — `phg serve <DIR>` never serves `.phg` source or a dotfile through a symlink (defect R9-A-1, P1, 2026-11-20)
 
