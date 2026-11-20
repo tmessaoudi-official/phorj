@@ -41,10 +41,11 @@
 ### Needs input
 ### Needs research
 ### Fragile
+- `src/compiler/cty.rs` is at 496 lines (hard cap 500, not grandfathered): the next operand-type fix there splits it first.
 ### Known issues
 - Found probing, not this defect: PHP-BUILTIN-FN-COLLISION (P1 proposed, queued in SLICE-STATE): a user `function getOpt`
-  transpiles to a PHP fatal `Cannot redeclare`, because `BUILTIN_FUNCTIONS` (`src/php_names.rs`) is a curated 155 of the
-  353 single-word PHP internal functions.
+  transpiles to a PHP fatal `Cannot redeclare`, because `BUILTIN_FUNCTIONS` (`src/php_names.rs`) lacks 231 of the
+  single-word PHP internal functions the lifter's list carries (`getopt` among them).
 - Perf OWED (Invariant 11): a program that already ran with a `var x = f()?` used outside arithmetic (interpolation,
   comparison) may now get typed ops instead of generic ones [Inferred: same mechanism as GENERIC-PAYLOAD-OPERAND];
   no before/after measured.
