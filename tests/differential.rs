@@ -4770,6 +4770,120 @@ function main(): void {
     );
 }
 
+/// TRY-UNWRAP-OPERAND (P0): a `var` bound to a Result-mode `?` is an arithmetic operand on the VM. The
+/// compiler typed `expr?` as unknown (`cty.rs`), so `var h = half(n)?; int y = h + 1;` failed `` `h` is not
+/// numeric `` on `phg run` alone; the checker's unwrapped `Success` type is now handed over at the `?`'s span.
+/// Shapes: int, float, string, two `?` in one function, a non-call operand (a parameter), a class and a list
+/// payload, a method body, a lambda body, and the forms that already worked (a typed local, throws mode).
+#[test]
+fn try_unwrapped_var_is_an_arithmetic_operand() {
+    agree_out_php(
+        r##"import Core.Output;
+import Core.Result;
+class Pt { constructor(public int x) {} }
+class OddError implements Error { constructor(public string message) {} }
+function half(int n): Result<int, string> {
+  if (n % 2 == 0) { return new Result.Success(n / 2); }
+  return new Result.Failure("odd");
+}
+function calc(int n): Result<int, string> {
+  var h = half(n)?;
+  int y = h + 1;
+  return new Result.Success(y * 2);
+}
+function fl(int n): Result<float, string> {
+  if (n > 0) { return new Result.Success(2.5); }
+  return new Result.Failure("neg");
+}
+function ratio(int n): Result<float, string> {
+  var f = fl(n)?;
+  return new Result.Success(f * 2.0);
+}
+function nm(int n): Result<string, string> {
+  if (n > 0) { return new Result.Success("n{n}"); }
+  return new Result.Failure("zero");
+}
+function label(int n): Result<string, string> {
+  var s = nm(n)?;
+  return new Result.Success(s + "!");
+}
+function both(int n): Result<int, string> {
+  var a = half(n)?;
+  var b = half(n + 2)?;
+  return new Result.Success(a + b * 3);
+}
+function param(Result<int, string> r): Result<int, string> {
+  var v = r?;
+  return new Result.Success(v - 1);
+}
+function pt(int n): Result<Pt, string> { return new Result.Success(new Pt(n)); }
+function usePt(int n): Result<int, string> {
+  var p = pt(n)?;
+  return new Result.Success(p.x + 1);
+}
+function xs(int n): Result<List<int>, string> { return new Result.Success([n, n + 1]); }
+function useXs(int n): Result<int, string> {
+  var l = xs(n)?;
+  return new Result.Success(l[1] * 10);
+}
+class Calc {
+  constructor(public int base) {}
+  public function add(int n): Result<int, string> {
+    var h = half(n)?;
+    return new Result.Success(h + this.base);
+  }
+}
+function typed(int n): Result<int, string> {
+  int t = half(n)?;
+  return new Result.Success(t + 100);
+}
+function check(int n): int throws OddError {
+  if (n % 2 == 1) { throw new OddError("odd"); }
+  return n;
+}
+function thrown(int n): int throws OddError {
+  var v = check(n)?;
+  return v * 2;
+}
+function safe(int n): string {
+  try {
+    int v = thrown(n);
+    return "{v}";
+  } catch (OddError e) {
+    return e.message;
+  }
+}
+function showI(Result<int, string> r): string {
+  return match (r) { Result.Success(v) => "ok {v}", Result.Failure(e) => e };
+}
+function showF(Result<float, string> r): string {
+  return match (r) { Result.Success(v) => "ok {v}", Result.Failure(e) => e };
+}
+function showS(Result<string, string> r): string {
+  return match (r) { Result.Success(v) => "ok {v}", Result.Failure(e) => e };
+}
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+  Output.printLine("int " + showI(calc(104)) + " " + showI(calc(7)));
+  Output.printLine("flt " + showF(ratio(6)) + " str " + showS(label(3)));
+  Output.printLine("two " + showI(both(4)) + " " + showI(both(5)));
+  Output.printLine("par " + showI(param(new Result.Success(8))));
+  Output.printLine("cls " + showI(usePt(4)) + " lst " + showI(useXs(4)));
+  Output.printLine("mth " + showI(new Calc(5).add(6)));
+  var lam = function(int n): Result<int, string> {
+    var h = half(n)?;
+    return new Result.Success(h * 3);
+  };
+  Output.printLine("lam " + showI(lam(8)) + " " + showI(lam(9)));
+  Output.printLine("typ " + showI(typed(10)));
+  Output.printLine("thr " + safe(6));
+}
+"##,
+        "int ok 106 odd\nflt ok 5 str ok n3!\ntwo ok 11 odd\npar ok 7\ncls ok 5 lst ok 50\nmth ok 8\nlam ok 12 odd\ntyp ok 105\nthr 12\n",
+        "TRY-UNWRAP-OPERAND `?`-unwrapped var",
+    );
+}
+
 /// GENERIC-PAYLOAD-OPERAND: a class or interface payload binding now types as its declared class (it
 /// was unknown); it must behave exactly as a local of that type — `with` on a `Par`-typed binding
 /// holding a `Kid` keeps `Kid`, the runtime class's hooks run, an interface method dispatches, and an

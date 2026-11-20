@@ -42,6 +42,10 @@ pub struct Reified {
     /// files and preludes (`INJECTED_SPAN_BASE`, per-file windows); a binding checked twice with two
     /// different types, or once as a non-operand (a type parameter), is recorded as `Ty::Error` (unknown).
     pub pattern_binds: HashMap<usize, (String, Ty)>,
+    /// TRY-UNWRAP-OPERAND: a Result-mode `?` let-initializer's `span.start` (the `?` token) → the unwrapped
+    /// `Success` type. Its own map, not `operands`: a synthesized `?` (`desugar_db`) may share its inner
+    /// call's span. Same disagreement rule as `pattern_binds`.
+    pub propagates: HashMap<usize, Ty>,
 }
 
 impl Checker {
@@ -68,6 +72,28 @@ impl Checker {
             }
         }
         self.declare(name, ty.clone(), span);
+    }
+}
+
+impl Checker {
+    /// Record a Result-mode `?` let-initializer's unwrapped type for the VM compiler ([`Reified`]).
+    pub(super) fn record_propagate(&mut self, ty: &Ty, span: Span) {
+        if span.len == 0 {
+            return; // synthesized, possibly shared
+        }
+        let ty = if Self::is_reifiable_operand(ty) {
+            ty.clone()
+        } else {
+            Ty::Error
+        };
+        let map = &mut self.reified_operands.propagates;
+        match map.get_mut(&span.start) {
+            None => {
+                map.insert(span.start, ty);
+            }
+            Some(old) if *old != ty => *old = Ty::Error,
+            Some(_) => {}
+        }
     }
 }
 
@@ -175,5 +201,39 @@ mod pattern_bind_tests {
     #[test]
     fn a_zero_length_span_records_nothing() {
         assert!(record(&[("v", Ty::Int, 0)]).is_empty());
+    }
+
+    /// The same rule for [`Checker::record_propagate`] (TRY-UNWRAP-OPERAND).
+    fn propagates(tys: &[(Ty, usize)]) -> HashMap<usize, Ty> {
+        let mut c = Checker::new();
+        for (ty, len) in tys {
+            let span = Span {
+                start: 5,
+                len: *len,
+                line: 1,
+                col: 1,
+            };
+            c.record_propagate(ty, span);
+        }
+        c.reified_operands.propagates
+    }
+
+    #[test]
+    fn a_propagate_recorded_twice_with_another_type_is_unknown() {
+        assert_eq!(
+            propagates(&[(Ty::Int, 1), (Ty::Int, 1)]).get(&5),
+            Some(&Ty::Int)
+        );
+        assert_eq!(
+            propagates(&[(Ty::Int, 1), (Ty::Float, 1)]).get(&5),
+            Some(&Ty::Error)
+        );
+    }
+
+    #[test]
+    fn a_propagate_of_a_type_parameter_or_zero_length_span_is_not_an_operand() {
+        let t = Ty::Param("T".to_string());
+        assert_eq!(propagates(&[(t, 1)]).get(&5), Some(&Ty::Error));
+        assert!(propagates(&[(Ty::Int, 0)]).is_empty());
     }
 }

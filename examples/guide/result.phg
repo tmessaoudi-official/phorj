@@ -37,6 +37,12 @@ function combine(int a, int b): Result<int, string> {
     return new Success(x + y);
 }
 
+// A `var` takes the unwrapped type, so it is an ordinary operand afterwards (TRY-UNWRAP-OPERAND).
+function bumped(int key): Result<int, string> {
+    var x = field(key)?;
+    return new Success(x + 1);
+}
+
 function show(Result<int, string> r): string {
     return match (r) { Success(v) => "ok {v}", Failure(e) => "err {e}" };
 }
@@ -55,5 +61,7 @@ function main(): void {
     Output.printLine(show(combine(3, -1)));
     // err negative key -1 — second field fails, `?` short-circuits
     Output.printLine(show(combine(-5, 9)));
+    // err negative key -5 — first field fails
+    Output.printLine(show(bumped(4)));
 }
-// err negative key -5 — first field fails
+// ok 41 — `var x = field(4)?` is an int, so `x + 1` is plain arithmetic

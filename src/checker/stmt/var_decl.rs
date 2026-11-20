@@ -32,14 +32,24 @@ impl Checker {
         };
         let actual = match init {
             crate::ast::Expr::Propagate { inner, span: psp } => {
-                match self.try_throws_propagate(inner, *psp) {
-                    Some(crate::checker::throws::PropagateOutcome::Throws(t)) => t,
+                // `Err` = throws mode, `Ok` = Result mode.
+                let unwrapped: Result<Ty, Ty> = match self.try_throws_propagate(inner, *psp) {
+                    Some(crate::checker::throws::PropagateOutcome::Throws(t)) => Err(t),
                     // A call that throws nothing was already checked — hand its type to
                     // Result-mode without a duplicate check.
                     Some(crate::checker::throws::PropagateOutcome::Plain(t)) => {
-                        self.check_propagate_typed(t, *psp)
+                        Ok(self.check_propagate_typed(t, *psp))
                     }
-                    None => self.check_propagate(inner, *psp),
+                    None => Ok(self.check_propagate(inner, *psp)),
+                };
+                // Result mode survives to the backends: hand the compiler its unwrapped type
+                // (TRY-UNWRAP-OPERAND); throws mode is erased to the inner call before any backend.
+                match unwrapped {
+                    Ok(t) => {
+                        self.record_propagate(&t, *psp);
+                        t
+                    }
+                    Err(t) => t,
                 }
             }
             // C2 sink: a bare return-overloaded call binds to a concrete declared type without a

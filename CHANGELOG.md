@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — a `var` bound to `f()?` is an arithmetic operand on the VM (defect TRY-UNWRAP-OPERAND, P0, 2026-11-20)
+
+`var h = half(n)?; int y = h + 1;` (in a function returning `Result<int, string>`) printed `ok 106` on the tree-walker
+and PHP and failed `` compile error: `h` is not numeric `` on `phg run`: the compiler typed `expr?` as unknown, and
+the checker's unwrapped `Success` type never reached it. The checker now records that type at the `?`'s span, in
+its own `Reified::propagates` map (a synthesized `?` may share its inner call's span), and `ctype` reads it where its
+own answer is unknown. Regression `try_unwrapped_var_is_an_arithmetic_operand`: int, float and string payloads, two
+`?` in one function, a parameter operand, a class and a list payload, a method and a lambda body, a typed local and
+throws mode; sabotage: without the record, or without the `ctype` key, it fails `` `h` is not numeric ``; the
+disagreement rule and the `is_empty` guard each redden their unit test. Example line in `examples/guide/result.phg`.
+Plan: `docs/plans/2026-11-20-try-unwrap-operand.plan.md`.
+
 ### Changed — the whole toolchain runs in Docker (2026-11-20)
 
 The host needs docker (with its compose plugin), bash, git and coreutils, nothing else. `docker/Dockerfile` builds one image with the pinned Rust

@@ -71,14 +71,16 @@ impl Compiler<'_> {
             return normal;
         }
         if !self.reified_operands.is_empty() {
-            let key = match e {
+            let r = &self.reified_operands;
+            let hit = match e {
                 Expr::Call { span, .. } | Expr::Member { span, .. } | Expr::Index { span, .. } => {
-                    Some(span.start)
+                    r.get(&span.start).cloned()
                 }
+                Expr::Propagate { span, .. } => r.propagate(span.start),
                 _ => None,
             };
-            if let Some(cty) = key.and_then(|k| self.reified_operands.get(&k)) {
-                return Ok(cty.clone());
+            if let Some(cty) = hit {
+                return Ok(cty);
             }
         }
         normal
@@ -383,8 +385,8 @@ impl Compiler<'_> {
             // `inner!` unwraps `T?` to `T`; its operand type is the inner's (so `o! + 1` specializes
             // — `resolve_cty(Optional)` already yields the inner `CTy`). M3 S2.5.
             Expr::Force { inner, .. } => self.ctype(inner),
-            // `expr?` unwraps a `Result<T, E>` to its `Ok` payload — generally an erased/unknown
-            // operand type, so it is not a specialized arithmetic operand (M-faults 2a).
+            // `expr?` unwraps a `Result<T, E>` to its `Success` payload, erased here; the `ctype`
+            // fallback above supplies the checker's type (TRY-UNWRAP-OPERAND).
             Expr::Propagate { .. } => Ok(CTy::Other),
             // `obj with { … }` yields a fresh instance of `obj`'s class — same compile-type as `obj`.
             Expr::CloneWith { object, .. } => self.ctype(object),

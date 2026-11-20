@@ -3004,10 +3004,11 @@ The value tier (`Result<T, E>` + `?`) and the panic tier (`panic`/`todo`/`unreac
 - **A fault intrinsic's message must be a string literal** (`E-INTRINSIC-LITERAL`) — it is baked into the
   fault at compile time. Interpolated/computed panic messages are deferred (would need a runtime-string
   fault path).
-- **`?`-unwrapped payloads are not specialized arithmetic operands on the VM** — the unwrapped `Ok`
-  value types as `CTy::Other` (the same erased-generics operand limitation), so `f()? + 1` in a
-  let-init would run on the interpreter but the VM rejects the arithmetic; bind to a typed local. Now a defect-queue
-  entry (TRY-UNWRAP-OPERAND, P0 proposed 2026-11-19, `docs/plans/SLICE-STATE.md`): the VM rejects what the other legs run.
+- ~~**`?`-unwrapped payloads are not specialized arithmetic operands on the VM**~~ — FIXED 2026-11-20
+  (TRY-UNWRAP-OPERAND, plan `docs/plans/2026-11-20-try-unwrap-operand.plan.md`): `var h = f()?; h + 1` failed
+  `` `h` is not numeric `` on `phg run` alone; the checker now hands the unwrapped `Success` type to the compiler at
+  the `?`'s span. Regression `try_unwrapped_var_is_an_arithmetic_operand`. A bare-`T` payload of a generic
+  function stays unknown, as any `T` does.
 
 ## Error model Slice 2b (M-faults) — deferred refinements
 

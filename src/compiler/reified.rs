@@ -1,7 +1,8 @@
 //! Bytecode compiler — the checker's reified side-tables ([`crate::checker::Reified`]) converted to
 //! compile types once, at `compile_with`. `ctype` falls back to `operands` where its own resolution is
-//! unknown (S2.1-broad), and `collect_bindings` to `binding` for a `match` binding whose payload type
-//! the compiler erased (GENERIC-PAYLOAD-OPERAND).
+//! unknown (S2.1-broad), `collect_bindings` to `binding` for a `match` binding whose payload type
+//! the compiler erased (GENERIC-PAYLOAD-OPERAND), and `ctype` to `propagate` for a `var x = f()?`
+//! initializer (TRY-UNWRAP-OPERAND).
 
 use super::*;
 
@@ -10,6 +11,7 @@ use super::*;
 pub(in crate::compiler) struct ReifiedCty {
     operands: HashMap<usize, CTy>,
     binds: HashMap<usize, (String, CTy)>,
+    propagates: HashMap<usize, CTy>,
 }
 
 impl ReifiedCty {
@@ -28,16 +30,27 @@ impl ReifiedCty {
                 .iter()
                 .filter_map(|(&span, (name, ty))| Some((span, (name.clone(), known(ty)?))))
                 .collect(),
+            propagates: r
+                .propagates
+                .iter()
+                .filter_map(|(&span, ty)| Some((span, known(ty)?)))
+                .collect(),
         }
     }
 
+    /// Guards `ctype`'s fallback, so it covers every table that fallback reads.
     pub(in crate::compiler) fn is_empty(&self) -> bool {
-        self.operands.is_empty()
+        self.operands.is_empty() && self.propagates.is_empty()
     }
 
     /// The reified operand type of the `Call`/`Member`/`Index` starting at `span_start`.
     pub(in crate::compiler) fn get(&self, span_start: &usize) -> Option<&CTy> {
         self.operands.get(span_start)
+    }
+
+    /// The unwrapped `Success` type of the Result-mode `?` at `span_start` (TRY-UNWRAP-OPERAND).
+    pub(in crate::compiler) fn propagate(&self, span_start: usize) -> Option<CTy> {
+        self.propagates.get(&span_start).cloned()
     }
 
     /// The checker's type for the `match` binding `name` declared at `span_start`; the name must
@@ -69,6 +82,15 @@ mod tests {
     #[test]
     fn a_binding_type_is_returned_only_at_its_own_span() {
         assert!(table("v", Ty::Int).binding(8, "v").is_none());
+    }
+
+    #[test]
+    fn a_table_holding_only_propagates_is_not_empty() {
+        let mut r = crate::checker::Reified::default();
+        r.propagates.insert(3, Ty::Int);
+        let t = ReifiedCty::from_checker(&r);
+        assert!(!t.is_empty());
+        assert!(t.propagate(3) == Some(CTy::Int));
     }
 
     #[test]
