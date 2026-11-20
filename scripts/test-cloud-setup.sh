@@ -203,6 +203,33 @@ fresh; rm -f "$TMP/repo/scripts/git-hooks/pre-push"; run /root true
 check "not phorj's root (no scripts/git-hooks/pre-push): WARN, hooksPath left unset" \
   '[[ -z "$(hooks_path)" ]] && grep -qE "WARN \| hooksPath: " <<<"$OUT"'
 
+# ── 6b. The host runner: with phorj.runner=host, scripts/dk and the hooks never reach for docker ──────────────
+# A cloud session has no docker and no terminal, and pre-push is fail-closed there: a dk or hook that still calls
+# docker would refuse every push. Shims record calls: `docker` (must stay silent) and `cargo` (must run). The control
+# case, with the switch unset, proves the docker shim does record a call. PHORJ_IN_DOCKER is unset because pre-push
+# runs this suite inside the toolchain image.
+D="$TMP/dkrepo"; mkdir -p "$D/scripts/git-hooks" "$TMP/dkshim"
+cp "$ROOT/scripts/dk" "$D/scripts/dk"; cp "$ROOT/scripts/git-hooks/pre-commit" "$D/scripts/git-hooks/pre-commit"
+cp "$ROOT/compose.yaml" "$D/compose.yaml"
+git -C "$D" init -q
+printf '#!/bin/sh\necho "docker $*" >> "%s/dkshim.calls"\nexit 1\n' "$TMP" > "$TMP/dkshim/docker"
+printf '#!/bin/sh\necho "cargo $*" >> "%s/dkshim.calls"\necho shim-cargo-ran\n' "$TMP" > "$TMP/dkshim/cargo"
+chmod +x "$TMP/dkshim/docker" "$TMP/dkshim/cargo"
+# timeout: a hook guard and dk that disagree exec each other forever (seen under sabotage); fail, never wedge a push.
+dkrun() { : > "$TMP/dkshim.calls"; OUT="$(cd "$D" && timeout 60 env -u PHORJ_IN_DOCKER PATH="$TMP/dkshim:/usr/bin:/bin" "$@" 2>&1)"; RC=$?; }
+git -C "$D" config phorj.runner host
+dkrun scripts/dk cargo --version
+check "runner=host: dk runs the host cargo" '[[ $RC -eq 0 && "$OUT" == *shim-cargo-ran* ]]'
+check "runner=host: dk never calls docker" '! grep -q "^docker" "$TMP/dkshim.calls"'
+dkrun scripts/dk --php 8.6 cargo --version
+check "runner=host: dk --php 8.6 refuses (it needs docker) and names the switch" '[[ $RC -ne 0 && "$OUT" == *phorj.runner=host* ]] && ! grep -q "^docker" "$TMP/dkshim.calls"'
+dkrun bash scripts/git-hooks/pre-commit
+# The fixture is not a whole checkout, so the body stops at its first missing script; reaching it is the point.
+check "runner=host: the pre-commit hook runs its body here, never through docker" '[[ "$OUT" == *"[pre-commit] "* ]] && ! grep -q "^docker" "$TMP/dkshim.calls"'
+git -C "$D" config --unset phorj.runner
+dkrun scripts/dk cargo --version
+check "control, runner unset: dk goes to docker (the shim records it) and fails loudly" '[[ $RC -ne 0 ]] && grep -q "^docker" "$TMP/dkshim.calls" && ! grep -q "^cargo" "$TMP/dkshim.calls"'
+
 # ── 7. Nothing leaks: the hook's temp dirs are gone ─────────────────────────────────────────────────────────
 check "no run left a temp dir in TMPDIR (checked after every run)" '[[ -z "$LEAKED" ]]'
 
