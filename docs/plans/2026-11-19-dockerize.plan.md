@@ -11,7 +11,7 @@
 | 1 | Image + compose + `scripts/dk` wrapper | done | `scripts/test-docker.sh` 37/37 (red first: no `scripts/dk`) |
 | 2 | Parity: host baseline vs the same gates in the container | done | host `de5f2395` pre-push: 3771 passed, 2 skipped; container (third run, all fixes in): 3772 passed (+1 = `83de0a3c`'s test), 2 skipped, every script suite green, microbench past the source check then SKIP for load exactly as on the host; sabotage: PHP hidden = the oracle test FAILS |
 | 3 | Hooks run through `scripts/dk` (cloud: explicit host runner) | done | pre-commit + pre-push re-exec via dk; `test-cloud-setup.sh` 41/41 incl. `phorj.runner = host` (sabotaged red) |
-| 4 | CI jobs run in the same image (macOS/Windows release native) | doing | `.github/actions/phorj-image`, ci.yml, playground.yml |
+| 4 | CI jobs run in the same image (macOS/Windows release native) | doing | `.github/actions/phorj-image` built the image on GitHub's runner (CI 44643020951); every job then died "scripts/dk: Permission denied" (exit 126, the 100644 index mode, fixed `1f5ea163`). Locally the 8.6 image fails only `trim_default_set` in `lift_roundtrip` (DEC-588), as setup-php's 8.6 did. Fresh clone, `env -i`, bare PATH: `dk php` and the pre-commit's full Rust tier from an empty `target/` pass |
 | 5 | Docs: CLAUDE.md "Run everything in Docker", php-oracle.md, gate-mechanics.md, CONTRIBUTING | done | `claude-config-guard` fails=0 |
 
 ## Decisions Log
@@ -20,6 +20,9 @@
 - [2026-11-19 23:20] AGREED: claude.ai cloud sessions keep .claude/cloud-setup.sh as the one declared fallback, installing the versions the Dockerfile names (developer, AskUserQuestion 2026-11-19).
 - [2026-11-19 23:21] AGREED: start now, before TRY-UNWRAP-OPERAND (developer, AskUserQuestion 2026-11-19).
 - [2026-11-19 23:21] ASSUMED (review): image tag php:8.5-cli-trixie floats the patch, no digest pin - because CLAUDE.md rules the oracle 'never pinned - no script may pin a patch version' (confident pick: a recorded ruling decides). Alternatives: digest pin + bump procedure (reproducible, but a pin the ruling forbids).
+- [2026-11-20 01:49] ASSUMED (review): microbench-gate accepts the in-image php as the 'docker php:8.5-cli' comparator (PHORJ_PHP_SOURCE, honoured only when MICROBENCH_PHP_BIN == PHORJ_PHP) — because php.real IS the official image's binary and the benches time themselves with hrtime() inside php. Not yet measured under it on a quiet box (both parity runs skipped for load): that row is OWED, never --emit. Alternatives: keep skipping in the container (loses G-8 coverage locally), or call docker from inside the container (needs the socket mounted).
+- [2026-11-20 01:49] ASSUMED (review): Linux release binaries stay on the native ubuntu runner (release.yml), like macOS/Windows — because a trixie-image build links newer glibc symbols (2.39 today, up to 2.41) and would raise the floor for users. The developer agreed to macOS/Windows only. Alternatives: build Linux releases in the image (portable build, higher floor), or a musl static build (no glibc floor, a separate ruling).
+- [2026-11-20 01:49] ASSUMED (review): scripts/test-docker.sh stays a manual contract test, not a pre-push step — because pre-push itself runs inside the container, where docker is unavailable. Alternatives: run it from the host side of the pre-push wrapper before the re-exec (adds ~1 min per push).
 
 ## Design
 - **Image** `docker/Dockerfile`, base `php:${PHP_MINOR}-cli-trixie` (official, NTS, non-debug, PCRE2 10.44) plus
