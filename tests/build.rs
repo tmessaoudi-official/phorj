@@ -259,6 +259,39 @@ fn built_binary_ignores_argv_runs_embedded() {
     );
 }
 
+/// R9-G-1: a built binary refuses a non-UTF-8 argument (exit 1, one line) instead of panicking.
+#[cfg(unix)]
+#[test]
+fn built_binary_refuses_a_non_utf8_argument() {
+    use std::os::unix::ffi::OsStrExt;
+    if !objcopy_available() {
+        return;
+    }
+    let out_bin = std::env::temp_dir().join(format!("phorj_built_utf8_{}", std::process::id()));
+    let _ = std::fs::remove_file(&out_bin);
+    let build = Command::new(BIN)
+        .args([
+            "build",
+            "examples/hello.phg",
+            "-o",
+            out_bin.to_str().unwrap(),
+        ])
+        .output()
+        .expect("spawn build");
+    assert!(build.status.success());
+    let out = Command::new(&out_bin)
+        .arg(std::ffi::OsStr::from_bytes(b"\xff"))
+        .output()
+        .expect("run built");
+    let _ = std::fs::remove_file(&out_bin);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{err}");
+    assert!(
+        !err.contains("panicked") && err.contains("not valid UTF-8"),
+        "{err}"
+    );
+}
+
 #[test]
 fn build_rejects_ill_typed_program() {
     let bad = std::env::temp_dir().join(format!("phorj_bad_{}.phg", std::process::id()));

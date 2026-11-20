@@ -13,6 +13,7 @@ use crate::vm::Vm;
 
 // Self-contained command groups (M-Decomp W1.2): the `explain` diagnostic-code table and the
 // `bench` profiling suite. Re-exported so callers keep referring to `cli::cmd_explain` etc.
+mod argv;
 mod benchmark;
 pub mod build_flags;
 mod build_php;
@@ -28,6 +29,7 @@ pub mod pm;
 mod rewrite_new;
 pub(crate) mod serve_config_prelude;
 mod test_runner;
+pub use argv::{args_or_exit, program_args_or_exit};
 pub use benchmark::{
     cmd_benchmark, cmd_benchmark_json, cmd_benchmark_vs_php, cmd_benchmark_vs_php_json,
 };

@@ -28,7 +28,7 @@ fn main() {
         phorj::profile::set_active(profile);
         // A standalone built binary runs as a normal executable, so `Core.Process.args()` reads the
         // real process arguments (everything after the program name).
-        phorj::native::set_process_args(std::env::args().skip(1).collect());
+        phorj::native::set_process_args(cli::program_args_or_exit());
         // DEC-273: artifacts JIT by default (measured ~110× on hot pure loops); `PHG_NO_JIT=1`
         // is the byte-identical pure-VM escape hatch (env — the argv belongs to the program).
         #[cfg(feature = "jit")]
@@ -49,7 +49,7 @@ fn main() {
         }
     }
 
-    let mut args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = cli::args_or_exit();
     // Global flags (before subcommand dispatch): -h/--help and -v/--version print and exit 0.
     match args.get(1).map(String::as_str) {
         Some("-h" | "--help") => {

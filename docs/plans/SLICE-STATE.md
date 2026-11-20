@@ -571,7 +571,6 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 | DEEP-INPUT-CRASHES | audit plan row 5 | P1 | five abort paths (DAP on an ordinary `down(3000)` recursion, `format`, `lsp`, `Drop` of a deep tree, a trusted `Content-Length`); row 9's sleuth H-1 is its `Content-Length` item, still open on row 9's frozen commit (row 9b V08). |
 | STACKDEPTH-deep-member-chain | KNOWN_ISSUES | P1 | by rule 1's letter (a crash); the entry grades itself P2, "pathological adversarial input only": Conflicts, item 1. |
 | QA-N5 LIFT-DEEP-CHAIN | ground-prep row 8 (QA sweep, N-5, reproduced 2026-11-16); not in KNOWN_ISSUES | P1 | by rule 1's letter, the class of DEEP-INPUT-CRASHES (Conflicts, item 1). record only; same class as DEEP-INPUT-CRASHES, whose entry lists `format`, `debug --dap`, `lsp` and `Drop` but not `lift`. `<?php function f(): int { return 1 + … + 1; }` with 2,000 terms: `phg lift` aborts with `thread 'main' has overflowed its stack`, exit 134; 1,500 terms lift clean (the formatter's limit is about five times higher) |
-| R9-G-1 NONUTF8-ARGV | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth G-1 | P1 | every `phg` verb panics (exit 101) on a non-UTF-8 argument. |
 | R9-G-2 NONUTF8-ENV | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth G-2 | P1 | `Environment.all()` panics on every leg when a variable is not UTF-8. |
 | R9-B-5 BROKEN-PIPE | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth B-5 | P1 | by rule 1's letter (row 9's agent graded it P2: Conflicts, item 1): `phg run` piped into `head` panics on every leg. |
 | R9-H-4 RUNWITH-TIMEOUT | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth H-4 | P1; re-probe owed | by rule 1's letter (a hang; row 9 graded it P2: Conflicts, item 1): the `Process.runWith` timeout is not enforced while a grandchild holds the pipes. |
@@ -642,7 +641,8 @@ IF-CLASS-ARM-TYPE, the same divergence in an `if` expression, found while fixing
 replaced in table A by HOOK-FIELD-SHADOW (DEC-582 PENDING), found while fixing it; HOOK-MI-COLLISION (DEC-584 PENDING)
 MI-TRANSPILE-COMPOSITION and OWN-TRAIT-HOOK-SPLIT, found closing it, make the count 76. TRY-UNWRAP-OPERAND (2026-11-20, plan `docs/plans/2026-11-20-try-unwrap-operand.plan.md`;
 regression `try_unwrapped_var_is_an_arithmetic_operand`) left the queue. R9-A-1 SERVE-STATIC-EXPOSURE (2026-11-20, plan
-`docs/plans/2026-11-20-serve-static-symlink.plan.md`; regression `a_symlink_never_serves_source_or_a_dotfile`) left the queue.
+`docs/plans/2026-11-20-serve-static-symlink.plan.md`; regression `a_symlink_never_serves_source_or_a_dotfile`) left the queue. R9-G-1 NONUTF8-ARGV (2026-11-20, plan `docs/plans/2026-11-20-nonutf8-argv.plan.md`;
+regression `a_non_utf8_argument_is_refused_not_a_panic`) left the queue.
 
 **Left the queue at ratification (2026-11-17):** STATIC-COMPOSITION-PARITY (its five items FIXED; its open remainder is
 DECOMPOSED-PARENT-TRAITS); DEV-PRERELEASE-FROM-BRANCH (accepted by the developer 2026-11-07); `Expr::New` inside an
