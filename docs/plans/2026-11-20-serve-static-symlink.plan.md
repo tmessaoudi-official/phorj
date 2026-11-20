@@ -11,6 +11,7 @@
 
 ## Decisions Log
 - [2026-11-20 11:59] ASSUMED (review): a symlink resolving to a `.phg` or a dot path answers `404` (the escape guard's and a direct `.phg` request's answer), not a fall-through to the program; and assets under a dot-named directory reached through a symlink stop being served (the quick-win row's fix, applied as written). Basis: advisor() 3C round 1 named both as safe and asked for one to be picked, pinned and recorded.
+- [2026-11-20 12:18] ASSUMED (review): 6C round 1 (advisor): two controls could not fail (the escape target sat under the dotted temp dir; the request-path .phg guard was shadowed); fixed in a test-only follow-up and proven by two more mutants.
 
 ## Formal Plan
 
@@ -29,7 +30,7 @@
 |---|------|------|-------|----------|-------|
 | 1 | Failing test | S | done | `a_symlink_never_serves_source_or_a_dotfile` red: `/leak.txt: HTTP/1.1 200 OK`; `the_request_path_guards_still_hold` green before and after | src/serve/static_files_tests.rs |
 | 2 | Guards on the canonical path | S | done | both tests green; file 235 lines | src/serve/static_files.rs |
-| 3 | Sabotage, shipped probe, SSOT, gate | S | doing | three compiling mutants red on their own case (no dot guard: `/env.txt 200`; no `.phg` guard: `/leak.txt 200`; absolute path: `/a.txt 404`), restored 2/2; release rebuilt; real `phg serve` after: `/leak.txt 404`, `/env.txt 404`, `/a.txt 200`, program route 200 | CHANGELOG.md docs/plans/SLICE-STATE.md |
+| 3 | Sabotage, shipped probe, SSOT, gate | S | done | five compiling mutants, each red on its own case (no dot guard: `/env.txt 200`; no `.phg` guard: `/leak.txt 200`; absolute path: `/a.txt 404`; no containment: `/out.txt 200`, its target moved to a dot-free directory so the dot guard cannot mask it; no request-path `.phg` guard: `/nope.phg` falls through), restored 2/2; full gate (nextest all-features 3792 passed 2 skipped, clippy x2, fmt after rustfmt, size-gate 54/0, release); real `phg serve` after: `/leak.txt 404`, `/env.txt 404`, `/a.txt 200`, program route 200 | CHANGELOG.md docs/plans/SLICE-STATE.md src/serve/static_files_tests.rs |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input

@@ -20,8 +20,24 @@ fn site() -> (PathBuf, PathBuf) {
     std::fs::write(public.join(".env"), "SECRET-ENV").unwrap();
     std::fs::write(public.join(".git").join("config"), "SECRET-GIT").unwrap();
     std::fs::write(public.join("a.txt"), "hello").unwrap();
-    std::fs::write(base.join("outside.txt"), "SECRET-OUTSIDE").unwrap();
     (base, public)
+}
+
+/// A file OUTSIDE the docroot in a directory with no dot component anywhere in its path, so only the
+/// containment guard can refuse a symlink to it (a dot in the path would trip the dot guard first).
+fn outside_file() -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!("phorj-static-out-{}-{nanos}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("outside");
+    std::fs::write(&file, "SECRET-OUTSIDE").unwrap();
+    assert!(file
+        .components()
+        .all(|c| !c.as_os_str().to_string_lossy().starts_with('.')));
+    file
 }
 
 fn get(root: &Path, path: &str) -> Option<(u16, String)> {
@@ -46,7 +62,8 @@ fn a_symlink_never_serves_source_or_a_dotfile() {
     symlink(".env", public.join("env.txt")).unwrap();
     symlink(".git", public.join("g")).unwrap();
     symlink("a.txt", public.join("alias.txt")).unwrap();
-    symlink("../outside.txt", public.join("out.txt")).unwrap();
+    let outside = outside_file();
+    symlink(&outside, public.join("out.txt")).unwrap();
     let (root, _entry) = resolve_site_dir(&base).unwrap();
     // A symlink resolving to source or to a dot path: the same 404 as a direct `.phg` request.
     for p in [
@@ -67,6 +84,7 @@ fn a_symlink_never_serves_source_or_a_dotfile() {
         assert!(text.ends_with("hello"), "{p}: {text}");
     }
     let _ = std::fs::remove_dir_all(base.parent().unwrap());
+    let _ = std::fs::remove_dir_all(outside.parent().unwrap());
 }
 
 #[test]
@@ -77,6 +95,9 @@ fn the_request_path_guards_still_hold() {
     assert_eq!(status, 404, "{text}");
     assert!(!text.contains("SECRET"));
     assert_eq!(get(&root, "/Other.PHG").map(|r| r.0), Some(404));
+    // A `.phg` path that does not exist is still a 404, never the program: the request-path guard alone
+    // decides it (the canonical-path guard needs a file to resolve).
+    assert_eq!(get(&root, "/nope.phg").map(|r| r.0), Some(404));
     // A dot path in the request falls through to the program, which decides.
     assert!(get(&root, "/.env").is_none());
     assert!(get(&root, "/.git/config").is_none());
