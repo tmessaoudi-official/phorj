@@ -642,7 +642,8 @@ replaced in table A by HOOK-FIELD-SHADOW (DEC-582 PENDING), found while fixing i
 MI-TRANSPILE-COMPOSITION and OWN-TRAIT-HOOK-SPLIT, found closing it, make the count 76. TRY-UNWRAP-OPERAND (2026-11-20, plan `docs/plans/2026-11-20-try-unwrap-operand.plan.md`;
 regression `try_unwrapped_var_is_an_arithmetic_operand`) left the queue. R9-A-1 SERVE-STATIC-EXPOSURE (2026-11-20, plan
 `docs/plans/2026-11-20-serve-static-symlink.plan.md`; regression `a_symlink_never_serves_source_or_a_dotfile`) left the queue. R9-G-1 NONUTF8-ARGV (2026-11-20, plan `docs/plans/2026-11-20-nonutf8-argv.plan.md`;
-regression `a_non_utf8_argument_is_refused_not_a_panic`) left the queue.
+regression `a_non_utf8_argument_is_refused_not_a_panic`) left the queue. Whether non-UTF-8 process input should instead be read lossily (or through a bytes API) is PENDING as
+DEC-590; R9-G-2 takes the no-ruling fix (leave such a pair out of `Environment.all()`, as `get()` already answers `null`).
 
 **Left the queue at ratification (2026-11-17):** STATIC-COMPOSITION-PARITY (its five items FIXED; its open remainder is
 DECOMPOSED-PARENT-TRAITS); DEV-PRERELEASE-FROM-BRANCH (accepted by the developer 2026-11-07); `Expr::New` inside an
