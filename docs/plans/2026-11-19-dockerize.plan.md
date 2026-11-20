@@ -48,6 +48,9 @@
   ~30 s per call (replaced by an input-hash label, ~2 s); `php -n` could not see the shared bcmath (a `-n`-aware
   wrapper); microbench-gate SKIPped as a "source mismatch" (the image declares `PHORJ_PHP_SOURCE`, cases 15b/15c); the
   forward probe had no newer PHP (the 8.6 binary rides in the 8.5 image) and one of its tests leaned on an unset seam.
+- `efa88579` committed `scripts/dk` as 100644: this repo sets `core.fileMode=false`, so staging a new file records it
+  non-executable whatever the disk says, and only this machine's disk `+x` hid it. Fixed in the index, and
+  `scripts/validate-infra.sh` (both hooks) now fails an extensionless shebang file not tracked 100755.
 - `scripts/test-docker.sh` needs docker on the host, so it is a manual contract test (`bash scripts/test-docker.sh`),
   not a pre-push step: pre-push itself runs inside the container.
 - `test-lint-on-write.sh` skips one case in the container: its observability check needs the developer's global

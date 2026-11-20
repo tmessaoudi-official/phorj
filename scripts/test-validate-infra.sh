@@ -44,6 +44,24 @@ out=$(cd "$R" && bash "$TOOL" 2>&1); rc=$?
 [[ $rc -ne 0 ]] && ok "non-zero exit on a shell syntax error" || bad "non-zero exit on a shell syntax error"
 grep -qiE 'fail' <<<"$out" && ok "names the failing shell file" || bad "names the failing shell file"
 
+# ── 2a. A script run by its name must be executable IN THE INDEX ─────────────────────────
+# This repo sets core.fileMode=false, so `git add` records a new file 100644 whatever the disk says:
+# scripts/dk landed that way (efa88579) and every hook and CI step calling `scripts/dk …` would have
+# died with "Permission denied" on a fresh clone. An extensionless file with a shebang is run by name.
+R="$TMP/exec"; mkrepo "$R"
+printf '#!/usr/bin/env bash\necho run-me\n' > "$R/scripts/runner"
+printf '#!/usr/bin/env bash\necho sourced\n' > "$R/scripts/lib.sh"
+( cd "$R" && git add -A && git update-index --chmod=-x scripts/runner scripts/lib.sh \
+  && git -c user.email=t@t -c user.name=t commit -qm x ) 2>/dev/null
+out=$(cd "$R" && bash "$TOOL" 2>&1); rc=$?
+[[ $rc -ne 0 ]] && ok "an extensionless shebang file tracked 100644 FAILS" || bad "100644 runner passed: $out"
+grep -qF 'scripts/runner' <<<"$out" && ok "…and the failure names it" || bad "exec failure does not name the file: $out"
+grep -qF 'FAIL scripts/lib.sh' <<<"$out" && bad "a .sh file (run as bash x.sh) was flagged" || ok "a .sh file tracked 100644 is not flagged"
+( cd "$R" && git update-index --chmod=+x scripts/runner && git -c user.email=t@t -c user.name=t commit -qm x ) 2>/dev/null
+out=$(cd "$R" && bash "$TOOL" 2>&1); rc=$?
+[[ $rc -eq 0 ]] && ok "the same file tracked 100755 passes" || bad "100755 runner failed: $out"
+grep -qE 'executable in the index \| 1/1' <<<"$out" && ok "the scan counted the one runner (not dark)" || bad "exec scan count missing: $out"
+
 # ── 2b. A pinned php-oracle path FAILS — and a pin in a NON-hook script fails too ────────
 # The check shipped 2026-08-20 with no test and, in this harness's fixture, scanned ZERO files while
 # printing a pass — the probe-that-cannot-fail shape. These cases are the guard against it going

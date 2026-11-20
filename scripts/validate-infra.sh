@@ -34,6 +34,7 @@ SH_OK=0;   SH_N=0
 YML_OK=0;  YML_N=0
 JSON_OK=0; JSON_N=0
 PIN_OK=0;  PIN_N=0
+EXE_OK=0;  EXE_N=0
 declare -a FAILED_LINES=()
 
 record_fail() { FAILURES=$((FAILURES + 1)); FAILED_LINES+=("$1"); }
@@ -58,6 +59,29 @@ for f in "${SH_FILES[@]:-}"; do
   fi
 done
 [[ $SH_N -eq 0 ]] && say "  (no shell files found)"
+
+# ── Executable bit, read from the INDEX (what a clone gets), not the disk ─────────────────────
+# This repo sets core.fileMode=false, so staging a new file records it 100644 whatever its disk mode:
+# scripts/dk landed that way (efa88579) while every hook and CI step runs `scripts/dk …` by name, so
+# a fresh clone would have failed "Permission denied" and only this machine's disk +x hid it. A file
+# run by its name is an extensionless file with a shebang (the git hooks, scripts/dk); a `.sh` file is
+# run as `bash x.sh` and may stay 100644.
+say ""
+say "-- executable in the index (extensionless files with a shebang) --"
+while IFS= read -r -d '' rec; do
+  mode="${rec%% *}"; f="${rec#*$'\t'}"
+  base="${f##*/}"
+  [[ "$base" == *.* || ! -f "$f" ]] && continue
+  [[ "$(head -c2 -- "$f" 2>/dev/null)" == '#!' ]] || continue
+  EXE_N=$((EXE_N + 1))
+  if [[ "$mode" == 100755 ]]; then
+    EXE_OK=$((EXE_OK + 1)); say "  PASS $f"
+  else
+    say "  FAIL $f: tracked $mode, run by name (fix: git update-index --chmod=+x -- $f)"
+    record_fail "exec FAIL $f: index mode $mode, needs 100755"
+  fi
+done < <(git ls-files -s -z 2>/dev/null)
+[[ $EXE_N -eq 0 ]] && say "  (no extensionless shebang files found)"
 
 # ── No hardcoded php-oracle pin in the gate scripts ────────────────────────────────────────────
 # The oracle is resolved ONCE, by scripts/toolchain.env, which globs `php-8.5.*` newest-first and
@@ -156,6 +180,7 @@ say "| Check | Result |"
 say "|---|---|"
 say "| bash -n | ${SH_OK}/${SH_N} pass |"
 say "| no pinned php oracle | ${PIN_OK}/${PIN_N} clean |"
+say "| executable in the index | ${EXE_OK}/${EXE_N} pass |"
 say "| YAML parse | ${YML_OK}/${YML_N} pass |"
 say "| JSON parse | ${JSON_OK}/${JSON_N} pass |"
 # Report what is TRUE, computed — this row was a hardcoded "SKIPPED — absent from PATH" literal
