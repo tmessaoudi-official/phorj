@@ -67,6 +67,10 @@
   per-job target caches is the lever if that happens.
 - A host `cargo` or rust-analyzer sharing `target/` with the container sees a different registry path, so each side
   rebuilds the other's dependencies. Point rust-analyzer at the container, or give the host its own target dir.
+- A comment-only edit of `docker/Dockerfile` on 2026-11-20 cost ~15 min: the Rust layers re-ran although no input
+  of theirs changed. Cause [Inferred: the layers' timestamps; BuildKit's cache was not inspected]: the builder cache
+  was garbage-collected after the 8.6 image build and the 9.4 GB clone build filled the disk. The 8.6 image's
+  input label is stale from that edit too, so the next `scripts/dk --php 8.6` rebuilds it.
 - `rustup-init` is fetched over TLS without a checksum (zig and wasm-pack are sha256-checked).
 - NEEDS INPUT (global Rule 5: an agent definition is edited only on the developer's explicit go):
   `.claude/agents/completeness-reviewer.md` lines 58 and 127 still say `source scripts/toolchain.env &&

@@ -9,7 +9,8 @@ in a large change, please open an issue to discuss it first (see [SUPPORT.md](SU
 
 ## Development setup
 
-You need **Docker** (with the compose plugin), `bash` and `git`. Nothing else: the whole toolchain (the pinned
+You need **Docker** (with the compose plugin), `bash`, `git` and coreutils (`scripts/test-docker.sh` pins the set).
+Nothing else: the whole toolchain (the pinned
 Rust from `rust-toolchain.toml`, PHP 8.5 with bcmath as the byte-identity oracle, cargo-nextest, `llvm-objcopy`,
 zig and cargo-zigbuild for `phg build --target`, wasm-pack and node for the playground) lives in one image,
 `docker/Dockerfile`, which is also the one place a tool version is written. `scripts/dk` runs any command in it,
