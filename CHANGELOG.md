@@ -8,7 +8,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### Changed — the whole toolchain runs in Docker (2026-11-20)
 
-The host needs docker, bash and git, nothing else. `docker/Dockerfile` builds one image with the pinned Rust
+The host needs docker (with its compose plugin), bash, git and coreutils, nothing else. `docker/Dockerfile` builds one image with the pinned Rust
 (`rust-toolchain.toml`), PHP 8.5 with bcmath (the byte-identity oracle; the tag floats the patch, never pinned),
 cargo-nextest, llvm-objcopy, zig and cargo-zigbuild, wasm-pack and node; it is the one place a tool version is
 written. `scripts/dk <cmd>` runs a command in it as the developer, with the repo at its host path (`target/` and

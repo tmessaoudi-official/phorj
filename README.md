@@ -91,7 +91,7 @@ scripts/dk cargo clippy --all-targets   # lints (warnings are denied)
 ```
 
 `scripts/dk` runs each command in the toolchain image (`docker/Dockerfile`: the pinned Rust, PHP 8.5 for the
-byte-identity oracle, and the rest), so the host needs only docker, bash and git; see CONTRIBUTING.md. The same
+byte-identity oracle, and the rest), so the host needs only docker (with its compose plugin), bash, git and coreutils; see CONTRIBUTING.md. The same
 `cargo` commands work outside it with the toolchain `rust-toolchain.toml` pins.
 
 Toolchain: Rust (edition 2021). The core is std-first with **15 vetted, feature-gated

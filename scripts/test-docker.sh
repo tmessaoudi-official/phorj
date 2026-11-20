@@ -73,5 +73,21 @@ set +e; msg="$(PATH=/usr/bin:/bin DK_DOCKER=/nonexistent/docker "$dk" true 2>&1)
 check "no docker and no runner switch = a loud failure" test "$rc" -ne 0
 check "the failure names the switch" grep -q "phorj.runner" <<<"$msg"
 
+# 8. What the host really needs, pinned: docker (with its compose plugin), bash, git and five coreutils, and NOTHING
+#    else on PATH. dk and a hook's re-exec must work from exactly this set, so a new host dependency fails here.
+#    The hook's temporary index lives in .git/, as git's own pathspec-commit index does (the container mounts the repo,
+#    not the host's /tmp).
+closed="$(mktemp -d)"
+for t in docker git bash dirname basename env id tr; do ln -s "$(command -v "$t")" "$closed/$t"; done
+set +e; env -i HOME="$HOME" PATH="$closed" "$closed/bash" "$dk" true; rc=$?; set -e
+check "dk runs from a PATH of docker, git, bash and five coreutils" test "$rc" = 0
+idx="$(cd "$(git -C "$root" rev-parse --git-dir)" && pwd)/test-docker-index"
+cp "$(git -C "$root" rev-parse --git-path index)" "$idx"
+GIT_INDEX_FILE="$idx" git -C "$root" update-index --cacheinfo "100644,$(git -C "$root" rev-parse HEAD:CONTRIBUTING.md),README.md"
+set +e; out="$(cd "$root" && env -i HOME="$HOME" PATH="$closed" GIT_INDEX_FILE="$idx" "$closed/bash" scripts/git-hooks/pre-commit 2>&1)"; rc=$?; set -e
+rm -f -- "$idx"; rm -rf -- "$closed"
+check "a hook re-executes through dk from that PATH and passes (no-Rust path)" test "$rc" = 0
+check "…and it did run in the container (its NO-RUST line)" grep -q "NO-RUST fast path" <<<"$out"
+
 echo "test-docker: $pass passed, $fail failed"
 (( fail == 0 ))

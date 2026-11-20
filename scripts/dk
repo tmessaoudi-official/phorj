@@ -5,7 +5,7 @@
 #   scripts/dk --php 8.6 cargo test --test lift_roundtrip
 #   scripts/dk                                       # an interactive shell
 #
-# The host needs docker, bash and git; nothing else. The image is rebuilt when docker/Dockerfile or
+# The host needs docker (with its compose plugin), bash, git and coreutils (dirname, basename, env, id, tr); nothing else. The image is rebuilt when docker/Dockerfile or
 # rust-toolchain.toml changes (compose's build cache makes an unchanged rebuild a no-op).
 # Environment: DK_DOCKER (the docker binary; tests), DK_NO_BUILD=1 (skip the rebuild check: CI builds the image itself).
 #

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# phorj's whole toolchain in one image (docs/plans/2026-11-19-dockerize.plan.md): the host needs docker, bash and git.
+# phorj's whole toolchain in one image (docs/plans/2026-11-19-dockerize.plan.md): the host needs docker, bash, git, coreutils.
 # Every gate, git hook, CI job and script runs here through `scripts/dk` (or `docker compose run --rm dev …`).
 #
 # THIS FILE IS THE ONE PLACE A TOOL VERSION LIVES (the ARGs below), apart from two that have their own SSOT:

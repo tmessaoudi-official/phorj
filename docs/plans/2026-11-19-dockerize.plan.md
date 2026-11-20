@@ -8,7 +8,7 @@
 ## Status
 | # | Step | State | Evidence |
 |---|------|-------|----------|
-| 1 | Image + compose + `scripts/dk` wrapper | done | `scripts/test-docker.sh` 37/37 (red first: no `scripts/dk`) |
+| 1 | Image + compose + `scripts/dk` wrapper | done | `scripts/test-docker.sh` 40/40 (red first: no `scripts/dk`; §8 pins the host set from a closed PATH, sabotage: a new host tool in dk reddens it); CI on `08209c3a` (44654266197) as on `148a5717` |
 | 2 | Parity: host baseline vs the same gates in the container | done | host `de5f2395` pre-push: 3771 passed, 2 skipped; container (third run, all fixes in): 3772 passed (+1 = `83de0a3c`'s test), 2 skipped, every script suite green, microbench past the source check then SKIP for load exactly as on the host; sabotage: PHP hidden = the oracle test FAILS |
 | 3 | Hooks run through `scripts/dk` (cloud: explicit host runner) | done | pre-commit + pre-push re-exec via dk; `test-cloud-setup.sh` 41/41 incl. `phorj.runner = host` (sabotaged red) |
 | 4 | CI jobs run in the same image (macOS/Windows release native) | done | CI 44649680637 on `148a5717`: gate, jit, perf-gate, cross-build, unsafe-island, oracle-nightly green; playground 44649680642 and release 44649680675 green; `gate-php86` red on `trim_default_set` alone (DEC-588, PENDING), as the local 8.6 image reproduces. The first run (44643020951) built the image on the runner and died "scripts/dk: Permission denied" (exit 126: the 100644 index mode, fixed `1f5ea163`); the image step took 6 min cold, ~1 min from the layer cache |
@@ -41,6 +41,10 @@
 
 ## Declared exceptions to "100 %"
 - macOS and Windows release binaries: a Linux container cannot build them (native runners).
+- The image is x86_64 only (zig and wasm-pack are fetched as x86_64-linux builds): proven on this x86_64 Linux box
+  and GitHub's ubuntu runners; an arm64 host (Apple silicon, Graviton) and docker on macOS or Windows are
+  UNVERIFIED. The true host set is docker with its compose plugin, bash, git and five coreutils (`dirname`,
+  `basename`, `env`, `id`, `tr`), pinned by `scripts/test-docker.sh` §8 from a closed PATH.
 - `oracle-nightly` (PHP 8.7-dev): no official image; non-gating canary, stays on setup-php.
 - claude.ai cloud sessions: the `cloud-setup.sh` fallback (ruled above).
 - Editors launch the `phg` the container built; it runs on a Linux host whose glibc is at least the newest symbol
@@ -69,8 +73,8 @@
   PHORJ_REQUIRE_PHP=1 cargo nextest run --workspace --all-features` and `cargo build --release`; the proposed text is
   `PHORJ_REQUIRE_PHP=1 scripts/dk cargo nextest run --workspace --all-features` and `scripts/dk cargo build --release`.
 - `scripts/test-cloud-setup.sh` §6b holds the host runner's dispatch: with `phorj.runner=host`, dk runs the host tool
-  and the hook runs its body without docker (shims; a control case proves the docker shim records calls; both
-  guards sabotaged red). A hook guard and dk that disagree exec each other forever, so the fixture runs are bounded.
+  and the pre-commit hook runs its body without docker (shims; a control case proves the docker shim records calls;
+  both guards sabotaged red). pre-push carries the same guard, untested by that section. A hook guard and dk that disagree exec each other forever, so the fixture runs are bounded.
 - `scripts/test-docker.sh` needs docker on the host, so it is a manual contract test (`bash scripts/test-docker.sh`),
   not a pre-push step: pre-push itself runs inside the container.
 - `test-lint-on-write.sh` skips one case in the container: its observability check needs the developer's global

@@ -60,7 +60,7 @@ stay in `.claude/agents/`.
 ## Toolchain & quality gate
 
 - **Run everything in Docker** (developer directive 2026-11-19, plan `docs/plans/2026-11-19-dockerize.plan.md`): the
-  host needs docker, bash and git, nothing else. `scripts/dk <cmd>` runs any command in the toolchain image
+  host needs docker (with its compose plugin), bash, git and coreutils, nothing else (`scripts/test-docker.sh` pins the set). `scripts/dk <cmd>` runs any command in the toolchain image
   (`docker/Dockerfile`, the ONE place a tool version is written; Rust's stays in `rust-toolchain.toml`), as the host
   uid, with the repo at its host path, so `target/` and every path are shared. Never call a host `cargo`, `php`,
   `node` or `/stack/tools/*` path; the git hooks re-run themselves through `dk`. Cloud sessions are the one host

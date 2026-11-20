@@ -50,4 +50,9 @@ not in `CLAUDE.md`.
   only because the path is the same. pre-push's ref list arrives on stdin, which `dk` passes through (no TTY: `-T`).
   The DEC-378 commit lock moved from `$TMPDIR` to the git dir, because every container has its own `/tmp`. A checkout
   with `git config phorj.runner host` (set only by `.claude/cloud-setup.sh`) runs the hook bodies on the host.
-  `scripts/test-docker.sh` holds the wrapper's contract (tools, uid, stdin, env, exit status, the loud failure).
+  `scripts/test-docker.sh` holds the wrapper's contract (tools, uid, stdin, env, exit status, the loud failure, and
+  the host set: docker, bash, git and five coreutils, from a closed PATH). Two traps: this repo has
+  `core.fileMode=false`, so a NEW executable is staged 100644 whatever the disk says (`scripts/dk` was, and every CI
+  job died "Permission denied"); `scripts/validate-infra.sh` fails an extensionless shebang file not tracked 100755.
+  And a hook guard that disagrees with dk's runner check makes the two exec each other forever:
+  `scripts/test-cloud-setup.sh` §6b pins the host-runner dispatch (pre-commit; pre-push carries the same guard).
