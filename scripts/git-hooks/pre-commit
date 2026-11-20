@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Phorj pre-commit gate (M2 P3.5 Wave 0, Task 0.5). Tracked in-repo and wired up with
 #   git config core.hooksPath scripts/git-hooks
-# Dependencies: the cargo toolchain, plus llvm-objcopy for tests/build.rs (DEC-530's test asserts it;
-# see CONTRIBUTING.md). Blocks a commit unless formatting and the
+# Dependencies: docker (the image carries cargo, nextest and llvm-objcopy for tests/build.rs, which
+# DEC-530's test asserts; see CONTRIBUTING.md). Blocks a commit unless formatting and the
 # RUST-ONLY test suite (fast tier) pass. cargo-nextest is used as a FASTER (parallel) test runner
 # when present; the hook falls back to plain `cargo test` when it is absent.
 #
@@ -20,9 +20,15 @@
 # opt-level (deps=2, workspace=1) lives in Cargo.toml [profile.dev]; it is what makes the fast tier ~11s.
 set -euo pipefail
 
-# The toolchain lives outside the default PATH on this machine; prepend it only if cargo is
-# not already reachable (keeps the hook working under git's reduced environment).
-command -v cargo >/dev/null 2>&1 || export PATH="/stack/tools/cargo/bin:$PATH"
+# ── Run in phorj's toolchain container (docs/plans/2026-11-19-dockerize.plan.md) ──────────────────────
+# The host needs docker, bash and git; the hook re-executes itself through scripts/dk, which mounts the repo at the
+# same path and forwards git's hook environment (GIT_INDEX_FILE: a pathspec commit's temporary index). A checkout
+# provisioned by .claude/cloud-setup.sh sets `git config phorj.runner host` and runs here directly; dk refuses to
+# guess that from a missing docker.
+if [[ "${PHORJ_IN_DOCKER:-}" != 1 && "$(git config --get phorj.runner || true)" != host ]]; then
+  _hook="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  exec "$(git rev-parse --show-toplevel)/scripts/dk" "$_hook" "$@"
+fi
 
 # Force the Rust-only gate regardless of any `php` on PATH (the oracle is a pre-push concern).
 export PHORJ_SKIP_PHP=1
@@ -33,7 +39,8 @@ export PHORJ_SKIP_PHP=1
 # (`--test cli` failed under the race, then passed 29/0 in isolation). CLAUDE.md states the rule; a
 # stated rule cannot stop a backgrounded commit, so take an exclusive lock and fail fast instead.
 if command -v flock >/dev/null 2>&1; then
-  exec 9>"${TMPDIR:-/tmp}/phorj-commit-hook.lock"
+  # In the git dir, not $TMPDIR: each container has its own /tmp, so a lock there would never see a second hook.
+  exec 9>"$(git rev-parse --git-common-dir)/phorj-commit-hook.lock"
   if ! flock -n 9; then
     echo "[pre-commit] ABORT: another commit's hook is still running (DEC-378 — they share target/" >&2
     echo "  and the phg binary the cli tests spawn, so racing them fails spuriously). Wait for it." >&2

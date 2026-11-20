@@ -1,0 +1,41 @@
+# phorj's toolchain as one compose service (docs/plans/2026-11-19-dockerize.plan.md). Use it through `scripts/dk <cmd>`,
+# which sets the variables below; by hand: `PHORJ_UID=$(id -u) PHORJ_GID=$(id -g) PHORJ_ROOT=$PWD docker compose run --rm dev <cmd>`.
+#
+# The repo is mounted at its HOST path (PHORJ_ROOT), not at /work: `target/` is then shared with the host and every
+# absolute path is the same on both sides (cargo fingerprints, git's temporary hook index, the paths microbench hands
+# to php, editors launching target/release/phg). The container runs as the developer's uid:gid, so what it writes stays
+# theirs. Host networking keeps localhost DSNs (PHORJ_PG_TEST_DSN, mailpit) meaning what they mean on the host.
+name: phorj
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_MINOR: "8.5"
+        PHORJ_INPUTS: "${PHORJ_INPUTS:-unset}"
+    image: phorj-dev:php8.5
+    user: "${PHORJ_UID:?run through scripts/dk, or set PHORJ_UID}:${PHORJ_GID:?set PHORJ_GID}"
+    working_dir: "${PHORJ_ROOT:?set PHORJ_ROOT to the repo path}"
+    volumes:
+      - "${PHORJ_ROOT}:${PHORJ_ROOT}"
+      # A named volume locally; CI points PHORJ_CARGO_CACHE at a directory actions/cache saves and restores.
+      - "${PHORJ_CARGO_CACHE:-cargo}:/cache/cargo"
+    network_mode: host
+    init: true
+
+  # CI's gate-php86 image (the newest gating PHP); `scripts/dk --php 8.6 <cmd>`.
+  dev86:
+    extends: dev
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_MINOR: "8.6"
+        PHORJ_INPUTS: "${PHORJ_INPUTS:-unset}"
+    image: phorj-dev:php8.6
+
+volumes:
+  cargo:
+    name: phorj-cargo

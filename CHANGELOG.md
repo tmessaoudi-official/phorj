@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — the whole toolchain runs in Docker (2026-11-20)
+
+The host needs docker, bash and git, nothing else. `docker/Dockerfile` builds one image with the pinned Rust
+(`rust-toolchain.toml`), PHP 8.5 with bcmath (the byte-identity oracle; the tag floats the patch, never pinned),
+cargo-nextest, llvm-objcopy, zig and cargo-zigbuild, wasm-pack and node; it is the one place a tool version is
+written. `scripts/dk <cmd>` runs a command in it as the developer, with the repo at its host path (`target/` and
+editor paths are shared); `scripts/dk --php 8.6` uses the PHP 8.6 image. The git hooks re-run themselves through dk,
+CI's gating jobs and the playground build use the same image, and `.claude/cloud-setup.sh` (claude.ai cloud sessions,
+which have no docker) installs the Dockerfile's versions and sets `git config phorj.runner host`. One PHP build
+locally and on CI also ends the PCRE2 10.44-vs-10.42 split (DEC-522). Parity: the full pre-push gate in the container
+ran 3772 tests, 3772 passed, 2 skipped, as on the host. Contract test: `bash scripts/test-docker.sh`. Plan:
+`docs/plans/2026-11-19-dockerize.plan.md`.
+
 ### Fixed — a lambda in a `match` arm can capture the arm's binding on the VM (defect LAMBDA-CAPTURE-MATCH-BINDING, P0, 2026-11-19)
 
 `match (s) { Shape.Sq(n) => List.sum(List.map([1, 2], function(int i) => i + n)), Shape.Dot() => 0 }` printed `13` on the

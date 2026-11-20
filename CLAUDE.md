@@ -59,7 +59,20 @@ stay in `.claude/agents/`.
 
 ## Toolchain & quality gate
 
-- `export PATH=/stack/tools/cargo/bin:$PATH`.
+- **Run everything in Docker** (developer directive 2026-11-19, plan `docs/plans/2026-11-19-dockerize.plan.md`): the
+  host needs docker, bash and git, nothing else. `scripts/dk <cmd>` runs any command in the toolchain image
+  (`docker/Dockerfile`, the ONE place a tool version is written; Rust's stays in `rust-toolchain.toml`), as the host
+  uid, with the repo at its host path, so `target/` and every path are shared. Never call a host `cargo`, `php`,
+  `node` or `/stack/tools/*` path; the git hooks re-run themselves through `dk`. Cloud sessions are the one host
+  runner: `.claude/cloud-setup.sh` installs the Dockerfile's versions and sets `git config phorj.runner host`.
+
+  | command | runs | replaces |
+  |---|---|---|
+  | `scripts/dk cargo …` | the pinned Rust, cargo-nextest, llvm-objcopy, zig + cargo-zigbuild | host `/stack/tools/cargo` |
+  | `scripts/dk php -n …` | PHP 8.5 + bcmath (`PHORJ_PHP` is set in the image) | phpbrew `php-8.5.*` via `scripts/toolchain.env` |
+  | `scripts/dk --php 8.6 …` | the same image on PHP 8.6 (CI's `gate-php86`) | host php 8.6 |
+  | `scripts/dk wasm-pack …` / `node …` / `npm …` | the playground and the VS Code extension | host node, wasm-pack |
+  | `scripts/dk` | a shell in the toolchain | — |
 - **Green means ALL of:** `cargo test --workspace` + `cargo clippy --all-targets`
   + `cargo fmt --check` + `cargo build --release`, clean. **`jit` is a DEFAULT feature** (developer-ruled
   2026-07-09) — so bare `cargo test`/`build`/`clippy` include the JIT (the `--features jit` still written
@@ -74,19 +87,18 @@ stay in `.claude/agents/`.
   `scripts/git-hooks/**`, `Cargo.toml` or `.config/nextest.toml`).
 - **Full correctness gate — ALL-FEATURES (developer-ruled 2026-07-16)** (before claiming any feature
   done, and always before a push):
-  `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo nextest run --workspace --all-features`
-  + `cargo clippy --all-targets --all-features` + `cargo clippy --all-targets --no-default-features`
-  + `cargo fmt --check` + `cargo build --release`. **`--all-features` is mandatory**: the non-default
+  `PHORJ_REQUIRE_PHP=1 scripts/dk cargo nextest run --workspace --all-features`
+  + `scripts/dk cargo clippy --all-targets --all-features` + `scripts/dk cargo clippy --all-targets --no-default-features`
+  + `scripts/dk cargo fmt --check` + `scripts/dk cargo build --release`. **`--all-features` is mandatory**: the non-default
   features (`http-client`, `mail`, `database-postgres`, `database-mysql`) are otherwise NEVER compiled/linted/tested
   by the gate — the `--features jit`-only gate hid real clippy lints in those files (DEC-264 build).
   The live DB/mail/http round-trips self-skip when their `PHORJ_*_TEST_DSN`/server env is absent
   (skip-loud). With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
-  Transpile floor = **PHP 8.5** (resolved by `scripts/toolchain.env`, never pinned — no script may pin a patch
-  version); the bare `php` on PATH is whatever the machine carries (a dev build, 8.7.0-dev, on 2026-09-29;
-  8.5.4 with JIT off on 2026-11-15) and is never the oracle — never gate against it (CI runs it only as a
-  non-gating canary).
-- **PHP oracle resolution** — how the local resolver picks the oracle, CI's SECOND resolution path, the PCRE2 split
-  between them (a `preg_*` pin must hold on both) and the no-pin check → `.claude/rules/php-oracle.md` (loads when
+  Transpile floor = **PHP 8.5**: the image's `php:8.5-cli-trixie` base, whose tag floats the patch (never pinned —
+  no script may pin a patch version). Any `php` on the host is whatever the machine carries (a dev build,
+  8.7.0-dev, on 2026-09-29; 8.5.4 with JIT off on 2026-11-15) and is never the oracle — never gate against it.
+- **PHP oracle resolution** — the image's PHP (one path for local and CI, so one PCRE2), the `php -n` wrapper, the
+  host-runner fallback (`scripts/toolchain.env`) and the no-pin check → `.claude/rules/php-oracle.md` (loads when
   you read `scripts/toolchain.env`, `scripts/validate-infra.sh`, `scripts/test-validate-infra.sh`, `tests/**`,
   `src/transpile/**`, `src/lift/**`, `src/native/**` or `.github/workflows/**`).
 - **Perf:** `phg benchmark <file>` (median-of-N, output-identity gated) for before/after numbers;

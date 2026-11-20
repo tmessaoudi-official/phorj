@@ -245,6 +245,19 @@ jq --arg p "$ISO/php-release" '._baseline_php = $p' "$ISO/bench/micro-baseline.j
 iso_check 0 'release binary .* absent' '15 a run whose source matches the baseline proceeds' \
   MICROBENCH_PHP_BIN="$ISO/php-release" MICROBENCH_BASELINE="$ISO/bench/matched.json"
 
+# 15b. In the toolchain image (docker/Dockerfile) the php IS the official image's binary, and the image says which
+# (PHORJ_PHP_SOURCE). Measured on it, a run is the `docker php:8.5-cli` comparator: it proceeds against a
+# docker-recorded baseline instead of SKIPping as a source mismatch (which silently turned the G-8 ratchet off in
+# every containerised pre-push, parity run 2026-11-19).
+iso_check 0 'release binary .* absent' '15b the image php named by PHORJ_PHP_SOURCE matches a docker baseline' \
+  MICROBENCH_PHP_BIN="$ISO/php-release" PHORJ_PHP="$ISO/php-release" PHORJ_PHP_SOURCE="docker php:8.5-cli" \
+  MICROBENCH_BASELINE="$ISO/bench/micro-baseline.json"
+
+# 15c. …and the label covers only that php: another binary under the same variable is still a mismatch.
+iso_check 0 'baseline was recorded on' '15c PHORJ_PHP_SOURCE does not relabel a different php' \
+  MICROBENCH_PHP_BIN="$ISO/php-release" PHORJ_PHP="$ISO/php-zts" PHORJ_PHP_SOURCE="docker php:8.5-cli" \
+  MICROBENCH_BASELINE="$ISO/bench/micro-baseline.json"
+
 # 16. `--emit` with no valid php source REFUSES (exit 2) and writes NOTHING. Cases 10-15 never pass
 # `--emit`, and the real DEC-516 emit went through the JSON seam, so without this the branch would
 # ship unexecuted. The refusal exists because an emit that exits 0 having written nothing reads as

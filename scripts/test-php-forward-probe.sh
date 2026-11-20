@@ -116,7 +116,8 @@ if [[ $rc -eq 2 ]]; then ok "no file argument is a usage error (rc 2)"; else bad
 
 # ── 3. Which builds count as newer: decided by the build's own version, never by its folder name ─
 : > "$TMP/linted"
-out="$(PHORJ_PHG="$TMP/bin/phg" PHORJ_FORWARD_FLOOR="$B/php-floor/bin/php" bash "$TOOL" --quiet "$TMP/hit.phg" 2>/dev/null)"; rc=$?
+# env -u: the glob is the path under test, so an inherited explicit list (the toolchain image sets one) must not win.
+out="$(env -u PHORJ_FORWARD_PHPS PHORJ_PHG="$TMP/bin/phg" PHORJ_FORWARD_FLOOR="$B/php-floor/bin/php" bash "$TOOL" --quiet "$TMP/hit.phg" 2>/dev/null)"; rc=$?
 if [[ $rc -eq 1 && "$out" == *"PHP 8.6.0 reports"* && "$out" == *"PHP 8.7.0-dev reports"* ]]; then
   ok "the builds beside the oracle are found by glob: 8.6.0 and 8.7.0-dev both probed"
 else

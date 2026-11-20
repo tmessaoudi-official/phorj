@@ -9,30 +9,33 @@ in a large change, please open an issue to discuss it first (see [SUPPORT.md](SU
 
 ## Development setup
 
+You need **Docker** (with the compose plugin), `bash` and `git`. Nothing else: the whole toolchain (the pinned
+Rust from `rust-toolchain.toml`, PHP 8.5 with bcmath as the byte-identity oracle, cargo-nextest, `llvm-objcopy`,
+zig and cargo-zigbuild for `phg build --target`, wasm-pack and node for the playground) lives in one image,
+`docker/Dockerfile`, which is also the one place a tool version is written. `scripts/dk` runs any command in it,
+from anywhere in the repo, as you (the files it writes are yours) and with the repo at its own path:
+
 ```sh
 git clone https://github.com/tmessaoudi-official/phorj
 cd phorj
-cargo build              # cargo fetches the vetted feature-gated deps (see THIRD-PARTY-NOTICES.md)
-cargo test               # run the full suite
+git config core.hooksPath scripts/git-hooks   # the pre-commit and pre-push gates (they run in the image too)
+scripts/dk cargo build                        # the first run builds the image (several minutes, once)
+scripts/dk cargo test                         # run the full suite
+scripts/dk                                    # a shell inside the toolchain
 ```
 
-You need a stable Rust toolchain (edition 2021) and `llvm-objcopy`: the host `phg build` tests shell out
-to it, and one of them (DEC-530) fails rather than skips without it. Either install LLVM (it is then on
-`PATH`), or run `rustup component add llvm-tools` and point `PHORJ_OBJCOPY` at the `llvm-objcopy` under
-`$(rustc --print sysroot)`. Cross-builds for `phg build --target` additionally need
-[`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild) and `zig`; those are **not** required for
-normal development.
+The binaries land in `target/` as usual, and run on the host: editors launch `target/release/phg`.
 
 ## The quality gate (must be green before every commit)
 
 ```sh
-cargo test                   # all tests pass
-cargo clippy --all-targets   # zero warnings — warnings are DENIED in the manifest
-cargo fmt --check            # formatting matches rustfmt
+scripts/dk cargo test                   # all tests pass
+scripts/dk cargo clippy --all-targets   # zero warnings — warnings are DENIED in the manifest
+scripts/dk cargo fmt --check            # formatting matches rustfmt
 ```
 
 A pre-commit hook (`scripts/git-hooks/pre-commit`) enforces this locally. GitHub Actions runs the
-same gate on every push and PR (`.github/workflows/ci.yml`), additionally setting
+same gate, in the same image, on every push and PR (`.github/workflows/ci.yml`), additionally setting
 `PHORJ_REQUIRE_PHP=1` so the PHP oracle in `tests/differential.rs` *fails* — never silently
 skips — if transpiled PHP diverges from the interpreter/VM. A second CI job exercises
 `phg build --target` cross-compilation parity. A change is not done until all three checks are
@@ -50,7 +53,7 @@ change is considered complete.
 - Unit tests live in `#[cfg(test)] mod tests` next to the code.
 - Integration tests live in `tests/` (`cli.rs`, `build.rs`, `differential.rs`, the `*_integration.rs`
   suites).
-- Golden diagnostics: `PHORJ_BLESS=1 cargo test --test diagnostics` (re)generates the `.expected`
+- Golden diagnostics: `PHORJ_BLESS=1 scripts/dk cargo test --test diagnostics` (re)generates the `.expected`
   files — review the diff before committing a blessed change.
 
 ## Correctness invariants (read before touching backends)

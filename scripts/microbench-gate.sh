@@ -90,7 +90,17 @@ _php_is_zts() { ! "$1" -r 'exit(PHP_ZTS ? 1 : 0);' >/dev/null 2>&1; }    # 0 = t
 # The php this run WOULD measure against, in the same spelling the baseline records. Single-sourced
 # here so the emit's provenance field and the source-consistency check below cannot drift apart —
 # they used to be two independent copies of the same default string.
-RUN_PHP_SOURCE="${MICROBENCH_PHP_BIN:-docker ${MICROBENCH_PHP_IMAGE:-php:8.5-cli}}"
+# In the toolchain image (docker/Dockerfile) PHORJ_PHP IS the official php image's binary, and the image says which
+# one (PHORJ_PHP_SOURCE, e.g. `docker php:8.5-cli`); measured on it, a run is that comparator, since the benches time
+# themselves with hrtime() inside php. The label covers that one binary only, never another php in the same variable.
+_run_php_source() {
+  if [[ -n "${PHORJ_PHP_SOURCE:-}" && -n "${MICROBENCH_PHP_BIN:-}" && "$MICROBENCH_PHP_BIN" == "${PHORJ_PHP:-}" ]]; then
+    printf '%s' "$PHORJ_PHP_SOURCE"
+  else
+    printf '%s' "${MICROBENCH_PHP_BIN:-docker ${MICROBENCH_PHP_IMAGE:-php:8.5-cli}}"
+  fi
+}
+RUN_PHP_SOURCE="$(_run_php_source)"
 
 command -v jq >/dev/null 2>&1 || {
   echo "microbench-gate: jq is required" >&2
@@ -170,7 +180,7 @@ else
     fi
   fi
   # Re-read: the fallback above may have just set MICROBENCH_PHP_BIN.
-  RUN_PHP_SOURCE="${MICROBENCH_PHP_BIN:-docker ${MICROBENCH_PHP_IMAGE:-php:8.5-cli}}"
+  RUN_PHP_SOURCE="$(_run_php_source)"
 
   # SOURCE CONSISTENCY (DEC-516) — the defect that was actually LIVE, not latent. The baseline
   # records the php it was measured on; comparing a run against a baseline recorded on a DIFFERENT

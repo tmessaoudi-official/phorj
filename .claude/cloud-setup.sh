@@ -27,21 +27,30 @@ SURY_FPR=15058500A0235D97F5D10063B188E2B695BD4743   # DEB.SURY.ORG Automatic Sig
 SURY_KEY_URL=https://packages.sury.org/php/apt.gpg
 SURY_REPO=https://packages.sury.org/php/
 KEYRING=/usr/share/keyrings/debsuryorg-archive-keyring.gpg
-PHP_PKGS=(php8.5-cli php8.5-bcmath php8.5-mbstring php8.5-sqlite3)
-NEXTEST_VER=0.9.152                                   # sha256 below computed 2026-11-19
+# Versions come from docker/Dockerfile, the one place a tool version lives (docs/plans/2026-11-19-dockerize.plan.md):
+# this script is the cloud fallback for the image a cloud session cannot run. Read beside the script, not from the cwd.
+DOCKERFILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/docker/Dockerfile"
+dockerfile_arg() { sed -n "s/^ARG $1=//p" "$DOCKERFILE" 2>/dev/null | head -n1; }
+PHP_MINOR="$(dockerfile_arg PHP_MINOR)"
+PHP_PKGS=("php$PHP_MINOR-cli" "php$PHP_MINOR-bcmath" "php$PHP_MINOR-mbstring" "php$PHP_MINOR-sqlite3")
+NEXTEST_VER="$(dockerfile_arg NEXTEST_VERSION)"
+NEXTEST_SHA_FOR=0.9.152                               # the version the sha256 below was computed for, 2026-11-19
 NEXTEST_URL="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$NEXTEST_VER/cargo-nextest-$NEXTEST_VER-x86_64-unknown-linux-gnu.tar.gz"
 NEXTEST_SHA=d039b43c3e0958441b6ad0a39c8884d018b3d2e8fb9928f209074b1100b5e17a
 
 say() { printf '%s | phorj-cloud-setup | %s | %s\n' "$(date -u +%FT%TZ)" "$1" "$2"; }
 timed() { local name=$1 t0=$SECONDS; shift; "$@"; say INFO "$name took $((SECONDS - t0))s"; }
 # stdout's module list is the verdict; a half-configured php prints startup warnings on stderr, noise for this check
-has_bcmath() { command -v php8.5 >/dev/null && [[ "$(php8.5 -m 2>/dev/null | grep -cx bcmath)" != 0 ]]; }
+has_bcmath() { command -v "php$PHP_MINOR" >/dev/null && [[ "$("php$PHP_MINOR" -m 2>/dev/null | grep -cx bcmath)" != 0 ]]; }
 
 hooks_path() {
   if [[ ! -f scripts/git-hooks/pre-push ]]; then
     say WARN "hooksPath: $(pwd) has no scripts/git-hooks/pre-push: not phorj's root, left unset"; return 0
   fi
   git config core.hooksPath scripts/git-hooks && say INFO "hooksPath: core.hooksPath = scripts/git-hooks"
+  # No docker daemon here: the hooks and scripts/dk run on this machine, provisioned by this script. Said explicitly,
+  # because dk never infers it from a missing docker.
+  git config phorj.runner host && say INFO "runner: phorj.runner = host (no docker in a cloud session)"
 }
 
 prereqs() {
@@ -62,7 +71,8 @@ prereqs() {
 }
 
 php_oracle() {
-  if has_bcmath; then say INFO "php: php8.5 with bcmath already present ($(command -v php8.5))"; return 0; fi
+  if [[ -z "$PHP_MINOR" ]]; then say ERROR "php: no ARG PHP_MINOR in $DOCKERFILE: PHP skipped, pre-push will refuse every push"; return 0; fi
+  if has_bcmath; then say INFO "php: php$PHP_MINOR with bcmath already present ($(command -v "php$PHP_MINOR"))"; return 0; fi
   if ! command -v gpg >/dev/null; then
     say ERROR "php: gpg is not installed (see prereqs), the sury key cannot be checked: PHP skipped, pre-push will refuse every push"
     return 0
@@ -100,8 +110,8 @@ php_oracle() {
            && printf 'deb [signed-by=%s] %s %s main\n' "$KEYRING" "$SURY_REPO" "$codename" >"$P/etc/apt/sources.list.d/php.list"; }; then
     say ERROR "php: cannot write the apt source (output above): PHP skipped"
   elif apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${PHP_PKGS[@]}"; then
-    if has_bcmath; then say INFO "php: $(command -v php8.5) with bcmath installed from sury ($codename)"
-    else say ERROR "php: apt succeeded but php8.5 -m lists no bcmath"; fi
+    if has_bcmath; then say INFO "php: $(command -v "php$PHP_MINOR") with bcmath installed from sury ($codename)"
+    else say ERROR "php: apt succeeded but php$PHP_MINOR -m lists no bcmath"; fi
   else
     say ERROR "php: apt-get failed for ${PHP_PKGS[*]} (output above): pre-push will refuse every push"
   fi
@@ -110,6 +120,10 @@ php_oracle() {
 
 nextest() {
   if command -v cargo-nextest >/dev/null; then say INFO "nextest: already present ($(command -v cargo-nextest))"; return 0; fi
+  if [[ "$NEXTEST_VER" != "$NEXTEST_SHA_FOR" ]]; then
+    say ERROR "nextest: docker/Dockerfile names ${NEXTEST_VER:-no NEXTEST_VERSION}, the sha256 here is for $NEXTEST_SHA_FOR: recompute it; not installed"
+    return 0
+  fi
   local t; t="$(mktemp -d)"
   if curl -fsSL --max-time 60 -o "$t/n.tgz" "$NEXTEST_URL" \
      && printf '%s  %s\n' "$NEXTEST_SHA" "$t/n.tgz" | sha256sum -c --status; then

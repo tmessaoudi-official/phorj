@@ -12,12 +12,18 @@
 # with a `cargo test` fallback — zero hard dependency.
 set -euo pipefail
 
+# ── Run in phorj's toolchain container (docs/plans/2026-11-19-dockerize.plan.md) ──────────────────────
+# The host needs docker, bash and git; the hook re-executes itself through scripts/dk, which mounts the repo at the
+# same path and forwards git's hook environment (GIT_INDEX_FILE: a pathspec commit's temporary index). A checkout
+# provisioned by .claude/cloud-setup.sh sets `git config phorj.runner host` and runs here directly; dk refuses to
+# guess that from a missing docker.
+if [[ "${PHORJ_IN_DOCKER:-}" != 1 && "$(git config --get phorj.runner || true)" != host ]]; then
+  _hook="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  exec "$(git rev-parse --show-toplevel)/scripts/dk" "$_hook" "$@"
+fi
+
 # git feeds the pushed-ref list on stdin; we gate the whole push, not per-ref, so drain it.
 cat >/dev/null || true
-
-# The toolchain lives outside the default PATH on this machine; prepend it only if cargo is
-# not already reachable (keeps the hook working under git's reduced environment).
-command -v cargo >/dev/null 2>&1 || export PATH="/stack/tools/cargo/bin:$PATH"
 
 # Build NON-incrementally for the gate. This box links with `mold` (machine-local, gitignored
 # config), and `mold` + rustc incremental compilation intermittently fail to link with
@@ -46,7 +52,8 @@ _gate_root="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 if [[ -z "${PHORJ_PHP:-}" ]]; then
   echo "[pre-push] FATAL: no PHP 8.5 build with bcmath resolved — see the toolchain.env warning above." >&2
   echo "[pre-push] The PHP leg of the byte-identity spine cannot be gated without it." >&2
-  echo "[pre-push] Fix: install a php-8.5.* under /stack/tools/phpbrew/php/, or export PHORJ_PHP=<path>." >&2
+  echo "[pre-push] Fix: run the hook through scripts/dk (the image sets PHORJ_PHP), or on a host-runner" >&2
+  echo "[pre-push] checkout re-run .claude/cloud-setup.sh." >&2
   exit 1
 fi
 export PHORJ_PHP

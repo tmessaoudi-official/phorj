@@ -88,10 +88,19 @@ _emit_ctx() {
 }
 trap _emit_ctx EXIT
 
+# toolchain TOOL — sets `tc` to the command prefix that runs TOOL from phorj's toolchain: scripts/dk on the host (the
+# host carries no toolchain), the tool itself inside the container or in a checkout without dk (this hook's own test
+# fixtures). Returns 1 when neither exists. Warn-only, so an unreachable docker only costs the advisory (dk says why).
+toolchain() {
+  if [[ "${PHORJ_IN_DOCKER:-}" != 1 && -x "$root/scripts/dk" ]]; then tc=("$root/scripts/dk" "$1")
+  elif command -v "$1" >/dev/null 2>&1; then tc=("$1")
+  else return 1; fi
+}
+
 case "$file" in
   *.rs)
-    if command -v rustfmt >/dev/null 2>&1; then
-      if ! out="$(rustfmt --edition 2021 --check "$file" 2>&1)"; then
+    if toolchain rustfmt; then
+      if ! out="$("${tc[@]}" --edition 2021 --check "$file" 2>&1)"; then
         [[ -n "$out" ]] && warn "rustfmt would reformat ${file#"$root"/} — run \`cargo fmt\` before committing"
         log_obs INFO lint-on-write "rustfmt --check dirty: $file"
       fi
@@ -136,7 +145,7 @@ relay() {
 if [[ "$file" == "$root"/* ]]; then
   rel="${file#"$root"/}"
   guard="$root/scripts/claude-config-guard.py"
-  if [[ -f "$guard" ]] && command -v python3 >/dev/null 2>&1; then
+  if [[ -f "$guard" ]] && toolchain python3; then
     # The guard reads ~10 files (about 0.6 s under load): run it only when this file can be part of a
     # finding — it is a config file, a file a derived claim lives in, or a file a config file names.
     involved=0
@@ -151,13 +160,13 @@ if [[ "$file" == "$root"/* ]]; then
         ;;
     esac
     if ((involved)); then
-      out="$(python3 "$guard" --root "$root" --only "$rel")"
+      out="$("${tc[@]}" "$guard" --root "$root" --only "$rel")"
       relay "claude-config-guard" "$?" "$out" "FAIL "
     fi
   fi
   probe="$root/scripts/php-forward-probe.sh"
-  if [[ "$file" == *.phg && -f "$probe" ]]; then
-    out="$(bash "$probe" --quiet "$file")"
+  if [[ "$file" == *.phg && -f "$probe" ]] && toolchain bash; then
+    out="$("${tc[@]}" "$probe" --quiet "$file")"
     relay "php-forward-probe" "$?" "$out" "php-forward: "
   fi
 fi

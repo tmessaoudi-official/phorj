@@ -43,3 +43,11 @@ not in `CLAUDE.md`.
   `phg transpile` and were not probed. Section 5 of the probe's suite asserts that `function let` IS reported on a
   machine with a newer PHP, so it turns red in the commit that fixes PHP86-DEPRECATED-NAMES and changes there.
   At write time `.claude/hooks/lint-on-write.sh` relays both, warn-only, for the file just written.
+
+- **The hooks run in the toolchain image** (2026-11-19, `docs/plans/2026-11-19-dockerize.plan.md`). Each hook's first
+  step re-executes it through `scripts/dk`, which mounts the repo at its host path and forwards git's hook variables:
+  a pathspec commit hands pre-commit a temporary `GIT_INDEX_FILE` inside `.git/`, which resolves in the container
+  only because the path is the same. pre-push's ref list arrives on stdin, which `dk` passes through (no TTY: `-T`).
+  The DEC-378 commit lock moved from `$TMPDIR` to the git dir, because every container has its own `/tmp`. A checkout
+  with `git config phorj.runner host` (set only by `.claude/cloud-setup.sh`) runs the hook bodies on the host.
+  `scripts/test-docker.sh` holds the wrapper's contract (tools, uid, stdin, env, exit status, the loud failure).

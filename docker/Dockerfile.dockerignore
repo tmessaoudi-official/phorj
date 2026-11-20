@@ -1,0 +1,3 @@
+# Build context is the repo root (compose.yaml); the image needs only the toolchain file. target/ alone is >100 GB.
+*
+!rust-toolchain.toml

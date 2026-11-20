@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# dk - run a command in phorj's toolchain container (docs/plans/2026-11-19-dockerize.plan.md).
+#
+#   scripts/dk cargo nextest run --all-features      # any command, from anywhere in the repo
+#   scripts/dk --php 8.6 cargo test --test lift_roundtrip
+#   scripts/dk                                       # an interactive shell
+#
+# The host needs docker, bash and git; nothing else. The image is rebuilt when docker/Dockerfile or
+# rust-toolchain.toml changes (compose's build cache makes an unchanged rebuild a no-op).
+# Environment: DK_DOCKER (the docker binary; tests), DK_NO_BUILD=1 (skip the rebuild check: CI builds the image itself).
+#
+# The one other runner is the HOST, and it is never inferred: a claude.ai cloud session has no docker daemon, so
+# `.claude/cloud-setup.sh` installs the same tool versions on the machine and sets `git config phorj.runner host`.
+# Without that switch, a missing docker is an error: falling back to whatever tools the host happens to carry is
+# exactly the dependence this wrapper exists to remove.
+set -euo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+docker_bin="${DK_DOCKER:-docker}"
+
+service=dev image=phorj-dev:php8.5
+if [[ "${1:-}" == "--php" ]]; then
+  case "${2:-}" in
+    8.5) service=dev ;;
+    8.6) service=dev86 image=phorj-dev:php8.6 ;;
+    *) echo "dk: --php takes 8.5 or 8.6 (the images compose.yaml defines), got '${2:-}'" >&2; exit 2 ;;
+  esac
+  shift 2
+fi
+(( $# )) || set -- bash
+
+# Already inside the container (a script calling dk from a gate that dk started): run directly.
+if [[ "${PHORJ_IN_DOCKER:-}" == 1 ]]; then exec "$@"; fi
+
+if [[ "$(git -C "$root" config --get phorj.runner 2>/dev/null || true)" == host ]]; then
+  [[ "$service" == dev ]] || { echo "dk: --php $2 needs docker; this checkout runs on the host (phorj.runner=host)" >&2; exit 2; }
+  exec "$@"
+fi
+
+if ! command -v "$docker_bin" >/dev/null 2>&1 || ! "$docker_bin" info >/dev/null 2>&1; then
+  {
+    echo "dk: docker is not reachable, and phorj runs its toolchain in docker (compose.yaml)."
+    echo "    Start docker, or - only on a machine provisioned by .claude/cloud-setup.sh - run on the host:"
+    echo "    git config phorj.runner host"
+  } >&2
+  exit 1
+fi
+
+# Forward the variables a gate, a hook or a test reads; git sets GIT_* for hooks (a pathspec commit hands its hook a
+# temporary GIT_INDEX_FILE, which resolves in the container because the repo is mounted at the same path).
+env_args=()
+while IFS='=' read -r name _; do
+  case "$name" in
+    # Where the HOST keeps its toolchain: forwarding these pointed cargo at /stack/tools/cargo inside the container
+    # (wasm-check failed "Permission denied" creating its registry cache, 2026-11-19 parity run).
+    PHORJ_IN_DOCKER|CARGO_HOME|CARGO_INSTALL_ROOT) ;;
+    PHORJ_*|GIT_*|CARGO_*|RUST_*|RUSTFLAGS|NEXTEST_*|MICROBENCH_*|PERF_*|CI|GITHUB_*|TERM) env_args+=(-e "$name") ;;
+  esac
+done < <(env)
+
+tty_args=(-T)
+[[ -t 0 && -t 1 ]] && tty_args=()
+
+export PHORJ_UID="${PHORJ_UID:-$(id -u)}" PHORJ_GID="${PHORJ_GID:-$(id -g)}" PHORJ_ROOT="$root"
+cd "$root"
+# Run from the caller's directory inside the repo, so relative paths mean what they meant.
+workdir="$(pwd -P)"
+if [[ "$OLDPWD" == "$root"* ]]; then workdir="$OLDPWD"; fi
+# Keep the image in step with its inputs: the image carries their git blob hashes as a label (docker/Dockerfile,
+# last lines), so an unchanged checkout costs one `image inspect`, and a changed one rebuilds before running.
+# DK_NO_BUILD=1: CI, which built and loaded the image itself from the Actions layer cache, a step earlier.
+export PHORJ_INPUTS
+PHORJ_INPUTS="$(git -C "$root" hash-object docker/Dockerfile docker/Dockerfile.dockerignore rust-toolchain.toml | tr '\n' '.')"
+if [[ "${DK_NO_BUILD:-}" != 1 ]]; then
+  have="$("$docker_bin" image inspect -f '{{index .Config.Labels "org.phorj.inputs"}}' "$image" 2>/dev/null || true)"
+  if [[ "$have" != "$PHORJ_INPUTS" ]]; then
+    echo "dk: building $image (its inputs changed, or it is absent; the first build takes several minutes)" >&2
+    "$docker_bin" compose -f "$root/compose.yaml" build "$service" >&2
+  fi
+fi
+exec "$docker_bin" compose --progress quiet -f "$root/compose.yaml" run --rm "${tty_args[@]}" \
+  "${env_args[@]}" -w "$workdir" "$service" "$@"

@@ -116,6 +116,7 @@ hooks_path() { git -C "$TMP/repo" config --get core.hooksPath; }
 fresh; run "$TMP/home" ""
 check "PC (no CLAUDE_CODE_REMOTE): exit 0" '[[ $RC -eq 0 ]]'
 check "PC: no output, no download, no apt, no hooksPath" '[[ -z "$OUT" && ! -s $TMP/calls && -z "$(hooks_path)" && ! -e $KR ]]'
+check "PC: phorj.runner left unset (the hooks run through docker)" '[[ -z "$(git -C "$TMP/repo" config --get phorj.runner)" ]]'
 fresh; run "$TMP/home" true
 check "stray CLAUDE_CODE_REMOTE=true with HOME not /root: no-op" '[[ $RC -eq 0 && -z "$OUT" && ! -s $TMP/calls && -z "$(hooks_path)" ]]'
 fresh; run /root ""
@@ -136,6 +137,10 @@ check "apt-get update runs, then the four php8.5 packages are installed" \
   'grep -q "^apt-get update" $TMP/calls && grep -qE "^apt-get .*install .*php8\.5-cli php8\.5-bcmath php8\.5-mbstring php8\.5-sqlite3" $TMP/calls'
 check "php8.5 with bcmath is reported present after the install" 'grep -qE "INFO \| php: .*bcmath" <<<"$OUT"'
 check "core.hooksPath = scripts/git-hooks" '[[ "$(hooks_path)" == scripts/git-hooks ]]'
+check "phorj.runner = host (scripts/dk runs on this machine: no docker in a cloud session)" \
+  '[[ "$(git -C "$TMP/repo" config --get phorj.runner)" == host ]]'
+check "the php packages are the minor docker/Dockerfile names" \
+  'grep -qE "^apt-get .*install .*php$(sed -n "s/^ARG PHP_MINOR=//p" "$ROOT/docker/Dockerfile")-cli" "$TMP/calls"'
 check "a nextest download that is not the pinned tarball is refused" \
   '[[ ! -e $TMP/p/usr/local/bin/cargo-nextest ]] && grep -qE "ERROR \| nextest: .*sha256" <<<"$OUT"'
 check "a missing llvm-objcopy is a WARN with the remedy" 'grep -qE "WARN \| llvm-objcopy: .*llvm-tools" <<<"$OUT"'
