@@ -63,5 +63,6 @@ the both-backends half still holds (both Rust backends share one process) — on
   `Process.args()` works exactly as in a normal program.
 - **Read-only.** There is no `putenv` — environment mutation is out of scope (matching the read-only
   stance of reflection). `Env.all()` is sorted by key for a stable result.
-- **Transpiled PHP.** `Process.args` → `array_slice($argv, 1)`; `Env.get` → `getenv` coerced to
+- **Transpiled PHP.** `Process.arguments()` and `main`'s parameter → `array_slice($GLOBALS['argv'] ?? [], 1)` (a
+  PHP function does not see `$argv`); `Env.get` → `getenv` coerced to
   `null`; `Env.all` → `getenv()` + `ksort`.

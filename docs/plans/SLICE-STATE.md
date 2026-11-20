@@ -537,7 +537,6 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 | R9-K6 FAULT-SKIPS-FINALLY | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth K6 | P1; awaits a ruling — does not block | Invariant 15: does a fault run pending `finally` and `using` cleanup? The VM skips it, the tree-walker and PHP run it. No register row yet. |
 | R9-AE-14 CALL-DEPTH-VS-PHP | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth AE-14 | P1; awaits a ruling — does not block | the 4096 call-depth bound faults where PHP runs deeper: raise it, quarantine deep recursion, or disclose it (Conflicts, item 2). No register row yet. |
 | R9-AE-4 PARSE-TRAILING-NEWLINE | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth AE-4 | P1 | the PHP leg's number-parsing helpers accept a trailing `\n` (a regex `$` without `D`), the class of VALIDATION-regex-trailing-newline. |
-| PROCESS-ARGS-PHP-SCOPE | found closing R9-G-2 (2026-11-20), `src/native/process.rs` (`arguments`' PHP twin) | P1 (proposed 2026-11-20, ratification owed) | the PHP twin of `Process.arguments()` emits `array_slice($argv ?? [], 1)` at the call site, and `$argv` is not in a function's scope, so on the PHP leg the call returns `[]` inside any function: `examples/process/main-args.phg -- alpha beta` prints `matches Process.arguments() = true` natively and `false` under `php -n` (measured 2026-11-20); wrong output, unseen because `Process` programs are quarantined from the differential. |
 | R9-CJ-1 PARSEINT-INT-MIN | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth CJ-1 (= AE-3) | P1 | the PHP helper overflows parsing the most negative `int`. |
 | R9-AE-2 SPLITONCE-EMPTY-SEPARATOR | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth AE-2 | P1 | native succeeds, PHP throws `ValueError`; row 9 flagged the fault kind as a decision (Conflicts, item 9). |
 | R9-AE-12 MATCH-ARM-AFTER-CATCHALL | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth AE-12 | P1 | the transpiled PHP of a `match` with an arm after a catch-all does not parse. |
@@ -645,7 +644,9 @@ regression `try_unwrapped_var_is_an_arithmetic_operand`) left the queue. R9-A-1 
 regression `a_non_utf8_argument_is_refused_not_a_panic`) left the queue. Whether non-UTF-8 process input should instead be read lossily (or through a bytes API) is PENDING as
 DEC-590. R9-G-2 NONUTF8-ENV (2026-11-20, plan `docs/plans/2026-11-20-nonutf8-env.plan.md`; regression
 `a_non_utf8_environment_variable_is_left_out_of_all_on_the_native_legs`) left the queue with the no-ruling fix: such a pair
-is left out of `Environment.all()`, as `get()` already answers `null`.
+is left out of `Environment.all()`, as `get()` already answers `null`. PROCESS-ARGS-PHP-SCOPE (found closing R9-G-2,
+2026-11-20, plan `docs/plans/2026-11-20-process-args-php-scope.plan.md`; regression
+`process_arguments_inside_a_function_match_on_the_php_leg`) left the queue.
 
 **Left the queue at ratification (2026-11-17):** STATIC-COMPOSITION-PARITY (its five items FIXED; its open remainder is
 DECOMPOSED-PARENT-TRAITS); DEV-PRERELEASE-FROM-BRANCH (accepted by the developer 2026-11-07); `Expr::New` inside an

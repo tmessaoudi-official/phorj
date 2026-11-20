@@ -114,3 +114,102 @@ fn a_non_utf8_environment_variable_is_left_out_of_all_on_the_native_legs() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The php binary, or `None` with a loud SKIP — a FAILURE under `PHORJ_REQUIRE_PHP=1` (skip-loud).
+fn php_or_gate(label: &str) -> Option<String> {
+    let cand = std::env::var("PHORJ_PHP").unwrap_or_else(|_| "php".to_string());
+    let ok = Command::new(&cand)
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if ok {
+        return Some(cand);
+    }
+    assert!(
+        std::env::var("PHORJ_REQUIRE_PHP").as_deref() != Ok("1"),
+        "{label}: php required (PHORJ_REQUIRE_PHP=1) but not found on PATH or $PHORJ_PHP"
+    );
+    eprintln!("SKIP {label}: php not found — set PHORJ_REQUIRE_PHP=1 to make this a failure");
+    None
+}
+
+const ARGS_PROBE: &str = r#"package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Process;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+function listed(): void {
+    for (string s in Process.arguments()) {
+        Output.printLine("helper [{s}]");
+    }
+}
+
+#[Entry(kind: EntryKind.Cli)]
+function main(List<string> args): int {
+    listed();
+    var f = function(): int { return List.length(Process.arguments()); };
+    Output.printLine("lambda {f()}");
+    Output.printLine("main {List.length(args)}");
+    return List.length(args);
+}
+"#;
+
+/// PROCESS-ARGS-PHP-SCOPE: `Process.arguments()` read from a helper function and from a lambda gives the same
+/// arguments on the PHP leg as natively. Its PHP twin used `$argv`, which a PHP function does not see, so it
+/// returned `[]` there. `Process` programs are quarantined from the differential (impure), so this is where the
+/// PHP leg is compared.
+#[test]
+fn process_arguments_inside_a_function_match_on_the_php_leg() {
+    let Some(php) = php_or_gate("process_arguments_inside_a_function_match_on_the_php_leg") else {
+        return;
+    };
+    let dir = std::env::temp_dir().join(format!("phorj_args_php_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("argsprobe.phg");
+    std::fs::write(&src, ARGS_PROBE).unwrap();
+    let args = ["alpha", "b c"];
+    let native = Command::new(BIN)
+        .arg("run")
+        .arg(&src)
+        .arg("--")
+        .args(args)
+        .output()
+        .unwrap();
+    let transpiled = Command::new(BIN)
+        .arg("transpile")
+        .arg(&src)
+        .output()
+        .unwrap();
+    assert!(
+        transpiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&transpiled.stderr)
+    );
+    let php_file = dir.join("argsprobe.php");
+    std::fs::write(&php_file, &transpiled.stdout).unwrap();
+    let php_out = Command::new(&php)
+        .arg("-n")
+        .arg(&php_file)
+        .args(args)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let want = "helper [alpha]\nhelper [b c]\nlambda 2\nmain 2\n";
+    assert_eq!(String::from_utf8_lossy(&native.stdout), want);
+    assert_eq!(
+        String::from_utf8_lossy(&php_out.stdout),
+        want,
+        "{}",
+        String::from_utf8_lossy(&php_out.stderr)
+    );
+    assert!(
+        php_out.stderr.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&php_out.stderr)
+    );
+    assert_eq!(native.status.code(), Some(2));
+    assert_eq!(php_out.status.code(), Some(2));
+}

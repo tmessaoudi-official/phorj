@@ -78,6 +78,12 @@ fn env_all(_args: &[Value], _: &mut String) -> Result<Value, String> {
     Ok(Value::Map(Rc::new(map)))
 }
 
+/// The PHP expression for the program's arguments, shared by `Process.arguments()`'s twin and the entry-point
+/// bootstrap (`main(List<string>)`) so the two never read different variables. `$GLOBALS['argv']`, not `$argv`:
+/// a PHP function does not see the global `$argv`, so the twin returned `[]` inside any function
+/// (PROCESS-ARGS-PHP-SCOPE).
+pub const PHP_PROGRAM_ARGS: &str = "array_slice($GLOBALS['argv'] ?? [], 1)";
+
 pub(crate) fn process_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
@@ -87,9 +93,9 @@ pub(crate) fn process_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: false,
             eval: NativeEval::Pure(process_args),
-            // PHP: the args after the script name. `$argv` exists under the CLI SAPI (register_argc_argv).
+            // PHP: the args after the script name (`$GLOBALS['argv']`, set under the CLI SAPI).
             lift_from: &[],
-            php: |_| "array_slice($argv ?? [], 1)".to_string(),
+            php: |_| PHP_PROGRAM_ARGS.to_string(),
         },
         NativeFn {
             module: "Core.Environment",

@@ -18,7 +18,8 @@ fn runtime_static_inits(program: &Program) -> Vec<(String, String, &Expr)> {
 }
 
 /// The entry-point bootstrap shape (Batch-1 B): `(main takes an argv param, main returns int)`. Drives
-/// the PHP call site — argv is passed as `array_slice($argv ?? [], 1)` (matching `Core.Process.args()`)
+/// the PHP call site — argv is passed as [`crate::native::PHP_PROGRAM_ARGS`] (the same expression as
+/// `Core.Process.arguments()`)
 /// and an `int`-returning `main` is wrapped in `exit(…)` so the return value becomes the process exit
 /// status. A `void` `main()` keeps the bare `main();` call (byte-identical to pre-Batch-1 B output).
 fn main_entry_shape(program: &Program) -> (bool, bool) {
@@ -49,7 +50,7 @@ fn main_bootstrap_stmt(program: &Program, ns_prefix: &str) -> String {
         None => format!("{ns_prefix}{}", entry_decl.name),
     };
     let call = if has_argv {
-        format!("{callee}(array_slice($argv ?? [], 1))")
+        format!("{callee}({})", crate::native::PHP_PROGRAM_ARGS)
     } else {
         format!("{callee}()")
     };

@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `Process.arguments()` reads the real arguments on the PHP leg inside a function (PROCESS-ARGS-PHP-SCOPE, P1 proposed, 2026-11-20)
+
+The PHP twin of `Process.arguments()` emitted `array_slice($argv ?? [], 1)` at the call site, and a PHP function does
+not see the global `$argv`, so on the transpiled PHP the call returned `[]` anywhere but top level:
+`examples/process/main-args.phg -- alpha beta` printed `matches Process.arguments() = false` there and `true`
+natively. The twin and the entry bootstrap (`main(List<string>)`) now share one expression,
+`native::PHP_PROGRAM_ARGS` = `array_slice($GLOBALS['argv'] ?? [], 1)`, measured on PHP 8.5 and 8.6 with an empty
+stderr. `Process` programs are quarantined from the differential, which is why no gate saw it; regression
+`process_arguments_inside_a_function_match_on_the_php_leg` compares the native and `php -n` output of a helper
+function and a lambda (skip-loud under `PHORJ_REQUIRE_PHP=1`); sabotage: reverting to `$argv` fails it. Plan:
+`docs/plans/2026-11-20-process-args-php-scope.plan.md`.
+
 ### Fixed — `Environment.all()` leaves out a non-UTF-8 variable instead of panicking (defect R9-G-2, P1, 2026-11-20)
 
 `Environment.all()` panicked on the three native legs (exit 101) when any environment variable's key or value was not valid
