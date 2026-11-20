@@ -5,7 +5,9 @@
 //! program's `index.phg` entry. The guard list is the point (the docroot exists so source can
 //! never leak): the resolved path is canonicalized and prefix-checked (no `../`, no symlink
 //! escape), `*.phg` source bytes are NEVER served, dot-files are invisible, and there is no
-//! directory listing/auto-index. GET/HEAD only — any other method goes to the program.
+//! directory listing/auto-index. The `.phg` and dot guards run on the request path AND on the
+//! canonical path a symlink resolves to (a symlink to either is a 404; a hard link cannot be told
+//! apart from its target and is not covered). GET/HEAD only — any other method goes to the program.
 //!
 //! Deliberately OUT (later, on demand): Range requests, compression, Cache-Control config,
 //! custom error pages, TLS — the correctness + security core only.
@@ -132,6 +134,19 @@ pub fn try_static(docroot: &Path, raw: &[u8]) -> Option<Vec<u8>> {
     if !real.starts_with(&root) || !real.is_file() {
         return Some(plain_response(404, "not found"));
     }
+    // The same two guards on what is actually SERVED: a symlink inside the docroot (`leak.txt ->
+    // index.phg`, `g -> .git`) passes every check above, which saw only the request path (R9-A-1).
+    // Relative to the canonical root, so a dot in the docroot's own path never trips it.
+    let served = real.strip_prefix(&root).unwrap_or(&real);
+    if served
+        .components()
+        .any(|c| c.as_os_str().to_string_lossy().starts_with('.'))
+        || served
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("phg"))
+    {
+        return Some(plain_response(404, "not found"));
+    }
     let meta = std::fs::metadata(&real).ok()?;
     let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
     let last_modified = http_date(modified);
@@ -214,3 +229,7 @@ pub fn resolve_site_dir(dir: &Path) -> Result<(PathBuf, PathBuf), String> {
     }
     Ok((docroot, entry))
 }
+
+#[cfg(test)]
+#[path = "static_files_tests.rs"]
+mod static_files_tests;

@@ -584,7 +584,6 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 | `serve` raw header lines | KNOWN_ISSUES; PENDING DEC-568 | P1; awaits a ruling — does not block | DEC-568. |
 | DEP-ADVISORIES | KNOWN_ISSUES | P1 | by rule 1's letter (a security exposure). One advisory matters: `rsa` (a timing side channel), reached only through the non-default `mail` DKIM signer, with no patched release; `async-std` is never compiled. Conflicts, item 5. |
 | QA-N9 COOKIE-ATTRIBUTE-INJECTION | ground-prep row 8 (`/cross-check` Q4-16, reproduced 2026-11-16); not in KNOWN_ISSUES; DEC-581 RULED 2026-11-17 | P1 | DEC-581 RULED (reject, like `setrawcookie`): the constructor faults on `;` `,` space and tab in `value` and `cookiePath` on every leg; build queued, it blocks. `Http.Cookie` guards CR/LF/NUL only (DEC-363), so a `;` in `value` or `cookiePath` adds cookie attributes, identically on the VM, the tree-walker, `--no-jit` and the transpiled PHP; PHP's own API refuses (`setrawcookie`) or encodes (`setcookie`) it. The reproduction is kept out of this public file by the developer's ruling of 2026-11-16; browser handling not tested |
-| R9-A-1 SERVE-STATIC-EXPOSURE | ground-prep row 9 (hunters, 2026-11-16; gitignored report), inspect A-1 | P1 | a `phg serve` static-file exposure, named by class here; the detail stays in the gitignored row 9 report (row 9's agent graded it P2: Conflicts, item 1). |
 | SERVE-SPILL | KNOWN_ISSUES (the `serve` body-spill item, "Spill temp files outlive the process"); audit plan row 5 | P2 | an earlier request's spilled body stays readable from a later one on the same worker, but only through a handle the app's own code forges (the entry: "not reachable without the app's own code forging a handle"); the spill files are never deleted. No remote exposure (Conflicts, item 10). |
 
 **D. Membership unconfirmed (11)** — the grade says whether it is a defect under rule 1, and at what grade.
@@ -605,7 +604,7 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 
 **Conflicts for the developer** (2026-11-17; the grades above stand as ratified; each conflict stays open until ruled):
 1. Rule 1's letter against an older or agent grade: STACKDEPTH-deep-member-chain (its own P2), R9-B-5, R9-H-4,
-   R9-AE-10, R9-AE-7, R9-A-1 (each P2 there, graded P1); R9-CJ-3 (P3 there, graded P1); QA-N5 (no earlier grade,
+   R9-AE-10, R9-AE-7, R9-A-1 (each P2 there, graded P1; R9-A-1 FIXED 2026-11-20, so its grade is moot); R9-CJ-3 (P3 there, graded P1); QA-N5 (no earlier grade,
    graded P1 beside STACKDEPTH); PKG-VERBS-HELP (old P1, graded P2); R9-CJ-6 (row 9 P1, graded P2).
 2. Resource bounds against PHP: DEEP-EQ-PHP-LIMIT, R9-AE-14, DIAMOND-EXPONENTIAL. One ruling could cover the class: a
    defect, or a disclosed bound.
@@ -642,7 +641,8 @@ IF-CLASS-ARM-TYPE, the same divergence in an `if` expression, found while fixing
 `docs/plans/2026-11-17-hook-inheritance.plan.md`; regression `hooks_are_inherited_like_methods`; DEC-572 built) was
 replaced in table A by HOOK-FIELD-SHADOW (DEC-582 PENDING), found while fixing it; HOOK-MI-COLLISION (DEC-584 PENDING)
 MI-TRANSPILE-COMPOSITION and OWN-TRAIT-HOOK-SPLIT, found closing it, make the count 76. TRY-UNWRAP-OPERAND (2026-11-20, plan `docs/plans/2026-11-20-try-unwrap-operand.plan.md`;
-regression `try_unwrapped_var_is_an_arithmetic_operand`) left the queue.
+regression `try_unwrapped_var_is_an_arithmetic_operand`) left the queue. R9-A-1 SERVE-STATIC-EXPOSURE (2026-11-20, plan
+`docs/plans/2026-11-20-serve-static-symlink.plan.md`; regression `a_symlink_never_serves_source_or_a_dotfile`) left the queue.
 
 **Left the queue at ratification (2026-11-17):** STATIC-COMPOSITION-PARITY (its five items FIXED; its open remainder is
 DECOMPOSED-PARENT-TRAITS); DEV-PRERELEASE-FROM-BRANCH (accepted by the developer 2026-11-07); `Expr::New` inside an

@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Security — `phg serve <DIR>` never serves `.phg` source or a dotfile through a symlink (defect R9-A-1, P1, 2026-11-20)
+
+A symlink inside `public/` whose target is also inside it (`leak.txt -> index.phg`, `env.txt -> .env`, a directory
+link to `.git`) was served with the target's bytes: the `.phg` and dot guards checked the request path only, and the
+canonicalized path was only checked for staying inside the docroot. Both guards now also run on the canonical path,
+relative to the canonical docroot, and answer `404` like a direct `/index.phg`. Assets under a dot-named directory
+reached through a symlink are no longer served. A hard link cannot be told apart from its target and is not covered.
+Regression `a_symlink_never_serves_source_or_a_dotfile` (with `the_request_path_guards_still_hold` as the control);
+sabotage: without either guard, or checking the absolute path instead of the root-relative one, it fails. Probed on
+the release binary with a real `phg serve`: `/leak.txt` and `/env.txt` went from `200` to `404`. Plan:
+`docs/plans/2026-11-20-serve-static-symlink.plan.md`.
+
 ### Fixed — a `var` bound to `f()?` is an arithmetic operand on the VM (defect TRY-UNWRAP-OPERAND, P0, 2026-11-20)
 
 `var h = half(n)?; int y = h + 1;` (in a function returning `Result<int, string>`) printed `ok 106` on the tree-walker
