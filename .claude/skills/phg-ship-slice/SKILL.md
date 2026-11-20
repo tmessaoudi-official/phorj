@@ -61,7 +61,7 @@ Load `/phg-lenses` first if a review round follows; this skill does not replace 
    loss is FLAGGED and fixed, never suppressed; an unmeasurable bench is an OWED verdict, never
    "passed", never re-baselined via `--emit`. No perf claim above [Inferred] without a measured
    before/after.
-9. **Fresh release binary** — `cargo build --release` in THIS repo (there is no `/stack/projects/phorge`;
+9. **Fresh release binary** — `scripts/dk cargo build --release` in THIS repo (there is no `/stack/projects/phorge`;
    older notes that cd there are stale), then tell the developer the path: `target/release/phg`. A
    full-tree build is heavy on this machine — see `/long-run`.
 10. **Sabotage** — `/sabotage-check` on the slice's guarantee (the differential case, the LSP test),

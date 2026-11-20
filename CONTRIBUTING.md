@@ -24,7 +24,8 @@ scripts/dk cargo test                         # run the full suite
 scripts/dk                                    # a shell inside the toolchain
 ```
 
-The binaries land in `target/` as usual, and run on the host: editors launch `target/release/phg`.
+The binaries land in `target/` as usual. On a Linux host with glibc 2.39 or newer they also run on the host, so
+editors can launch `target/release/phg`; elsewhere point the editor at a native build.
 
 ## The quality gate (must be green before every commit)
 

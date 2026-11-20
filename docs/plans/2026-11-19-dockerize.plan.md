@@ -40,8 +40,9 @@
 - macOS and Windows release binaries: a Linux container cannot build them (native runners).
 - `oracle-nightly` (PHP 8.7-dev): no official image; non-gating canary, stays on setup-php.
 - claude.ai cloud sessions: the `cloud-setup.sh` fallback (ruled above).
-- Editors launch the `phg` the container built; it runs on the host because the image's glibc (2.41) is older than
-  the host's (2.43) [Verified: `ldd --version` in `rust:1.100-slim` and on the host, 2026-11-19].
+- Editors launch the `phg` the container built; it runs on a Linux host whose glibc is at least the newest symbol
+  version the binary links: `GLIBC_2.39` for `target/release/phg` [Verified: `objdump -T`, 2026-11-20; image glibc
+  2.41, host 2.43]. A macOS or Windows host runs its editors against a native build instead.
 
 ## Known issues
 - Parity found five defects, each fixed with a test: dk forwarded the host `CARGO_HOME`; `compose run --build` cost
@@ -58,8 +59,10 @@
 - The Claude hook `.claude/hooks/lint-on-write.sh` still uses the host's `jq` to emit its JSON to Claude Code: harness
   plumbing, like bash and git, not a project tool. Its toolchain calls (rustfmt, the config guard, the forward probe)
   go through dk.
-- Linux release binaries stay on the native runner too (`release.yml`): built in the trixie image they would need
-  glibc 2.41, raising the floor for users.
+- Linux release binaries stay on the native runner too (`release.yml`): built in the trixie image they would link
+  against glibc 2.41 (2.39 symbols today), above the ubuntu runner's, raising the floor for users.
+- `stub-registry.yml` keeps its own zig version and sha (it publishes, so it is never dispatched from here);
+  `scripts/validate-infra.sh` fails when they differ from the Dockerfile's.
 - OBSOLETE, kept until the developer agrees: the phpbrew glob in `scripts/toolchain.env` (cloud uses `php8.5`), the
   `/stack/tools/cargo` toolchain and phpbrew builds on this machine.
 - The first container build of the whole tree took ~17 min under load ~30 (deps rebuild once: the registry path

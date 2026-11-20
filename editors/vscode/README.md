@@ -54,13 +54,14 @@ server power the JetBrains/PhpStorm setup — see `../phpstorm/README.md`.)
 ## Prerequisites
 
 - The `phg` binary on your `PATH` (or set `phorj.serverPath` in settings to its absolute path).
-  Build it with `cargo build --release` (the binary is `target/release/phg`).
+  Build it with `scripts/dk cargo build --release` from the repo root (the binary is `target/release/phg`; it runs
+  on a Linux host with glibc 2.39 or newer, see CONTRIBUTING.md).
 
 ## Run it (Extension Development Host)
 
 ```sh
 cd editors/vscode
-npm install          # fetches vscode-languageclient
+../../scripts/dk npm install    # fetches vscode-languageclient (node runs in the toolchain image)
 code .               # then press F5 → "Run Extension" to launch the dev host
 ```
 
@@ -70,9 +71,8 @@ Open any `.phg` file in the dev host; diagnostics, hover, signature help, go-to-
 ## Package / install locally
 
 ```sh
-npm install -g @vscode/vsce
 cd editors/vscode
-vsce package         # produces phorj-0.7.0.vsix
+../../scripts/dk npx --yes @vscode/vsce package   # produces phorj-0.7.0.vsix
 code --install-extension phorj-0.7.0.vsix
 ```
 

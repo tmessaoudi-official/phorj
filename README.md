@@ -85,10 +85,14 @@ map and [`docs/INVARIANTS.md`](docs/INVARIANTS.md) for the rules that keep all s
 ### From source
 
 ```sh
-cargo build --release        # produces target/release/phg
-cargo test                   # full suite
-cargo clippy --all-targets   # lints (warnings are denied)
+scripts/dk cargo build --release        # produces target/release/phg
+scripts/dk cargo test                   # full suite
+scripts/dk cargo clippy --all-targets   # lints (warnings are denied)
 ```
+
+`scripts/dk` runs each command in the toolchain image (`docker/Dockerfile`: the pinned Rust, PHP 8.5 for the
+byte-identity oracle, and the rest), so the host needs only docker, bash and git; see CONTRIBUTING.md. The same
+`cargo` commands work outside it with the toolchain `rust-toolchain.toml` pins.
 
 Toolchain: Rust (edition 2021). The core is std-first with **15 vetted, feature-gated
 dependencies** (10 in the default build: `argon2`, `regex` + `fancy-regex`, `ctrlc`, `corosensei`, `cranelift`×3

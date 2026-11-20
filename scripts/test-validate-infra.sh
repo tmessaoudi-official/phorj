@@ -62,6 +62,21 @@ out=$(cd "$R" && bash "$TOOL" 2>&1); rc=$?
 [[ $rc -eq 0 ]] && ok "the same file tracked 100755 passes" || bad "100755 runner failed: $out"
 grep -qE 'executable in the index \| 1/1' <<<"$out" && ok "the scan counted the one runner (not dark)" || bad "exec scan count missing: $out"
 
+# ── 2c. A tool version a workflow restates must equal docker/Dockerfile's ARG ────────────
+# The Dockerfile is the one place a tool version is written; stub-registry.yml (which publishes, so it
+# is never dispatched to try) keeps its own ZIG_VERSION/ZIG_SHA256 env. A bump of one alone is drift.
+R="$TMP/drift"; mkrepo "$R"; mkdir -p "$R/docker"
+printf 'FROM scratch\nARG ZIG_VERSION=0.17.1\nARG ZIG_SHA256=aaa\n' > "$R/docker/Dockerfile"
+printf 'name: s\non: [workflow_dispatch]\nenv:\n  ZIG_VERSION: "0.17.1"\n  ZIG_SHA256: "bbb"\njobs:\n  a:\n    runs-on: ubuntu-latest\n' > "$R/.github/workflows/stub.yml"
+( cd "$R" && git add -A && git -c user.email=t@t -c user.name=t commit -qm x ) 2>/dev/null
+out=$(cd "$R" && bash "$TOOL" 2>&1); rc=$?
+[[ $rc -ne 0 ]] && ok "a workflow sha that differs from the Dockerfile ARG FAILS" || bad "drifted ZIG_SHA256 passed: $out"
+grep -qE 'stub\.yml.*ZIG_SHA256' <<<"$out" && ok "…naming the file and the variable" || bad "drift failure unnamed: $out"
+sed -i 's/"bbb"/"aaa"/' "$R/.github/workflows/stub.yml"
+out=$(cd "$R" && bash "$TOOL" 2>&1); rc=$?
+[[ $rc -eq 0 ]] && ok "equal values pass" || bad "equal versions failed: $out"
+grep -qE 'tool versions match docker/Dockerfile \| 2/2' <<<"$out" && ok "both restated values were compared (not dark)" || bad "drift scan count missing: $out"
+
 # ── 2b. A pinned php-oracle path FAILS — and a pin in a NON-hook script fails too ────────
 # The check shipped 2026-08-20 with no test and, in this harness's fixture, scanned ZERO files while
 # printing a pass — the probe-that-cannot-fail shape. These cases are the guard against it going

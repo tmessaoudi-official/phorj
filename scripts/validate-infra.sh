@@ -35,6 +35,7 @@ YML_OK=0;  YML_N=0
 JSON_OK=0; JSON_N=0
 PIN_OK=0;  PIN_N=0
 EXE_OK=0;  EXE_N=0
+VER_OK=0;  VER_N=0
 declare -a FAILED_LINES=()
 
 record_fail() { FAILURES=$((FAILURES + 1)); FAILED_LINES+=("$1"); }
@@ -124,6 +125,33 @@ if [[ $PIN_N -eq 0 ]]; then
   record_fail "php-pin FAIL: scan inspected 0 files"
 fi
 
+# ── Tool versions: docker/Dockerfile is the one place one is written ─────────────────────────
+# A workflow that cannot run in the image restates a version as an env key of the same name (stub-registry.yml's
+# ZIG_VERSION/ZIG_SHA256: it publishes, so it is never dispatched to try). Every such key must equal the ARG.
+say ""
+say "-- tool versions match docker/Dockerfile --"
+if [[ -f docker/Dockerfile ]]; then
+  while IFS='=' read -r name want; do
+    for f in "${YML_FILES[@]:-}"; do
+      # Workflows only: compose.yaml passes the same names as build-arg OVERRIDES (PHP_MINOR 8.6 for dev86).
+      [[ -n "$f" && -f "$f" && "$f" == .github/workflows/* ]] || continue
+      while IFS= read -r hit; do
+        VER_N=$((VER_N + 1))
+        got="$(sed -E 's/^[^:]*:[[:space:]]*//; s/^"//; s/"[[:space:]]*$//; s/[[:space:]]+$//' <<<"${hit#*:}")"
+        if [[ "$got" == "$want" ]]; then
+          VER_OK=$((VER_OK + 1)); say "  PASS $f $name"
+        else
+          say "  FAIL $f:${hit%%:*} $name is \"$got\", docker/Dockerfile says \"$want\""
+          record_fail "version FAIL $f $name: $got != Dockerfile $want"
+        fi
+      done < <(grep -nE "^[[:space:]]*${name}:[[:space:]]" "$f" || true)
+    done
+  done < <(sed -nE 's/^ARG ([A-Z0-9_]+)=([^[:space:]]+)$/\1=\2/p' docker/Dockerfile)
+  [[ $VER_N -eq 0 ]] && say "  (no workflow restates a Dockerfile version)"
+else
+  say "  (no docker/Dockerfile)"
+fi
+
 # ── YAML: parse with python3 (yamllint is absent here; a parse is the load-bearing check) ──────
 say ""
 say "-- YAML parse (python3 yaml.safe_load) --"
@@ -181,6 +209,7 @@ say "|---|---|"
 say "| bash -n | ${SH_OK}/${SH_N} pass |"
 say "| no pinned php oracle | ${PIN_OK}/${PIN_N} clean |"
 say "| executable in the index | ${EXE_OK}/${EXE_N} pass |"
+say "| tool versions match docker/Dockerfile | ${VER_OK}/${VER_N} pass |"
 say "| YAML parse | ${YML_OK}/${YML_N} pass |"
 say "| JSON parse | ${JSON_OK}/${JSON_N} pass |"
 # Report what is TRUE, computed — this row was a hardcoded "SKIPPED — absent from PATH" literal

@@ -61,7 +61,7 @@ args: "[--only <substr>] [--skip-build] [--journey <name>] [--no-playground] [--
 ## Ground rules
 
 1. **Drive `target/release/phg`, not the library.** The whole point is the artefact a user gets. Build
-   it first (`cargo build --release`) unless `--skip-build`, and report the path and version you
+   it first (`scripts/dk cargo build --release`) unless `--skip-build`, and report the path and version you
    actually exercised (`./target/release/phg --version`) — a sweep of a stale binary is a false green.
 2. **Work in a scratch directory under the scratchpad**, never in the repo tree. Anything a journey
    creates is removed at the end unless `--keep-scratch`.
@@ -82,7 +82,7 @@ Each row is a real, runnable surface. Run them in order; later ones assume the b
 
 | # | name | what it covers that `cargo test` does not |
 |---|---|---|
-| 0 | `binary` | `cargo build --release` clean, `phg --version`, `phg --help` lists every verb the docs claim, and every verb answers `<verb> --help` without panicking. A verb documented but absent — or present but undocumented — is a finding. Note `phg vendor` is **retired and must ERROR** (DEC-282), and there is **no `runvm`**: the VM is `run`'s default engine, `--tree-walker` the oracle. |
+| 0 | `binary` | `scripts/dk cargo build --release` clean, `phg --version`, `phg --help` lists every verb the docs claim, and every verb answers `<verb> --help` without panicking. A verb documented but absent — or present but undocumented — is a finding. Note `phg vendor` is **retired and must ERROR** (DEC-282), and there is **no `runvm`**: the VM is `run`'s default engine, `--tree-walker` the oracle. |
 | 1 | `spine` | The three legs on the SHIPPED binary over `examples/**/*.phg`: `phg run` ≡ `phg run --tree-walker` ≡ `phg transpile` under the php RESOLVED by `scripts/toolchain.env` (globbed + bcmath-checked, never a pinned patch version) (**PHP 8.5** floor — never gate against the bare `php` on PATH, which is whatever the machine carries and never the oracle). Also `phg run --no-jit`, which must be byte-identical with no rebuild. This duplicates `tests/differential.rs` *deliberately*: it re-runs it through the installed artefact. |
 | 2 | `lsp` | The language server over **real stdio JSON-RPC**, not handler calls. Frame `initialize` → `initialized` → a document open → the request under test → `shutdown` → `exit`. Assert the advertised capabilities against Invariant 17's 100% RULE. The advertised set is the `capabilities` string of the `initialize` reply in `src/lsp/mod.rs` — eleven providers plus `textDocumentSync` on 2026-11-15, `signatureHelpProvider`, `foldingRangeProvider` and `workspaceSymbolProvider` among them; assert the handshake returns exactly what that string lists. NOT advertised: `codeActionProvider`, `semanticTokensProvider` and `inlayHintProvider`. Those three are known standing gaps — report them as such, not as new findings, and DO flag any new call-site or diagnostic surface that ships without them. Exit codes are conformant (`shutdown`+`exit` → 0; a cold stdin close → 1); do not report that as a defect. |
 | 3 | `diagnostics` | `phg check` ≡ LSP diagnostics (DEC-252, same pipeline, never diverging). Take a file with a real error, run `phg check`, then ask the LSP for diagnostics on the same bytes, and compare code, message and range. A divergence here is a P0 — it is the invariant, not a nicety. Also `phg explain <CODE>` for every code the run emitted. |

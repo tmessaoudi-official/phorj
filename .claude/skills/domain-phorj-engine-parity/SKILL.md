@@ -56,7 +56,7 @@ Delta over CLAUDE.md: Invariants 1-8 and 11 (spine, oracle, Op triad, kernels, s
 - **Checker inheritance runs twice** (`merge_inherited_pass`, before and after the trait merge): every member copy is `or_insert`-shaped except the concatenated constructor signature, which the second pass clears and rebuilds.  [Source: src/checker/collect/inherit.rs:173-178; memory/statics-composition-gotchas.md]
 
 ## Evidence surfaces (what counts as proof here)
-- `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo nextest run --workspace --all-features` with the `CorpusTally` counts read, not only the pass line (CLAUDE.md § Toolchain & quality gate).  [Source: tests/differential.rs:1892-1898]
+- `PHORJ_REQUIRE_PHP=1 scripts/dk cargo nextest run --workspace --all-features` with the `CorpusTally` counts read, not only the pass line (CLAUDE.md § Toolchain & quality gate).  [Source: tests/differential.rs:1892-1898]
 - `tests/build.rs` third surface (`built_binary_matches_vm` and the cross-target round trips); `tests/serve.rs` for serve parity.  [Source: tests/build.rs:205; tests/serve.rs:194]
 - Unit tests over `Value` use `matches!` (no `PartialEq`); perf claims carry `scripts/microbench.sh` output (interleaved, core-pinned, K > 1).  [Source: memory/perf-vm-only-dispatch-core-bound.md; memory/l4-named-tuples-gate-lessons.md]
 

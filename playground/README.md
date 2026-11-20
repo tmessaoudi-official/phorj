@@ -42,18 +42,16 @@ agreement.
 
 ## Build & run locally
 
-Prerequisites: the pinned Rust toolchain (`rust-toolchain.toml`), `wasm-pack`, and Python 3.
+Prerequisites: docker. The toolchain image (`docker/Dockerfile`, run through `scripts/dk`) carries the pinned Rust
+with the wasm target, `wasm-pack`, node and Python 3.
 
 ```bash
 # from the repo root
-rustup target add wasm32-unknown-unknown                 # once
-cargo install wasm-pack                                  # once (or use the official installer)
-
 # bump the wasm stack (MAX_CALL_DEPTH is 4096 — see src/limits.rs)
 RUSTFLAGS="-C link-arg=-zstack-size=33554432" \
-  wasm-pack build playground --target web --release --out-dir web/pkg
+  scripts/dk wasm-pack build playground --target web --release --out-dir web/pkg
 
-python3 playground/web/gen_examples.py                   # regenerate examples.js
+scripts/dk python3 playground/web/gen_examples.py        # regenerate examples.js
 
 # serve the static dir (any static server works); a module worker needs http://, not file://
 python3 -m http.server -d playground/web 8000
@@ -72,8 +70,8 @@ GitHub Pages, via `.github/workflows/playground.yml`:
 ## Tests
 
 ```bash
-cargo test -p phorj-playground          # native unit tests of the wrapper logic
-node playground/tests/php-run.test.mjs  # the php-wasm run path (real php-wasm 0.2.0; needs network unless PHP_WASM_DIR is set)
+scripts/dk cargo test -p phorj-playground          # native unit tests of the wrapper logic
+scripts/dk node playground/tests/php-run.test.mjs  # the php-wasm run path (real php-wasm 0.2.0; needs network unless PHP_WASM_DIR is set)
 ```
 
 ## Known limitations (v1)
