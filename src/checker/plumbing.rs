@@ -51,6 +51,7 @@ impl Checker {
             cur_package: String::new(),
             depth: 0,
             loop_depth: 0,
+            finally_loop_base: None,
             aliases: HashMap::new(),
             alias_stack: Vec::new(),
             alias_cycle_reported: std::collections::HashSet::new(),

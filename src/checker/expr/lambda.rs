@@ -86,6 +86,11 @@ impl Checker {
         // cases 19-21 legal (a lambda param MAY shadow an enclosing local; PHP arrow-fn params shadow
         // correctly and the block-body capture list is `free_vars` minus params, so both legs agree).
         let saved_floor = std::mem::replace(&mut self.fn_scope_floor, self.scopes.len());
+        // A lambda body sees no enclosing loop and no enclosing `finally`: a `break` in it cannot
+        // reach a loop around the lambda (the VM refused it at compile time while the tree-walker ran
+        // it), and a `return` in it leaves the lambda, not a `finally` it is written in (DEC-595/596).
+        let saved_loops = std::mem::replace(&mut self.loop_depth, 0);
+        let saved_finally = self.finally_loop_base.take();
         self.push_scope();
         for p in params {
             let pty = self.resolve_lambda_param_ty(p, ctx_param);
@@ -126,6 +131,8 @@ impl Checker {
             }
         };
         self.pop_scope();
+        self.loop_depth = saved_loops;
+        self.finally_loop_base = saved_finally;
         self.cur_ret = saved_ret;
         self.cur_throws = saved_throws;
         self.try_catch_stack = saved_try;

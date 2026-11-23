@@ -4,6 +4,7 @@ use super::*;
 
 mod core;
 mod flow;
+mod jumps;
 mod literals;
 mod narrow;
 mod using;

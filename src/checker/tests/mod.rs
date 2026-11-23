@@ -21,6 +21,7 @@ mod entry_point;
 mod enums_backed;
 mod field_init;
 mod final_parent;
+mod finally_exits;
 mod function_imports;
 mod generics;
 mod inheritance;

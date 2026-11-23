@@ -109,7 +109,8 @@
 | DEC-593 | Lift and transpile bar = a census ratchet on a pinned twes-in commit, the checker of north-star axis 8 | RULED 2026-11-23 — QUEUED (step 3) |
 | DEC-588 | `String.trimAscii` follows PHP 8.6's default `trim()` set (form feed stripped), passed explicitly; the 8.5 lift split is disclosed | RULED 2026-11-23 — BUILT (step 1a) |
 | DEC-594 | PHP 8.6 deprecated names: functions `let`/`is`/`readonly` renamed in the output (`let_`), types `Is`/`Let` rejected (`E-RESERVED-NAME`) | RULED 2026-11-23 — BUILT (step 1a) |
-| DEC-595 | A `return` inside `finally` is a check error on every leg | RULED 2026-11-23 — QUEUED (step 1b); code name to be asked |
+| DEC-595 | A `return` inside `finally` is a check error on every leg (`E-FINALLY-EXIT`) | RULED 2026-11-23 — BUILT (step 1b) |
+| DEC-596 | A `break`/`continue` leaving a `finally` is the same check error (`E-FINALLY-EXIT`); PHP refuses it at compile time | RULED 2026-11-23 — BUILT (step 1b) |
 
 ## 0.08 THE SCOUT FORCING-FUNCTION RULINGS — mirror rows (DEC-504 … DEC-512)
 

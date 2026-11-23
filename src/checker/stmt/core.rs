@@ -72,6 +72,7 @@ impl Checker {
                 }
             }
             Stmt::Return { value, span } => {
+                self.check_finally_exit(*span, None);
                 let want = self.cur_ret.clone();
                 let actual = match value {
                     // C2 sink: `return f()` resolves a bare return-overloaded call against the declared
@@ -166,31 +167,8 @@ impl Checker {
                 body,
                 ..
             } => self.check_cfor(init.as_deref(), cond.as_ref(), step.as_deref(), body),
-            Stmt::Break(span) => {
-                if self.loop_depth == 0 {
-                    self.err_coded(
-                        *span,
-                        "`break` outside a loop",
-                        "E-BREAK-OUTSIDE-LOOP",
-                        Some(
-                            "`break` may only appear inside a `for`/`while`/`do-while` loop".into(),
-                        ),
-                    );
-                }
-            }
-            Stmt::Continue(span) => {
-                if self.loop_depth == 0 {
-                    self.err_coded(
-                        *span,
-                        "`continue` outside a loop",
-                        "E-CONTINUE-OUTSIDE-LOOP",
-                        Some(
-                            "`continue` may only appear inside a `for`/`while`/`do-while` loop"
-                                .into(),
-                        ),
-                    );
-                }
-            }
+            Stmt::Break(span) => self.check_jump(*span, "break"),
+            Stmt::Continue(span) => self.check_jump(*span, "continue"),
             Stmt::Block(stmts, _) => self.check_block(stmts),
             Stmt::Expr(e, _) => {
                 // B1b: a bare `parent.constructor(…)` statement is the only legal position for the
@@ -286,7 +264,7 @@ impl Checker {
                     self.pop_scope();
                 }
                 if let Some(fb) = finally_block {
-                    self.check_block(fb);
+                    self.check_finally_block(fb);
                 }
             }
             Stmt::Destructure {

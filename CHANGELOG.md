@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — no `return`, `break` or `continue` may leave a `finally` block (`E-FINALLY-EXIT`, DEC-595, DEC-596, 2026-11-23)
+
+`try { throw new LostError("x"); } finally { return 3; }` returned 3 and silently lost the error on every leg (PHP 8.6
+deprecates it); a `break`/`continue` that left a `finally` ran on the native legs while the transpiled PHP died at compile
+time ("jump out of a finally block is disallowed", PHP 8.5 and 8.6). All three are now `E-FINALLY-EXIT` at `phg check`, so in
+the LSP too; a loop written wholly inside the `finally`, and a lambda written there, keep their own `break`/`continue`/`return`.
+**Breaking:** such a program no longer compiles (no shipped example or lift fixture had one). Found building it and fixed
+with it: a `break`/`continue` in a lambda body saw the loop around the lambda, so `phg check` passed, the VM refused the
+program at compile time and the tree-walker ran it; it is now `E-BREAK-OUTSIDE-LOOP`/`E-CONTINUE-OUTSIDE-LOOP`. The rule lives
+in `src/checker/stmt/jumps.rs` (the `break`/`continue` checks moved there from `stmt/core.rs`); `phg explain E-FINALLY-EXIT`.
+The forward probe's real-machine case now feeds the real newer PHP a raw deprecated function through its stub `phg`, as
+Phorj no longer emits any shape 8.6 deprecates. Tests: `src/checker/tests/finally_exits.rs`.
+
 ### Changed — `String.trimAscii` follows PHP 8.6's `trim()` set; PHP 8.6's deprecated names are kept out of the output (DEC-588, DEC-594, 2026-11-23)
 
 PHP 8.6 added the form feed to `trim()`'s default list. `String.trimAscii` now strips `" \t\n\r\0\x0B\x0C"` on every leg and

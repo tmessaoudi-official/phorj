@@ -18,6 +18,8 @@
 - [2026-11-23 12:00] AGREED: DEC-588 RULED (option b): String.trimAscii follows PHP 8.6's default set, form feed included; the transpiled PHP passes the set explicitly so the 8.5 gate agrees. A form feed trimmed by lifted 8.5 code now changes (disclosed). Alternatives: keep 8.5's set; a lift target version picking a second native.
 - [2026-11-23 12:00] AGREED: DEC-594 — PHP86-DEPRECATED-NAMES fix style: a user function named let, is or readonly is renamed in the PHP output like clamp (let_); a user type named Let or Is (case-insensitive class names) is E-RESERVED-NAME on every leg like SortDirection. Alternatives: reserve the names in Phorj itself; rename classes too (rejected: a printed class name would differ on the PHP leg).
 - [2026-11-23 12:00] AGREED: DEC-595 — a return inside finally is a check error on every leg (it silently discards a pending exception; C# CS0157; PHP 8.6 deprecates it). break and continue leaving a finally are NOT included by this ruling. The E-code's name is asked with the build. Alternatives: keep it and silence 8.6 in the transpiled PHP; reject break and continue too.
+- [2026-11-23 14:05] AGREED: DEC-596 — a break or continue that leaves a finally block is a check error on every leg, the same rule as DEC-595's return (option a; developer, AskUserQuestion). Found probing DEC-595: the native legs ran it, the transpiled PHP is a compile fatal on 8.5 and 8.6. A loop wholly inside the finally stays legal.
+- [2026-11-23 14:05] AGREED: DEC-595/596 code name: E-FINALLY-EXIT, one code for return, break and continue leaving a finally; the message names the statement (developer, AskUserQuestion). Rejected: E-RETURN-IN-FINALLY (+ a second code for jumps), E-FINALLY-CONTROL-FLOW.
 
 ## Formal Plan
 
@@ -46,7 +48,7 @@
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 0 | Secure R9-AE-4 (`fix(transpile): a number with a trailing newline is not a number on the PHP leg`) | S | done | cc443044 | src/transpile/runtime_php.rs tests/differential.rs |
-| 1 | PHP 8.6 floor: 1a DEC-588 + DEC-594 built; 1b DEC-595; 1c image, CI, docs, perf rebaseline | M | doing | - | src/native/registry_modules/trim_ascii.rs src/php_names.rs src/checker/common.rs docker/** .github/workflows/** |
+| 1 | PHP 8.6 floor: 1a DEC-588 + DEC-594 built; 1b DEC-595 + DEC-596 built; 1c image, CI, docs, perf rebaseline | M | doing | - | src/native/registry_modules/trim_ascii.rs src/php_names.rs src/checker/common.rs docker/** .github/workflows/** |
 | 2 | Rulings session for the PENDING rows blocking P0/P1 | M | todo | - | docs/research/full-audit/raw/C-decisions.md |
 | 3 | Defect burn, bridge defects first, plus the census ratchet | L | todo | - | - |
 | 4 | First stable pre-release | M | todo | - | - |
@@ -54,7 +56,7 @@
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- Step 1: DEC-588, DEC-594 and DEC-595 RULED 2026-11-23. Open: the diagnostic code name for DEC-595 (step 1b).
+- Step 1: DEC-588, DEC-594, DEC-595 and DEC-596 RULED 2026-11-23, code `E-FINALLY-EXIT`. None open.
 ### Needs research
 - The PHP 8.6 features the survey found untracked (partial function application, readonly property defaults,
   `#[\Override]` on constants, the URI builders, the stream-error and polling APIs): which belong in the gap

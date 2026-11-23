@@ -7,8 +7,8 @@
 # `finally` lint clean on 8.5 and print a `Deprecated:` line on 8.6.)
 #
 # Sections 1-4 use STUB binaries, so they pass with no newer PHP build, no release binary and no
-# /stack/tools: that is CI and a cloud session. Section 5 runs the real thing when this machine has
-# it and says SKIP loudly when it does not.
+# /stack/tools: that is CI and a cloud session. Section 5 runs real newer PHP builds when this machine
+# has one and says SKIP loudly when it does not.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -138,31 +138,26 @@ else
 fi
 
 # ── 5. The real thing, when this machine has it ─────────────────────────────────────────────────
-# The only end-to-end proof that the probe sees a REAL deprecation, so it needs a shape the transpiler
-# still emits and a newer PHP still deprecates. It was `function let` until DEC-594 (2026-11-23)
-# renamed that one like `clamp`; it is now a `return` inside `finally`. DEC-595 (ruled 2026-11-23,
-# QUEUED) makes that shape a check error, so the change that builds DEC-595 must swap this case again
-# or drop it - by design, not a gate on the defect.
-ROOT="$(cd "$HERE/.." && pwd)"
+# The only end-to-end proof that the probe sees a REAL deprecation from a REAL newer PHP build. Phorj
+# no longer emits any shape PHP 8.6 deprecates: `function let` is renamed (DEC-594, 2026-11-23) and a
+# `return` inside `finally` is refused by `phg check` (DEC-595, E-FINALLY-EXIT). So this case feeds
+# the real newer builds through the STUB phg (it prints the file behind a PHP open tag): a raw PHP
+# function named `let`, which 8.6 deprecates, then the same file with an ordinary name.
 real="$TMP/real.phg"
-printf 'package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\nfunction f(): int { try { return 1; } finally { return 2; } }\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void { Output.printLine("{f()}"); }\n' > "$real"
-if [[ -x "$ROOT/target/release/phg" ]]; then
-  err="$(bash "$TOOL" "$real" 2>&1 >/dev/null)"
-  if [[ "$err" == *"nothing probed"* ]]; then
-    skip "real probe: ${err#php-forward: }"
-  else
-    out="$(bash "$TOOL" --quiet "$real" 2>/dev/null)"; rc=$?
-    if [[ $rc -eq 1 && "$out" == *'Returning from a finally block is deprecated'* ]]; then
-      ok "REAL: a return inside finally is reported by an installed newer PHP"
-    else
-      bad "REAL probe found nothing: rc=$rc ${out:0:300}"
-    fi
-    sed -i 's/finally { return 2; }/finally { Output.printLine("y"); }/' "$real"
-    out="$(bash "$TOOL" --quiet "$real" 2>/dev/null)"; rc=$?
-    if [[ $rc -eq 0 && -z "$out" ]]; then ok "REAL: the same file with an ordinary name is silent"; else bad "REAL clean file: rc=$rc $out"; fi
-  fi
+printf 'function let(): int { return 1; }\necho let();\n' > "$real"
+err="$(PHORJ_PHG="$TMP/bin/phg" bash "$TOOL" "$real" 2>&1 >/dev/null)"
+if [[ "$err" == *"nothing probed"* || "$err" == *"no installed PHP build is newer"* ]]; then
+  skip "real probe: ${err#php-forward: }"
 else
-  skip "real probe: no target/release/phg on this machine"
+  out="$(PHORJ_PHG="$TMP/bin/phg" bash "$TOOL" --quiet "$real" 2>/dev/null)"; rc=$?
+  if [[ $rc -eq 1 && "$out" == *'"let" is deprecated since 8.6'* ]]; then
+    ok "REAL: a function named let is reported by an installed newer PHP"
+  else
+    bad "REAL probe found nothing: rc=$rc ${out:0:300}"
+  fi
+  sed -i 's/let()/fine()/g' "$real"
+  out="$(PHORJ_PHG="$TMP/bin/phg" bash "$TOOL" --quiet "$real" 2>/dev/null)"; rc=$?
+  if [[ $rc -eq 0 && -z "$out" ]]; then ok "REAL: the same file with an ordinary name is silent"; else bad "REAL clean file: rc=$rc $out"; fi
 fi
 
 echo

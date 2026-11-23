@@ -502,6 +502,9 @@ pub struct Checker {
     /// number of enclosing loops being checked (M-mut.3). `break`/`continue` are valid only when
     /// this is `> 0` (`E-BREAK-OUTSIDE-LOOP`/`E-CONTINUE-OUTSIDE-LOOP`).
     loop_depth: u32,
+    /// `Some(loop_depth at entry)` while a `finally` block is being checked (DEC-595/596,
+    /// `E-FINALLY-EXIT`; `stmt/jumps.rs`). Saved and cleared at a lambda boundary.
+    finally_loop_base: Option<u32>,
     /// `type Name = Type;` aliases, stored as raw AST types and expanded in `resolve_type`.
     aliases: HashMap<String, crate::ast::Type>,
     /// alias names currently being expanded — detects `type A = B; type B = A;` cycles.

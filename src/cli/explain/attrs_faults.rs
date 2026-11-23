@@ -191,6 +191,17 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              no return slot and property hooks are typed by their property, so neither needs one;\n\
              expression-body lambdas (`function(x) => e`) infer their return from the expression.\n"
         }
+        "E-FINALLY-EXIT" => {
+            "E-FINALLY-EXIT — a `return`, `break` or `continue` would leave a `finally` block.\n\n\
+             A `finally` block runs while an error may be on its way out of the `try`. A `return` there\n\
+             replaces that error with a value, so the error is lost without a trace\n\
+             (`try { throw new LostError(\"x\"); } finally { return 3; }` returns 3). A `break` or\n\
+             `continue` that targets a loop around the `try` does the same, and PHP refuses it outright\n\
+             (\"jump out of a finally block is disallowed\"). Phorj refuses all three, on every leg\n\
+             (DEC-595, DEC-596; PHP 8.6 deprecates the `return`, C# rejects all three as CS0157).\n\n\
+             Return or jump AFTER the `try` instead. A loop written wholly inside the `finally` may use\n\
+             `break`/`continue`, and a lambda written there may `return`: neither leaves the block.\n"
+        }
         "E-VOID-CAPTURE" => {
             "E-VOID-CAPTURE — a `void` value cannot be captured.\n\n\
              `void` is the type of an expression that produces *nothing* (a side-effecting call like\n\
