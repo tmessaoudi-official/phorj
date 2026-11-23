@@ -107,6 +107,18 @@ command -v jq >/dev/null 2>&1 || {
   exit 2
 }
 
+# A claude.ai cloud session (D6/D3, plan docs/plans/2026-11-23-cloud-readiness-fixes.plan.md): on its shared VM two
+# runs flipped two different benches (floatmul 1.185 -> 0.867, then mapinsert 1.139 -> 0.855), so a verdict there is
+# noise. SKIP with an OWED verdict (DEC-365), and never emit: the baseline is measured on the PC alone.
+if [[ "${CLAUDE_CODE_REMOTE:-}" == true ]]; then
+  if [[ "$EMIT" == 1 ]]; then
+    echo "microbench-gate: REFUSING to emit in a cloud session (shared VM): the baseline is emitted on the PC only (D3)." >&2
+    exit 2
+  fi
+  echo "microbench-gate: SKIP the G-8 ratchet in a cloud session (shared VM, noisy ratios: D6). The verdict is OWED until the next PC push." >&2
+  exit 0
+fi
+
 # Acquire the measurement JSON: the testing seam bypasses docker/binary/harness entirely.
 if [[ -n "${MICROBENCH_GATE_JSON:-}" ]]; then
   [[ -f "$MICROBENCH_GATE_JSON" ]] || {

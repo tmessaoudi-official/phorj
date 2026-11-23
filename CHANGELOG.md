@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — a cloud session gates against the right PHP, and its pre-push no longer fails on benchmark noise (cloud audit 2026-11-23, B1, D6)
+
+On the host runner (`phorj.runner=host`, a cloud session) `scripts/dk` now sources `scripts/toolchain.env` before it runs
+the command, so `scripts/dk cargo nextest …` exports the same `PHORJ_PHP` pre-push resolves; before, `tests/differential.rs`
+fell back to the machine's bare `php` (Ubuntu's 8.3, no bcmath). `scripts/microbench-gate.sh` SKIPS with an OWED verdict
+when `CLAUDE_CODE_REMOTE=true` (two cloud runs flipped two different benches on a shared VM) and refuses `--emit` there:
+the baseline is emitted on the PC only (developer rulings D6, D3). Tests: `scripts/test-cloud-setup.sh` (dk exports the
+resolved `PHORJ_PHP`), `scripts/test-microbench-gate.sh` cases 20 and 20b.
+
 ### Fixed — the pre-push gate's own suites pass in a claude.ai cloud session again (cloud audit 2026-11-23, B0)
 
 Every cloud pre-push was red for three environmental reasons, none of them in the code under test.

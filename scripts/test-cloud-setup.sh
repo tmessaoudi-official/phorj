@@ -252,6 +252,16 @@ git -C "$D" config phorj.runner host
 dkrun scripts/dk cargo --version
 check "runner=host: dk runs the host cargo" '[[ $RC -eq 0 && "$OUT" == *shim-cargo-ran* ]]'
 check "runner=host: dk never calls docker" '! grep -q "^docker" "$TMP/dkshim.calls"'
+# B1 (cloud audit 2026-11-23): on the host runner, dk resolves PHP as pre-push does (scripts/toolchain.env), so a
+# manual `scripts/dk cargo nextest …` never gates against the machine's bare `php` (Ubuntu's 8.3, no bcmath). A fake
+# php8.5 with bcmath on the shim PATH makes the resolution deterministic; PHORJ_PHP is unset so nothing is inherited.
+cp "$ROOT/scripts/toolchain.env" "$D/scripts/toolchain.env"
+printf '#!/bin/sh\n[ "$1" = -m ] && printf "Core\\nbcmath\\n"\n' >"$TMP/dkshim/php8.5"; chmod +x "$TMP/dkshim/php8.5"
+printf '#!/bin/sh\necho "PHORJ_PHP=$PHORJ_PHP"\n' >"$TMP/dkshim/showphp"; chmod +x "$TMP/dkshim/showphp"
+want="$(cd "$D" && env -u PHORJ_PHP PATH="$TMP/dkshim:/usr/bin:/bin" bash -c 'source scripts/toolchain.env 2>/dev/null; printf %s "$PHORJ_PHP"')"
+dkrun env -u PHORJ_PHP scripts/dk showphp
+check "runner=host: dk exports the PHORJ_PHP scripts/toolchain.env resolves (as pre-push does)" \
+  '[[ $RC -eq 0 && -n "$want" && "$OUT" == *"PHORJ_PHP=$want"* ]]'
 dkrun scripts/dk --php 8.6 cargo --version
 check "runner=host: dk --php 8.6 refuses (it needs docker) and names the switch" '[[ $RC -ne 0 && "$OUT" == *phorj.runner=host* ]] && ! grep -q "^docker" "$TMP/dkshim.calls"'
 dkrun bash scripts/git-hooks/pre-commit

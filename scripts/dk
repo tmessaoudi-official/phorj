@@ -33,6 +33,10 @@ if [[ "${PHORJ_IN_DOCKER:-}" == 1 ]]; then exec "$@"; fi
 
 if [[ "$(git -C "$root" config --get phorj.runner 2>/dev/null || true)" == host ]]; then
   [[ "$service" == dev ]] || { echo "dk: --php $2 needs docker; this checkout runs on the host (phorj.runner=host)" >&2; exit 2; }
+  # Resolve the PHP oracle exactly as pre-push does: a bare `php` on a cloud host is Ubuntu's 8.3 without bcmath, and
+  # tests/differential.rs falls back to it when PHORJ_PHP is unset (cloud audit 2026-11-23, B1).
+  # shellcheck source=scripts/toolchain.env
+  [[ -f "$root/scripts/toolchain.env" ]] && source "$root/scripts/toolchain.env"
   exec "$@"
 fi
 

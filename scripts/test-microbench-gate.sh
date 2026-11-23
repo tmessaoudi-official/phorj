@@ -28,6 +28,9 @@ GATE="$ROOT/scripts/microbench-gate.sh"
 BASELINE="$ROOT/bench/micro-baseline.json"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+# This suite runs in a cloud pre-push too, where CLAUDE_CODE_REMOTE=true makes the gate skip (case 20): every other
+# case must see the PC's behaviour, so the variable is dropped here and set only where a case asks for it.
+unset CLAUDE_CODE_REMOTE
 
 command -v jq >/dev/null 2>&1 || { echo "test-microbench-gate: jq required — SKIP" >&2; exit 0; }
 [[ -f "$BASELINE" ]] || { echo "test-microbench-gate: no baseline — SKIP" >&2; exit 0; }
@@ -315,6 +318,18 @@ if [[ -n "$win_feat" ]]; then
   out19="$(MICROBENCH_BASELINE="$TMP/esc.json" MICROBENCH_GATE_JSON="$TMP/clean.json" bash "$GATE" 2>&1)"
   if [[ "$out19" == *$'\302\233'* ]]; then echo "  FAIL 19 a malformed ratio's control bytes were printed raw"; fails=$((fails + 1))
   else echo "  ok   19 a malformed ratio is printed %q-quoted"; fi
+fi
+
+# 20. A cloud session (D6, cloud audit 2026-11-23): a shared VM flipped a different bench on each run, so the gate
+#     SKIPS there with an OWED verdict, even on a real flip, and REFUSES to emit (D3: the baseline is the PC's alone).
+if [[ -n "$win_feat" ]]; then
+  out20="$(CLAUDE_CODE_REMOTE=true MICROBENCH_GATE_JSON="$TMP/flip.json" bash "$GATE" 2>&1)"; rc20=$?
+  if [[ $rc20 == 0 && "$out20" == *"cloud session"*OWED* && "$out20" != *"WIN->LOSS"* ]]; then echo "  ok   20 a cloud session SKIPS, OWED, even on a flip"
+  else echo "  FAIL 20 cloud session: exit $rc20 ${out20:0:200}"; fails=$((fails + 1)); fi
+  cp "$BASELINE" "$TMP/base20.json"
+  out20b="$(CLAUDE_CODE_REMOTE=true MICROBENCH_BASELINE="$TMP/base20.json" MICROBENCH_GATE_JSON="$TMP/clean.json" bash "$GATE" --emit 2>&1)"; rc20b=$?
+  if [[ $rc20b == 2 && "$out20b" == *"cloud session"* ]] && cmp -s "$BASELINE" "$TMP/base20.json"; then echo "  ok   20b a cloud session REFUSES to emit, baseline untouched"
+  else echo "  FAIL 20b cloud emit: exit $rc20b ${out20b:0:200}"; fails=$((fails + 1)); fi
 fi
 
 if [[ "$fails" -gt 0 ]]; then

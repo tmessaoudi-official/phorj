@@ -9,6 +9,13 @@
 > first: the cloud evidence is a hint.
 
 ## Decisions Log
+- [2026-11-23 18:47] AGREED: D2 — cloud runner: keep phorj.runner=host; B4 rewrites the 'no docker in a cloud session' wording to say docker may run but the host runner is used (proven, no Docker Hub limit, no cold image build; pre-push is fail-closed). Alternatives: the docker image in the cloud; host with optional docker.
+- [2026-11-23 18:47] AGREED: D1 — cloud toolchain scope: zig + cargo-zigbuild, wasm-pack, node 26 and pdo_mysql/pdo_pgsql are declared CI-only in cloud sessions (cloud-setup.sh header + CLAUDE.md, pinned by a test); none is a pre-push need. Alternatives: install them all; node + wasm-pack only.
+- [2026-11-23 18:47] AGREED: D4 — remote branch ccr-56056e44-aec471 deleted 2026-11-23 (gh api, no code pushed so no gate): 37/37 commits on master by patch-id, tip vs landing b8f383ba (`land.sh re-sign of the cloud branch`) differs only by the 3 PC-only commits, the re-sign map resolves every old sha. Local backup ref backup/ccr-56056e44-aec471 = c314682c; rollback: git push origin backup/ccr-56056e44-aec471:refs/heads/ccr-56056e44-aec471. Alternatives: archive tag; keep.
+- [2026-11-23 18:47] AGREED: D5 — release run 45195353225 (9deb2b99, `feat(checker): no return, break or continue may leave a finally block`) failed on runner capacity, not the release environment's approval: phg-macos-aarch64 ran 0 steps and was cancelled 15 min in, publish skipped. Its failed job was re-run. Alternatives: leave it; make macos-aarch64 non-blocking.
+- [2026-11-23 18:48] AGREED: D6 — the cloud pre-push SKIPS the microbench gate with an OWED verdict when CLAUDE_CODE_REMOTE=true (same mechanism as the load skip; a shared VM flipped a different bench on each run: floatmul 1.185->0.867, then mapinsert 1.139->0.855); the PC pre-push stays the perf authority. Owed when the developer says the PC is quiet: measure floatmul + mapinsert on the PC, re-emit the 4 recovered benches, record the 5 new no-baseline benches OWED (Invariant 18). Alternatives: advisory only; keep blocking.
+- [2026-11-23 18:48] AGREED: D3 — the step-1c perf rebaseline (8.6 + JIT comparator) is emitted on the PC only, when the developer says it is quiet, through the gate's emit load guard (0.7). Alternatives: a CI runner.
+- [2026-11-23 18:48] AGREED: B1 approach (a): scripts/dk's host branch sources scripts/toolchain.env before exec, so every host-runner call resolves PHP as pre-push does; step 1c moves that one resolver to 8.6. Alternatives: update-alternatives; both.
 
 ## Formal Plan
 
@@ -45,17 +52,17 @@
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 0 | B0 cloud pre-push suites (B0a, B0b, B0c) | M | doing | - | scripts/test-cloud-setup.sh scripts/test-size-gate.sh .claude/hooks/test-lint-on-write.sh |
-| 1 | B1 host-runner PHP resolution | S | todo | - | scripts/dk |
+| 0 | B0 cloud pre-push suites (`test(cloud): the pre-push suites pass in a cloud session again`) | M | done | 51aad5f8 | scripts/test-cloud-setup.sh scripts/test-size-gate.sh .claude/hooks/test-lint-on-write.sh |
+| 1 | B1 host-runner PHP resolution | S | doing | - | scripts/dk scripts/test-cloud-setup.sh |
 | 2 | B2 PHP 8.6 in the cloud | M | todo | - | .claude/cloud-setup.sh scripts/dk |
 | 3 | B4 docker-in-the-cloud wording (per D2) | S | todo | - | - |
 | 4 | B5 certification-schedule slug | S | todo | - | CLAUDE.md |
 | 5 | B6 expertise-core re-review | S | todo | - | .claude/rules/expertise-core.md |
-| 6 | C decisions D1-D6 | S | todo | - | - |
+| 6 | C decisions D1-D6 (all ruled 2026-11-23); D6 cloud skip built with B1 | S | doing | - | scripts/microbench-gate.sh scripts/test-microbench-gate.sh |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- D1-D6 (the developer's); D3 and D6 run only when the developer says the PC is quiet.
+- The D6/D3 measurements (floatmul + mapinsert on the PC, re-emit the 4 recovered benches, the 5 new benches OWED): only when the developer says the PC is quiet.
 ### Needs research
 ### Fragile
 - B0b's rm-guard is a model of the hosted harness's guard: a fresh cloud session proves it.
