@@ -338,7 +338,7 @@ fi
 #     knobs scripts/microbench-leg.sh sets (DEC-597): MICROBENCH_MAX_LOAD lifts the load guard, MICROBENCH_IDENTITY_ONLY
 #     measures through a php SOURCE MISMATCH (identity needs no baseline), and without them both still SKIP.
 printf '#!/bin/sh\nexit 0\n' >"$TMP/fakephp"; printf '#!/bin/sh\nexit 0\n' >"$TMP/fakephg"
-printf '#!/bin/sh\necho called >>"%s/harness.calls"\ncat "$HARNESS_JSON"\n' "$TMP" >"$TMP/harness"
+printf '#!/bin/sh\necho "called $*" >>"%s/harness.calls"\ncat "$HARNESS_JSON"\n' "$TMP" >"$TMP/harness"
 chmod +x "$TMP/fakephp" "$TMP/fakephg" "$TMP/harness"
 jq --arg p "$TMP/fakephp" '._baseline_php = $p' "$BASELINE" >"$TMP/base21.json"
 printf '9.99 9.99 9.99 1/100 1\n' >"$TMP/load-high"; printf '0.10 0.10 0.10 1/100 1\n' >"$TMP/load-low"
@@ -371,6 +371,16 @@ g21f
 t21 "21f no docker, a php without JIT: SKIP, the harness never runs" '[[ $rc21 == 0 && "$out21" == *"no JIT"* && ! -s "$TMP/harness.calls" ]]'
 MICROBENCH_IDENTITY_ONLY=1 g21f
 t21 "21g ...with MICROBENCH_IDENTITY_ONLY=1: measures on it, and an identity break BLOCKS" '[[ $rc21 == 1 && "$out21" == *"output-identity break"* && -s "$TMP/harness.calls" ]]'
+# 21h/i. MICROBENCH_ONLY measures only the named benches (the leg's confirming re-run of a RECOVERED reading), and an
+#     emit refuses it: a partial run must never write the baseline.
+MICROBENCH_ONLY="alpha beta" g21f; rc21h=$rc21
+MICROBENCH_IDENTITY_ONLY=1 MICROBENCH_ONLY="alpha beta" g21f
+t21 "21h MICROBENCH_ONLY passes its benches to the harness, and only those" 'grep -q "^called --json alpha beta$" "$TMP/harness.calls"'
+: >"$TMP/harness.calls"; cp "$TMP/ident21.json" "$TMP/only-base.json"
+out21="$(MICROBENCH_ONLY=alpha MICROBENCH_BASELINE="$TMP/only-base.json" MICROBENCH_PHP_BIN="$TMP/fakephp" PHG_BIN="$TMP/fakephg" \
+  MICROBENCH_HARNESS="$TMP/harness" HARNESS_JSON="$TMP/ident21.json" MICROBENCH_LOADAVG="$TMP/load-low" MICROBENCH_SETTLE_SECS=0 \
+  timeout 60 bash "$GATE" --emit 2>&1)"; rc21=$?
+t21 "21i --emit with MICROBENCH_ONLY: REFUSED (exit 2), the harness never runs" '[[ $rc21 == 2 && "$out21" == *"MICROBENCH_ONLY"* && ! -s "$TMP/harness.calls" ]]'
 
 if [[ "$fails" -gt 0 ]]; then
   echo "test-microbench-gate: FAIL — $fails case(s)" >&2

@@ -48,7 +48,8 @@ not in `CLAUDE.md`.
   `scripts/microbench-leg.sh`, which blocks on an output-identity break everywhere and on a confirmed flip on the PC,
   and records anything it could not judge (a load skip, no comparator, a cloud session's ratios, an unconfirmed
   suspect, a bench missing from the baseline) with `scripts/owed-legs.sh` in SLICE-STATE's OWED GATE LEGS section.
-  Only a real PC pass clears an entry (`microbench-leg.sh --verify`). pre-commit's `owed-legs.sh check-staged`
+  Only a real PC pass clears an entry (`microbench-leg.sh --verify`). A RECOVERED bench opens `microbench-baseline` only
+  when a re-run of the gate on it alone (`MICROBENCH_ONLY`, which `--emit` refuses) agrees: one sample flapped it. pre-commit's `owed-legs.sh check-staged`
   refuses a commit that deletes an OPEN entry or leaves a new one uncommitted. A cloud session writes no entry and
   is never refused for one: the leg prints what is owed there, and the PC push after landing records it (DEC-597). Every pre-push leg has a row in `scripts/gate-legs.tsv` (everywhere / owed / pc-only / info),
   checked both ways by `scripts/test-gate-legs.sh`: a new leg fails pre-push until it is classified. `test-docker.sh`

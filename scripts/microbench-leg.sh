@@ -80,13 +80,35 @@ elif [[ "$env" == cloud ]]; then
 elif [[ -z "${MICROBENCH_GATE_JSON:-}" ]]; then
   owed clear microbench "microbench-gate PASS"
 fi
-# A RECOVERED line compares a ratio with the baseline, so in the cloud (another comparator) it is an artefact: only a
-# bench missing from the baseline counts there.
-pat='note [a-z0-9_]+: not in baseline'; [[ "$env" == pc ]] && pat="$pat|RECOVERED [a-z0-9_]+"
-new="$(grep -E "^ *($pat)" "$log" | sed -E 's/^ *(note|RECOVERED) ([a-z0-9_]+).*/\2/' | sort -u | tr '\n' ' ')"
-if [[ -n "$new" ]]; then
+# A bench missing from the baseline is a fact; a RECOVERED line is one sample, so on the PC it is re-measured first
+# (MICROBENCH_ONLY: the gate on those benches alone) and opens `microbench-baseline` only when the re-run agrees, as a
+# flip is confirmed (developer ruling 2026-11-23: a near-parity bench, deepjson 0.975 <-> 1.269, flapped the entry
+# open and shut on alternate pushes). A re-run that cannot measure leaves the entry as it was. In the cloud a
+# RECOVERED line compares with a baseline measured on another comparator: an artefact, never counted.
+names() { grep -E "^ *($1)" "$2" | sed -E 's/^ *(note|RECOVERED) ([a-z0-9_]+).*/\2/' | LC_ALL=C sort -u | tr '\n' ' '; }
+new="$(names 'note [a-z0-9_]+: not in baseline' "$log")"
+rec=""; unknown=0
+if [[ "$env" == pc ]]; then
+  rec="$(names 'RECOVERED [a-z0-9_]+' "$log")"
+  if [[ -n "$rec" && -z "${MICROBENCH_GATE_JSON:-}" ]]; then
+    echo "microbench-leg: re-measuring RECOVERED bench(es) to confirm: $rec"
+    log2="$(mktemp)"; trap 'rm -f -- "$log" "$log2"' EXIT
+    MICROBENCH_ONLY="${rec% }" bash "$GATE" 2>&1 | tee "$log2"
+    grep -qE '^ *FAIL [a-z0-9_]+: output-identity break' "$log2" && exit 1
+    if grep -q 'PASS (ratchet' "$log2"; then
+      conf="$(names 'RECOVERED [a-z0-9_]+' "$log2")"
+      noise="$(LC_ALL=C comm -23 <(tr ' ' '\n' <<<"$rec" | sed '/^$/d') <(tr ' ' '\n' <<<"$conf" | sed '/^$/d') | tr '\n' ' ')"
+      [[ -z "$noise" ]] || echo "microbench-leg: RECOVERED not confirmed on re-measure (noise, not recorded): $noise"
+      rec="$conf"
+    else
+      unknown=1; echo "microbench-leg: the confirming re-run could not measure; microbench-baseline is left as it was"
+    fi
+  fi
+fi
+new="$new$rec"
+if [[ -n "${new// }" ]]; then
   owed record microbench-baseline "$env" "not protected by the ratchet until re-emitted on a quiet PC: $new"
-elif [[ "$env" == pc && -z "${MICROBENCH_GATE_JSON:-}" ]]; then
+elif [[ "$env" == pc && -z "${MICROBENCH_GATE_JSON:-}" && "$unknown" == 0 ]]; then
   owed clear microbench-baseline "microbench-gate PASS with every bench in the baseline"
 fi
 exit 0

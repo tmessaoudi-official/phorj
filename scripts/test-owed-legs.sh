@@ -84,11 +84,12 @@ jq --arg f "$win" 'map(if .feature == $f then .ratio = 0.3 else . end)' "$TMP/cl
 jq --arg f "$win" 'map(if .feature == $f then .identical = false else . end)' "$TMP/clean.json" >"$TMP/ident.json"
 jq '. + [{feature: "brandnew", vm_ns: 1000, php_ns: 1000, ratio: 0.5, identical: true}]' "$TMP/clean.json" >"$TMP/new.json"
 # A fake gate for the outputs the seam cannot produce: prints $FAKE_OUT, exits $FAKE_RC.
-printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$FAKE_OUT"\necho "knobs: settle=${MICROBENCH_SETTLE_SECS:-} maxload=${MICROBENCH_MAX_LOAD:-} idonly=${MICROBENCH_IDENTITY_ONLY:-}"\nexit "${FAKE_RC:-0}"\n' >"$TMP/fakegate"; chmod +x "$TMP/fakegate"
+# The fake gate: FAKE_OUT on the first call, FAKE_OUT2 (when set) on a later one (the leg's confirming re-run).
+printf '#!/usr/bin/env bash\nn="$(cat "%s/fake.n" 2>/dev/null || echo 0)"; echo $((n + 1)) >"%s/fake.n"\nout="$FAKE_OUT"; [[ "$n" -ge 1 && -n "${FAKE_OUT2+set}" ]] && out="$FAKE_OUT2"\nprintf "%%s\\n" "$out"\necho "knobs: settle=${MICROBENCH_SETTLE_SECS:-} maxload=${MICROBENCH_MAX_LOAD:-} idonly=${MICROBENCH_IDENTITY_ONLY:-} only=${MICROBENCH_ONLY:-}"\nexit "${FAKE_RC:-0}"\n' "$TMP" "$TMP" >"$TMP/fakegate"; chmod +x "$TMP/fakegate"
 reset_owed() { git -C "$R" checkout -q -- docs/plans/SLICE-STATE.md; sed -i '/^- \(OPEN\|CLEARED\) /d' "$O"; }
 leg() { (cd "$R" && MICROBENCH_BASELINE="$B" bash scripts/microbench-leg.sh "$@" >"$TMP/legout" 2>&1); }
 seam() { local j="$1"; shift; MICROBENCH_GATE_JSON="$j" leg "$@"; }
-fake() { MICROBENCH_GATE_SCRIPT="$TMP/fakegate" leg "$@"; }
+fake() { rm -f "$TMP/fake.n"; MICROBENCH_GATE_SCRIPT="$TMP/fakegate" leg "$@"; }
 
 if [[ ! -f "$R/scripts/microbench-leg.sh" ]]; then bad "scripts/microbench-leg.sh exists"
 else
@@ -114,6 +115,18 @@ reset_owed; seam "$TMP/new.json"; rc=$?
 check "a bench missing from the baseline opens microbench-baseline, naming it" '[[ $rc == 0 ]] && grep -qE "^- OPEN microbench-baseline .*brandnew" "$O"'
 reset_owed; FAKE_OUT=$'  RECOVERED deepjson: owed at 0.9, now 1.1 (a WIN) — re-emit so the ratchet protects it\nmicrobench-gate: PASS (ratchet: no flips, all output-identical)' fake; rc=$?
 check "a RECOVERED bench opens microbench-baseline" '[[ $rc == 0 ]] && grep -qE "^- OPEN microbench-baseline .*deepjson" "$O"'
+check "...after a confirming re-run of the gate on that bench alone (MICROBENCH_ONLY)" 'grep -q "only=deepjson" "$TMP/legout" && [[ "$(cat "$TMP/fake.n")" == 2 ]]'
+REC=$'  RECOVERED deepjson: owed at 0.9, now 1.1 (a WIN) — re-emit so the ratchet protects it\nmicrobench-gate: PASS (ratchet: no flips, all output-identical)'
+reset_owed; owed record microbench-baseline pc "not protected: deepjson" >/dev/null
+FAKE_OUT="$REC" FAKE_OUT2='microbench-gate: PASS (ratchet: no flips, all output-identical)' fake; rc=$?
+check "a RECOVERED reading the re-run does not confirm is noise: no entry opens, and the open one CLEARS (the flap, 2026-11-23)" \
+  '[[ $rc == 0 ]] && ! grep -q "^- OPEN microbench-baseline" "$O" && grep -q "^- CLEARED microbench-baseline" "$O" && grep -q "not confirmed" "$TMP/legout"'
+reset_owed; owed record microbench-baseline pc "not protected: deepjson" >/dev/null
+FAKE_OUT="$REC" FAKE_OUT2='microbench-gate: 1-min load 3.0 still > 2.5 after 90s — SKIP the G-8 ratchet' fake; rc=$?
+check "a re-run that cannot measure leaves microbench-baseline as it was (neither opened nor cleared)" \
+  '[[ $rc == 0 ]] && grep -q "^- OPEN microbench-baseline .*not protected: deepjson" "$O" && ! grep -q "^- CLEARED microbench-baseline" "$O"'
+reset_owed; FAKE_OUT="$REC" FAKE_OUT2=$'  FAIL deepjson: output-identity break\nmicrobench-gate: FAIL — 1' FAKE_RC=0 fake; rc=$?
+check "an output-identity break in the confirming re-run blocks (exit 1)" '[[ $rc == 1 ]]'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_OUT=$'  RECOVERED deepjson: owed at 0.9, now 1.1 (a WIN) — re-emit so the ratchet protects it\nmicrobench-gate: PASS (ratchet: no flips, all output-identical)' fake; rc=$?
 check "cloud: a RECOVERED line (a comparator artefact there) opens no microbench-baseline entry" '[[ $rc == 0 ]] && ! grep -q "^- OPEN microbench-baseline" "$O"'
 reset_owed; FAKE_RC=2 FAKE_OUT='microbench-gate: SETUP ERROR — 1 malformed baseline ratio(s)' fake; rc=$?
@@ -133,7 +146,7 @@ check "cloud: flips and deepenings only: printed OWED naming both, exit 0" '[[ $
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_OUT='microbench-gate: PASS (ratchet: no flips, all output-identical)' fake
 check "cloud: the leg lifts the load guard and asks for identity through a source mismatch" 'grep -q "maxload=1000 idonly=1" "$TMP/legout"'
 FAKE_OUT='microbench-gate: PASS (ratchet: no flips, all output-identical)' fake
-check "PC: the leg sets neither knob" 'grep -q "settle= maxload= idonly=$" "$TMP/legout"'
+check "PC: the leg sets neither knob" 'grep -q "settle= maxload= idonly= only=$" "$TMP/legout"'
 # --verify: a release build first (fake cargo, recorded), then the gate with a long settle; refused in the cloud.
 mkdir -p "$TMP/vbin"; printf '#!/bin/sh\necho "cargo $*" >>"%s/cargo.calls"\n' "$TMP" >"$TMP/vbin/cargo"; chmod +x "$TMP/vbin/cargo"; : >"$TMP/cargo.calls"
 reset_owed; PATH="$TMP/vbin:$PATH" FAKE_OUT='microbench-gate: PASS (ratchet: no flips, all output-identical)' fake --verify; rc=$?

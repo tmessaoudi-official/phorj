@@ -22,7 +22,8 @@
 #                                      (docker-free, deterministic — for tests); microbench.sh's own
 #                                      (PHG_BIN, MICROBENCH_RUNS, MICROBENCH_PHP_IMAGE) otherwise.
 #         MICROBENCH_LOADAVG, MICROBENCH_HARNESS (test seams); MICROBENCH_MAX_LOAD, MICROBENCH_SETTLE_SECS and
-#         MICROBENCH_IDENTITY_ONLY=1 (measure through a php source mismatch) are what scripts/microbench-leg.sh sets.
+#         MICROBENCH_IDENTITY_ONLY=1 (measure through a php source mismatch) are what scripts/microbench-leg.sh sets, and
+#         MICROBENCH_ONLY="<bench> …" (its confirming re-run of a RECOVERED reading; an emit refuses it).
 # Requires docker + the release binary (unless the JSON seam is set). Either absent => SKIP with a
 # warning (a push is never wedged by missing infra). Exit 0 pass/skip, 1 regression, 2 setup error
 # (including a malformed baseline ratio — behaviour suite: scripts/test-microbench-gate.sh).
@@ -111,7 +112,8 @@ command -v jq >/dev/null 2>&1 || {
 
 # A claude.ai cloud session never emits: on its shared VM two runs flipped two different benches (floatmul 1.185 ->
 # 0.867, then mapinsert 1.139 -> 0.855), so the baseline is measured on the PC alone (D3). Its gating runs measure
-# as usual; scripts/microbench-leg.sh turns their ratio verdicts into OWED entries (DEC-597).
+# as usual; scripts/microbench-leg.sh reports their ratio verdicts OWED (DEC-597). A partial run never writes it either.
+[[ "$EMIT" == 1 && -n "${MICROBENCH_ONLY:-}" ]] && { echo "microbench-gate: REFUSING to emit with MICROBENCH_ONLY set (a partial run)." >&2; exit 2; }
 if [[ "${CLAUDE_CODE_REMOTE:-}" == true && "$EMIT" == 1 ]]; then
   echo "microbench-gate: REFUSING to emit in a cloud session (shared VM): the baseline is emitted on the PC only (D3)." >&2
   exit 2
@@ -275,7 +277,8 @@ else
     exit 0
   fi
   [[ "$_waited" -gt 0 ]] && echo "microbench-gate: load settled to $_load1 after ${_waited}s — measuring" >&2
-  json="$(bash "${MICROBENCH_HARNESS:-$ROOT/scripts/microbench.sh}" --json)" || {
+  read -ra _only <<<"${MICROBENCH_ONLY:-}"   # bench names are [a-z0-9_]: no quoting to lose
+  json="$(bash "${MICROBENCH_HARNESS:-$ROOT/scripts/microbench.sh}" --json "${_only[@]}")" || {
     echo "microbench-gate: harness run failed" >&2
     exit 2
   }

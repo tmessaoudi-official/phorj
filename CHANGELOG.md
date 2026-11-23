@@ -18,6 +18,15 @@ every `docker/Dockerfile` ARG is either installed or on that line. The "no docke
 (D2: docker may run there; the host runner is the chosen path). Tests: `scripts/test-cloud-setup.sh` 49 -> 64 cases,
 two sabotages (the forward step removed; dk ignoring `--php 8.6`) each red, restored.
 
+### Fixed — the owed list no longer flaps on a near-parity bench (DEC-597)
+
+A RECOVERED line is one sample: deepjson measured 0.975 at the re-baseline and 1.269 on a push, so
+`microbench-baseline` opened on one push and cleared on the next. Now `scripts/microbench-leg.sh` re-runs the gate on
+the RECOVERED benches alone (new `MICROBENCH_ONLY`, which `--emit` refuses: a partial run never writes the baseline)
+and opens the entry only when the re-run agrees; a re-run that cannot measure leaves the entry as it was, and an
+identity break in it blocks. Tests, red first: `test-owed-legs.sh` 42 -> 46, `test-microbench-gate.sh` 21h/21i;
+three sabotages (no confirmation; the harness ignoring `MICROBENCH_ONLY`; no emit refusal) each red, restored.
+
 ### Changed — a cloud session prints what is owed and is never refused for it (DEC-597 refined)
 
 The cloud pre-push refusal is gone, and so is `scripts/owed-legs.sh has-committed`, its only user. In a cloud session

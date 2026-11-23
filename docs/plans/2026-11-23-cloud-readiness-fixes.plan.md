@@ -20,6 +20,7 @@
 - [2026-11-23 20:29] AGREED: DEC-597 refinement: a cloud session neither writes an OWED entry nor refuses its push; it prints what is owed (an output-identity break still blocks). The developer's push after land.sh (which never pushes) runs the leg on the landed tree and records OWED itself. Alternatives: keep the refusal; keep it with a union-merged separate file.
 - [2026-11-23 20:29] AGREED: LIVE-ROUNDTRIPS-NOWHERE graded P2, ratified (a gate that runs nowhere, not wrong output). Alternative: P1.
 - [2026-11-23 20:29] AGREED: The PC is quiet now: run the D3 re-baseline (microbench-gate.sh --emit) then microbench-leg.sh --verify. Alternative: wait.
+- [2026-11-23 21:25] AGREED: The owed-list flap: a RECOVERED reading opens microbench-baseline only after a re-measure confirms it, as WIN->LOSS flips are confirmed. Alternatives: open only for a bench missing from the baseline; leave as is.
 
 ## Formal Plan
 
@@ -73,6 +74,6 @@
 - B0b's rm-guard is a model of the hosted harness's guard: a fresh cloud session proves it.
 - Needs a fresh cloud session to prove: B0 (the rm-guard and GIT_CONFIG models), B1, B2 (the forward install inside the 120 s budget, and that sury serves the 8.6 packages), the cloud push printing its OWED lines and going through with no refusal and no SLICE-STATE edit, and the cloud identity check (which comparator the gate resolves: with docker it pulls `php:8.5-cli` from Docker Hub, without it the host php8.5 for identity only; and the leg's wall time there).
 ### Known issues
-- The owed list FLAPS on a near-parity bench: a RECOVERED line (one sample) opens `microbench-baseline`, and the next pass without one clears it, so most pushes rewrite SLICE-STATE (deepjson: 0.967 / 0.975 at emit, 1.269 at a push). A margin alone does not absorb a 30% swing; a re-measure confirmation, as flips get, would. PENDING a ruling.
+- The owed list FLAPS on a near-parity bench: a RECOVERED line (one sample) opens `microbench-baseline`, and the next pass without one clears it, so most pushes rewrite SLICE-STATE (deepjson: 0.967 / 0.975 at emit, 1.269 at a push). A margin alone does not absorb a 30% swing. RULED 2026-11-23 (re-measure to confirm) and BUILT: the leg re-runs the gate on the RECOVERED benches alone (`MICROBENCH_ONLY`, refused by `--emit`) and opens the entry only when the re-run agrees; a re-run that cannot measure leaves it as it was.
 - `_baseline_php_digest` is empty since the 2026-11-19 dockerize: `--emit` runs in the toolchain image, which cannot see the docker digest of its own php; the build line (`PHP 8.5.13 … built: Nov 19 2026`) is the remaining provenance. P3, not fixed here.
 - `--emit` takes one sample per bench (MICROBENCH_RUNS, default 3) with no re-measure, so a near-parity WIN can be written as a carried loss; use MICROBENCH_RUNS=7 and compare with a `--verify` run before committing an emit.
