@@ -118,6 +118,12 @@ reset_owed; CLAUDE_CODE_REMOTE=true FAKE_OUT=$'  RECOVERED deepjson: owed at 0.9
 check "cloud: a RECOVERED line (a comparator artefact there) opens no microbench-baseline entry" '[[ $rc == 0 ]] && ! grep -q "^- OPEN microbench-baseline" "$O"'
 reset_owed; FAKE_RC=2 FAKE_OUT='microbench-gate: SETUP ERROR — 1 malformed baseline ratio(s)' fake; rc=$?
 check "a setup error stays exit 2 and records nothing" '[[ $rc == 2 ]] && ! grep -q "^- OPEN " "$O"'
+reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=2 FAKE_OUT='microbench-gate: harness run failed' fake; rc=$?
+check "cloud: a harness failure (infra) is OWED, exit 0: it never holds a cloud push" '[[ $rc == 0 ]] && grep -qE "^- OPEN microbench .*cloud\).*harness run failed" "$O"'
+reset_owed; FAKE_RC=2 FAKE_OUT='microbench-gate: harness run failed' fake; rc=$?
+check "PC: a harness failure stays exit 2 (the developer is there to look)" '[[ $rc == 2 ]] && ! grep -q "^- OPEN " "$O"'
+reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=2 FAKE_OUT='microbench-gate: SETUP ERROR — 1 malformed baseline ratio(s)' fake; rc=$?
+check "cloud: a malformed baseline stays exit 2 (a repo defect, not infra)" '[[ $rc == 2 ]] && ! grep -q "^- OPEN " "$O"'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=1 FAKE_OUT=$'microbench-gate: harness died' fake; rc=$?
 check "cloud: a gate exit 1 with no FAIL line propagates (not read as timing), records nothing" '[[ $rc == 1 ]] && ! grep -q "^- OPEN " "$O"'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=1 FAKE_OUT=$'  FAIL a: WIN->LOSS flip — baseline 2 (WIN) now 0.3\n  FAIL b: something else entirely' fake; rc=$?

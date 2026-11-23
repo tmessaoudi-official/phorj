@@ -41,7 +41,14 @@ fi
 
 log="$(mktemp)"; trap 'rm -f -- "$log"' EXIT
 bash "$GATE" 2>&1 | tee "$log"; rc=${PIPESTATUS[0]}
-[[ "$rc" == 2 ]] && exit 2
+if [[ "$rc" == 2 ]]; then
+  # In a cloud session a harness that cannot run (a docker pull, the host php) is infra: OWED, never a held push. A
+  # setup error in the repo (a malformed baseline) still stops it, as on the PC.
+  if [[ "$env" == cloud ]] && grep -q 'harness run failed' "$log" && ! grep -q 'malformed baseline' "$log"; then
+    owed record microbench cloud "the harness could not run in a cloud session: harness run failed"; exit 0
+  fi
+  exit 2
+fi
 grep -qE '^ *FAIL [a-z0-9_]+: output-identity break' "$log" && exit 1   # the bench's own line, not the summary
 
 reason() { grep -m1 -E "$1" "$log" | sed -E 's/^ *(microbench-gate: )?//'; }

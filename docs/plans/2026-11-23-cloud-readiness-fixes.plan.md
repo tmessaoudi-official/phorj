@@ -58,7 +58,7 @@
 | 2 | B2 PHP 8.6 in the cloud (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | M | done | ea126849 | .claude/cloud-setup.sh scripts/dk scripts/test-cloud-setup.sh |
 | 3 | B4 docker-in-the-cloud wording (per D2) (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | .claude/cloud-setup.sh scripts/dk scripts/test-cloud-setup.sh CLAUDE.md |
 | 4 | B5 certification-schedule slug (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | CLAUDE.md |
-| 5 | B6 expertise-core re-review (six claims re-checked, the rest not; stale Stmt/Expr counts fixed) (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | .claude/rules/expertise-core.md CLAUDE.md docs/INVARIANTS.md |
+| 5 | B6 expertise-core re-review (every cited anchor re-checked; stale Stmt/Expr counts and the CorpusTally cite fixed) (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | .claude/rules/expertise-core.md CLAUDE.md docs/INVARIANTS.md |
 | 6 | C decisions D1-D6 (all ruled 2026-11-23); D6 cloud skip built with B1, replaced by row 7; D1 (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | scripts/microbench-gate.sh scripts/test-microbench-gate.sh |
 | 7 | DEC-597/598/599 durable OWED legs (`feat(gates): a leg that cannot run where it is becomes a durable OWED entry`), defects-first, legs classified | M | done | 1d104c1a d66c0787 15c935f6 (`fix(gates): a cloud run checks output identity through a php source mismatch`) | scripts/owed-legs.sh scripts/microbench-leg.sh scripts/gate-legs.tsv scripts/git-hooks/pre-push scripts/git-hooks/pre-commit |
 <!-- /progress-block -->

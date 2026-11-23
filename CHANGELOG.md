@@ -26,7 +26,8 @@ php may have none), still refusing a debug build. In the cloud a RECOVERED line 
 `scripts/microbench-leg.sh` re-executes through `scripts/dk` off the host runner, as the hooks do, so `--verify` never
 calls a host cargo. The forward PHP gets the oracle's four packages (cli, bcmath, mbstring, sqlite3), not two. Tests:
 `test-microbench-gate.sh` 21f/21g, `test-owed-legs.sh` 39 -> 41, `test-cloud-setup.sh` (the package set); two sabotages
-(the JIT waiver; the dk re-exec) each red, restored.
+(the JIT waiver; the dk re-exec) each red, restored. In a cloud session a harness that cannot run is OWED, not a held
+push (a malformed baseline still exits 2): `test-owed-legs.sh` 41 -> 44.
 
 ### Fixed — stale facts in always-loaded files (cloud audit 2026-11-23, B5, B6)
 
@@ -34,7 +35,10 @@ CLAUDE.md and `docs/INVARIANTS.md` said `Stmt` has 15 variants (16 since `using`
 certification-schedule path in CLAUDE.md named this machine's project slug, which differs in a cloud session.
 In `.claude/rules/expertise-core.md`, the claims re-checked against the code were: DEC-568 still PENDING, the LSP still
 advertises only signature help, no `Any` in `src/types.rs`, `E-INJECTED-TYPE-BARE` and the bare `agree()` still there, and
-the variant counts (item 5); the review date was bumped. The rest of its items were not re-checked.
+the variant counts (item 5); then (6C round 3) every remaining cited anchor (DEPRECATION, the rejection catalogue, the
+pending banner, `src/limits.rs`, `on_deep_stack`, the phg-ask-human rule, the 13 memory notes, ADR-0002, the register
+and MILESTONES lines, the serve-header and DEC-568 anchors, the typed-LSB status): all hold except the `CorpusTally`
+line cite, which had drifted and is now a quoted anchor. The review date was bumped.
 
 ### Added — a gate leg that cannot run where it is becomes a durable OWED entry, verified first on the PC (DEC-597, DEC-598)
 

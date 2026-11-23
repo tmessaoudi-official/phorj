@@ -2,7 +2,7 @@
 # A count may shrink and never grow; lower it with `scripts/claude-config-guard.py --emit-baseline`.
 # Seeded 2026-11-15 (123 line cites). A new citation is written as a quoted anchor: file ("phrase").
 C3	2	.claude/agents/safety-promises-reviewer.md
-C3	16	.claude/rules/expertise-core.md
+C3	15	.claude/rules/expertise-core.md
 C3	39	.claude/skills/domain-phorj-engine-parity/SKILL.md
 C3	14	.claude/skills/domain-phorj-language-design/SKILL.md
 C3	29	.claude/skills/domain-phorj-php-bridge/SKILL.md
