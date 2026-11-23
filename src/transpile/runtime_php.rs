@@ -141,13 +141,15 @@ impl Transpiler {
         }
         self.emit_json_helpers();
         if self.gates.uses_text_parse_int {
-            // Mirror Rust's `i64::from_str`: `^[+-]?[0-9]+$`, in i64 range, no surrounding whitespace.
+            // Mirror Rust's `i64::from_str`: `^[+-]?[0-9]+$`, in i64 range, no surrounding whitespace. Every
+            // anchored helper regex here carries `D`: without it `$` also matches before a final `\n`
+            // (R9-AE-4: `parseFloat("1.5\n")` was 1.5 and `Decimal.of("1.5\n")` died in `bccomp`).
             // PHP's `(int)` clamps on overflow (≠ Rust's None), so detect overflow by re-deriving the
             // magnitude digits from the cast value and comparing to the input's (sign + leading zeros
             // stripped) — a mismatch means it clamped. Tier-1 only (PCRE), correct under `php -n`.
             self.line("function __phorj_parse_int($s) {");
             self.indent += 1;
-            self.line("if (preg_match('/^[+-]?[0-9]+$/', $s) !== 1) { return null; }");
+            self.line("if (preg_match('/^[+-]?[0-9]+$/D', $s) !== 1) { return null; }");
             self.line("$n = (int)$s;");
             self.line("$neg = ($s[0] === '-');");
             self.line("$digits = ltrim(ltrim($s, '+-'), '0');");
@@ -164,8 +166,8 @@ impl Transpiler {
             self.line("function __phorj_parse_float($s, $permissive) {");
             self.indent += 1;
             self.line("$re = $permissive");
-            self.line("    ? '/^[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/'");
-            self.line("    : '/^[+-]?[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/';");
+            self.line("    ? '/^[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/D'");
+            self.line("    : '/^[+-]?[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/D';");
             self.line("return preg_match($re, $s) === 1 ? (float)$s : null;");
             self.indent -= 1;
             self.line("}");
@@ -282,7 +284,7 @@ impl Transpiler {
             // (no `bc*` normalization needed — Phorj preserves trailing zeros as scale).
             self.line("function __phorj_dec_of($s) {");
             self.indent += 1;
-            self.line("if (preg_match('/^[+-]?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$/', $s) !== 1) { return null; }");
+            self.line("if (preg_match('/^[+-]?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$/D', $s) !== 1) { return null; }");
             self.line("$digits = ltrim(str_replace(['-', '+', '.'], '', $s), '0');");
             self.line("if ($digits === '') { $digits = '0'; }");
             self.line("if (bccomp($digits, '170141183460469231731687303715887105727', 0) > 0) { return null; }");

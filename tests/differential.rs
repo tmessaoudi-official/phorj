@@ -4884,6 +4884,34 @@ function main(): void {
     );
 }
 
+/// R9-AE-4: a number with a trailing `\n` is not a number on any leg. The PHP helpers' anchors were `$` without
+/// `D`, which also matches before a final newline: `parseFloat("1.5\n")` was 1.5 there and `Decimal.of("1.5\n")`
+/// died in `bccomp`, where the native legs answer `null`. `parseInt` agreed only because its overflow re-check
+/// compares digits; it is pinned too.
+#[test]
+fn a_number_with_a_trailing_newline_is_not_a_number_on_any_leg() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.String;
+import Core.Decimal;
+import Core.Runtime.Entry;
+import Core.Runtime.EntryKind;
+
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    Output.printLine("int {String.parseInt("12\n") ?? -1}");
+    Output.printLine("float {String.parseFloat("1.5\n") ?? -1.0}");
+    Output.printLine("lax {String.parseFloat("1.5\n", true) ?? -1.0}");
+    decimal d = Decimal.of("1.5\n") ?? 0d;
+    Output.printLine("dec {d}");
+    Output.printLine("ok {String.parseInt("12") ?? -1} {String.parseFloat("1.5") ?? -1.0} {Decimal.of("1.5") ?? 0d}");
+}
+"#,
+        "int -1\nfloat -1\nlax -1\ndec 0\nok 12 1.5 1.5\n",
+        "a_number_with_a_trailing_newline_is_not_a_number_on_any_leg",
+    );
+}
+
 /// TRY-UNWRAP-OPERAND: programs that already ran now type their `var x = f()?` local, so it must behave
 /// exactly as before outside arithmetic — a subclass payload keeps its runtime class through `with`, hooks
 /// and `instanceof`; an interface payload dispatches; an optional, a bool, a string, a float and a list

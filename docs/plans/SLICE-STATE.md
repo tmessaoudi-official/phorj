@@ -10,7 +10,7 @@
 > in the "left the queue" paragraph of § DEFECT QUEUE. New PENDING: DEC-590 (non-UTF-8 process input; the native/PHP
 > split is disclosed as KNOWN_ISSUES NONUTF8-PROCESS-INPUT). OWED: no gate runs a `Process`/`Environment` program under
 > PHP except `tests/cli_argv.rs`, which is how PROCESS-ARGS-PHP-SCOPE hid. Next: the remaining P1 quick wins
-> (R9-AE-4, R9-K4, R9-CJ-1).
+> (R9-AE-4 FIXED 2026-11-23; R9-K4, R9-CJ-1).
 >
 > **▶ 2026-11-20 — TOOLCHAIN IN DOCKER (plan `docs/plans/2026-11-19-dockerize.plan.md`, developer directive 2026-11-19).** Every gate, git hook and CI gating job now runs in the `docker/Dockerfile` image through `scripts/dk`; the host needs docker (with its compose plugin), bash, git and coreutils. Infrastructure, not a feature row: ruled to run before TRY-UNWRAP-OPERAND, which followed and was FIXED 2026-11-20 (plan `docs/plans/2026-11-20-try-unwrap-operand.plan.md`). DONE: CI 44649680637 on `148a5717` is green in the image except `gate-php86`, red on `trim_default_set` alone (DEC-588, PENDING). Open: the G-8 microbench ratchet has not yet measured in the container (load); the `completeness-reviewer.md` command lines await the developer (agent definition).
 >
@@ -544,7 +544,6 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 | QA-N7 FORMAT-TRAILING-COMMENT | ground-prep row 8 (QA sweep, N-7); not in KNOWN_ISSUES | P3 | record only. `return a; // why` as the last statement of a body is moved after the closing `}`, outside the function; a trailing comment on an earlier statement moves to the next line. The help says "comment-preserving" (DEC-170) |
 | R9-K6 FAULT-SKIPS-FINALLY | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth K6 | P1; awaits a ruling — does not block | Invariant 15: does a fault run pending `finally` and `using` cleanup? The VM skips it, the tree-walker and PHP run it. No register row yet. |
 | R9-AE-14 CALL-DEPTH-VS-PHP | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth AE-14 | P1; awaits a ruling — does not block | the 4096 call-depth bound faults where PHP runs deeper: raise it, quarantine deep recursion, or disclose it (Conflicts, item 2). No register row yet. |
-| R9-AE-4 PARSE-TRAILING-NEWLINE | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth AE-4 | P1 | the PHP leg's number-parsing helpers accept a trailing `\n` (a regex `$` without `D`), the class of VALIDATION-regex-trailing-newline. |
 | R9-CJ-1 PARSEINT-INT-MIN | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth CJ-1 (= AE-3) | P1 | the PHP helper overflows parsing the most negative `int`. |
 | R9-AE-2 SPLITONCE-EMPTY-SEPARATOR | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth AE-2 | P1 | native succeeds, PHP throws `ValueError`; row 9 flagged the fault kind as a decision (Conflicts, item 9). |
 | R9-AE-12 MATCH-ARM-AFTER-CATCHALL | ground-prep row 9 (hunters, 2026-11-16; gitignored report), sleuth AE-12 | P1 | the transpiled PHP of a `match` with an arm after a catch-all does not parse. |
@@ -654,7 +653,10 @@ DEC-590. R9-G-2 NONUTF8-ENV (2026-11-20, plan `docs/plans/2026-11-20-nonutf8-env
 `a_non_utf8_environment_variable_is_left_out_of_all_on_the_native_legs`) left the queue with the no-ruling fix: such a pair
 is left out of `Environment.all()`, as `get()` already answers `null`. PROCESS-ARGS-PHP-SCOPE (found closing R9-G-2,
 2026-11-20, plan `docs/plans/2026-11-20-process-args-php-scope.plan.md`; regression
-`process_arguments_inside_a_function_match_on_the_php_leg`) left the queue.
+`process_arguments_inside_a_function_match_on_the_php_leg`) left the queue. R9-AE-4 PARSE-TRAILING-NEWLINE (2026-11-23,
+plan `docs/plans/2026-11-20-parse-trailing-newline.plan.md`; regression
+`a_number_with_a_trailing_newline_is_not_a_number_on_any_leg`) left the queue; its class sibling
+VALIDATION-regex-trailing-newline stays.
 
 **Left the queue at ratification (2026-11-17):** STATIC-COMPOSITION-PARITY (its five items FIXED; its open remainder is
 DECOMPOSED-PARENT-TRAITS); DEV-PRERELEASE-FROM-BRANCH (accepted by the developer 2026-11-07); `Expr::New` inside an

@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — a number with a trailing newline is not a number on the PHP leg either (defect R9-AE-4, P1, 2026-11-23)
+
+The transpiled PHP's number-parsing helpers anchored their regexes with `$` and no `D` modifier, and PCRE's `$` also
+matches before a final newline. So `String.parseFloat("1.5\n")` (strict and permissive) printed `1.5` on the PHP leg
+and `null` natively, and `Decimal.of("1.5\n")` died in `bccomp()` (`ValueError: … not well-formed`). The four anchored
+helper regexes in `src/transpile/runtime_php.rs` now carry `D`. Regression
+`a_number_with_a_trailing_newline_is_not_a_number_on_any_leg` pins all three legs; sabotage: dropping `D` from either
+`parseFloat` grammar or from `Decimal.of` fails it, and from `parseInt` it stays green (its digit re-check already
+rejects the newline, an equivalent mutant). The `Validation` natives' same-shaped regexes are a separate entry,
+VALIDATION-regex-trailing-newline. Plan: `docs/plans/2026-11-20-parse-trailing-newline.plan.md`.
+
 ### Fixed — `Process.arguments()` reads the real arguments on the PHP leg inside a function (PROCESS-ARGS-PHP-SCOPE, P1 proposed, 2026-11-20)
 
 The PHP twin of `Process.arguments()` emitted `array_slice($argv ?? [], 1)` at the call site, and a PHP function does
