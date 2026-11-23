@@ -7,9 +7,9 @@
 #   - In a claude.ai cloud session (CLAUDE_CODE_REMOTE=true) the gate measures regardless of load, so the identity half
 #     runs whenever a PHP comparator resolves; ratios from a shared VM are never a verdict (two cloud runs flipped two
 #     different benches, 2026-11-23), so every cloud run PRINTS what is owed, writes no entry and never holds the push.
-#   - A SKIP (load, no comparator, source mismatch, no binary) or a pass that carries an unconfirmed "verdict OWED"
-#     leaves `microbench` OWED; only a real pass on the PC clears it (a JSON-seam pass is not a measurement).
-#   - A bench missing from the baseline, or RECOVERED, leaves `microbench-baseline` OWED until a PC pass shows neither
+#   - On the PC, a SKIP (load, no comparator, source mismatch, no binary) or a pass that carries an unconfirmed
+#     "verdict OWED" leaves `microbench` OWED; only a real PC pass clears it (a JSON-seam pass is not a measurement).
+#   - On the PC, a bench missing from the baseline, or RECOVERED, leaves `microbench-baseline` OWED until a pass shows neither
 #     (the ratchet does not protect it until someone re-emits on a quiet PC: DEC-431.1, DEC-365).
 #
 #   scripts/microbench-leg.sh            # what pre-push runs
@@ -38,7 +38,7 @@ owed() {
 }
 # A cloud run measures anyway: past the load guard, and past a php SOURCE MISMATCH (a cloud host without docker measures
 # on its own php8.5, not the baseline's `docker php:8.5-cli`), since output identity needs no baseline. Its ratios are
-# never a verdict; everything below records them OWED.
+# never a verdict; everything below reports them OWED (printed in the cloud, recorded on the PC: owed() above).
 if [[ "$env" == cloud ]]; then export MICROBENCH_MAX_LOAD=1000 MICROBENCH_IDENTITY_ONLY=1; fi
 if [[ "${1:-}" == --verify ]]; then
   [[ "$env" == pc ]] || { echo "microbench-leg: --verify clears debt and runs on the PC only (DEC-598)" >&2; exit 2; }

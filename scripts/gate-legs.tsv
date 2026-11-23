@@ -3,7 +3,8 @@
 # key = the text of the leg's `echo "[pre-push] …"` line up to " (" ; columns are TAB-separated.
 #   everywhere  runs in every pre-push, PC and cloud (a skip inside it is the leg's own, loud). CI is a separate list:
 #               its gate job runs fmt, clippy and the test suite, none of the script suites below
-#   owed        may not run where it is; its script MUST record an OWED entry (scripts/owed-legs.sh) when it does not
+#   owed        may not run where it is; on the PC its script MUST record an OWED entry (scripts/owed-legs.sh) when it
+#               does not; in a cloud session it prints the OWED verdict and the PC push after landing records it
 #   pc-only     runs on every PC push, before the dk re-exec; a cloud session never runs it, and its work reaches master
 #               only through a PC push, which does
 #   info        a message, not a leg
