@@ -6,13 +6,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — a gate leg that cannot run where it is becomes a durable OWED entry, verified first on the PC (DEC-597, DEC-598)
+
+The microbench leg used to vanish silently: a load SKIP on the PC printed one line in a push log, and the first cloud fix
+(`9bf7fc57`, below) skipped the whole gate in a cloud session, its identity check included. Now pre-push runs
+`scripts/microbench-leg.sh`, which wraps `scripts/microbench-gate.sh`: an output-identity break blocks everywhere (when a
+PHP comparator resolves); a confirmed WIN->LOSS flip blocks on the PC; in a cloud session the gate measures regardless of
+load and every ratio verdict is recorded OWED. Every SKIP, every unconfirmed suspect and every bench missing from the
+baseline is recorded too, by `scripts/owed-legs.sh`, in a new `OWED GATE LEGS` section of `docs/plans/SLICE-STATE.md`;
+only a real pass on the PC turns an entry CLEARED (`scripts/microbench-leg.sh --verify`: release build, long settle, run
+when the box is quiet). A cloud pre-push refuses in seconds until the OWED entry is committed, so it travels with the
+push; pre-commit refuses a commit that deletes an OPEN entry or leaves a new one behind, and lists what is owed. The
+first entry is real: the microbench leg was skipped on the push of `51aad5f8` (load 6.36). Tests: `scripts/test-owed-legs.sh`
+(26 cases: the ledger, check-staged through real pathspec commits, the leg driven through the gate's JSON seam), and
+`scripts/test-microbench-gate.sh` case 20 (a cloud gating run measures).
+
 ### Fixed — a cloud session gates against the right PHP, and its pre-push no longer fails on benchmark noise (cloud audit 2026-11-23, B1, D6)
 
 On the host runner (`phorj.runner=host`, a cloud session) `scripts/dk` now sources `scripts/toolchain.env` before it runs
 the command, so `scripts/dk cargo nextest …` exports the same `PHORJ_PHP` pre-push resolves; before, `tests/differential.rs`
-fell back to the machine's bare `php` (Ubuntu's 8.3, no bcmath). `scripts/microbench-gate.sh` SKIPS with an OWED verdict
-when `CLAUDE_CODE_REMOTE=true` (two cloud runs flipped two different benches on a shared VM) and refuses `--emit` there:
-the baseline is emitted on the PC only (developer rulings D6, D3). Tests: `scripts/test-cloud-setup.sh` (dk exports the
+fell back to the machine's bare `php` (Ubuntu's 8.3, no bcmath). `scripts/microbench-gate.sh` refuses `--emit` when
+`CLAUDE_CODE_REMOTE=true` (two cloud runs flipped two different benches on a shared VM): the baseline is emitted on the PC
+only (developer ruling D3). Its first form also SKIPPED every cloud gating run (D6); DEC-597 replaced that skip (above). Tests: `scripts/test-cloud-setup.sh` (dk exports the
 resolved `PHORJ_PHP`), `scripts/test-microbench-gate.sh` cases 20 and 20b.
 
 ### Fixed — the pre-push gate's own suites pass in a claude.ai cloud session again (cloud audit 2026-11-23, B0)

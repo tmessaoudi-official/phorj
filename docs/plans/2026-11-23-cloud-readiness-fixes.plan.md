@@ -16,6 +16,7 @@
 - [2026-11-23 18:48] AGREED: D6 — the cloud pre-push SKIPS the microbench gate with an OWED verdict when CLAUDE_CODE_REMOTE=true (same mechanism as the load skip; a shared VM flipped a different bench on each run: floatmul 1.185->0.867, then mapinsert 1.139->0.855); the PC pre-push stays the perf authority. Owed when the developer says the PC is quiet: measure floatmul + mapinsert on the PC, re-emit the 4 recovered benches, record the 5 new no-baseline benches OWED (Invariant 18). Alternatives: advisory only; keep blocking.
 - [2026-11-23 18:48] AGREED: D3 — the step-1c perf rebaseline (8.6 + JIT comparator) is emitted on the PC only, when the developer says it is quiet, through the gate's emit load guard (0.7). Alternatives: a CI runner.
 - [2026-11-23 18:48] AGREED: B1 approach (a): scripts/dk's host branch sources scripts/toolchain.env before exec, so every host-runner call resolves PHP as pre-push does; step 1c moves that one resolver to 8.6. Alternatives: update-alternatives; both.
+- [2026-11-23 19:09] AGREED: DEC-597 (option A) supersedes the D6 skip: the cloud runs the microbench benches (an output-identity break blocks, a ratio flip is recorded), every leg that cannot run where it is writes a durable OWED entry into SLICE-STATE, cleared only by a real PC pass; a test classifies every pre-push leg. DEC-598 (a): owed legs are verified first on the PC; a confirmed flip is P1, an identity break P0, carried _owed losses unchanged. DEC-599: test-docker.sh into the PC pre-push; DB/mail CI services queued (LIVE-ROUNDTRIPS-NOWHERE, P2 proposed). Alternatives: B (cloud skips, list only); C (rule text only).
 
 ## Formal Plan
 
@@ -53,12 +54,13 @@
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 0 | B0 cloud pre-push suites (`test(cloud): the pre-push suites pass in a cloud session again`) | M | done | 51aad5f8 | scripts/test-cloud-setup.sh scripts/test-size-gate.sh .claude/hooks/test-lint-on-write.sh |
-| 1 | B1 host-runner PHP resolution | S | doing | - | scripts/dk scripts/test-cloud-setup.sh |
+| 1 | B1 host-runner PHP resolution (`fix(cloud): dk resolves the PHP oracle on the host runner`) | S | done | 9bf7fc57 | scripts/dk scripts/test-cloud-setup.sh |
 | 2 | B2 PHP 8.6 in the cloud | M | todo | - | .claude/cloud-setup.sh scripts/dk |
 | 3 | B4 docker-in-the-cloud wording (per D2) | S | todo | - | - |
 | 4 | B5 certification-schedule slug | S | todo | - | CLAUDE.md |
 | 5 | B6 expertise-core re-review | S | todo | - | .claude/rules/expertise-core.md |
-| 6 | C decisions D1-D6 (all ruled 2026-11-23); D6 cloud skip built with B1 | S | doing | - | scripts/microbench-gate.sh scripts/test-microbench-gate.sh |
+| 6 | C decisions D1-D6 (all ruled 2026-11-23); D6 cloud skip built with B1, replaced by row 7 | S | doing | - | scripts/microbench-gate.sh scripts/test-microbench-gate.sh |
+| 7 | DEC-597/598/599 durable OWED legs, defects-first, legs classified | M | doing | - | scripts/owed-legs.sh scripts/microbench-leg.sh scripts/gate-legs.tsv scripts/git-hooks/pre-push scripts/git-hooks/pre-commit |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input

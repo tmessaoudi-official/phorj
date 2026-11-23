@@ -55,6 +55,13 @@ fi
 echo "[pre-commit] claude-config-guard"
 python3 "$(git rev-parse --show-toplevel)/scripts/claude-config-guard.py"
 
+# ── The OWED list (DEC-597) ─────────────────────────────────────────────────────────────────────
+# A gate leg that could not run where it was left an OPEN entry in docs/plans/SLICE-STATE.md; this refuses a commit
+# that deletes one by hand or leaves a new one uncommitted, then prints what is still owed (DEC-598: the first work of
+# a PC session that can run it).
+bash "$(git rev-parse --show-toplevel)/scripts/owed-legs.sh" check-staged
+bash "$(git rev-parse --show-toplevel)/scripts/owed-legs.sh" list
+
 # ── DEC-378 part 1: DOCS-ONLY FAST PATH ──────────────────────────────────────────────────────────
 # Measured cost of getting this wrong: the 2026-07-26 session spent ~45 min waiting on twelve
 # docs-only ruling commits, and the 2026-07-29 session paid the full 1999-test tier on eight more.

@@ -484,6 +484,12 @@ structure for the cross-language differential test"* and yields
 `{tenure, confidence_bp, outcome, reasons[]}`. The eleven-property spec the port must satisfy is
 scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation contract".
 
+## OWED GATE LEGS (DEC-597) — legs that could not run where they were; the FIRST work of a PC session that can run them (DEC-598)
+
+<!-- owed-legs -->
+- OPEN microbench since 9bf7fc57 `fix(cloud): dk resolves the PHP oracle on the host runner; the microbe` (2026-11-23, pc): the pre-push of 51aad5f8 skipped it (1-min load 6.36, still 3.27 after 90s); SLICE-STATE item 3 above: the baseline has not been gated against a real pass since its emit
+<!-- /owed-legs -->
+
 ## DEFECT QUEUE (DEC-578) — the ONE list; grades RATIFIED 2026-11-17 (seeded 2026-11-13)
 
 > **What this is.** Rule 1 of `.claude/rules/north-star.md` orders work by this list. It was seeded on 2026-11-13

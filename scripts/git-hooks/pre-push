@@ -25,6 +25,18 @@ fi
 # git feeds the pushed-ref list on stdin; we gate the whole push, not per-ref, so drain it.
 cat >/dev/null || true
 
+# DEC-597: a cloud session's microbench ratios are never a verdict (a shared VM flipped a different bench on each run),
+# so every cloud push owes a run on a quiet PC. The OWED entry must travel WITH the push (a container does not
+# survive), so it is checked here, in seconds, before the heavy legs: when the pushed commit does not carry it yet,
+# write it and refuse; one commit of docs/plans/SLICE-STATE.md and the next push goes through.
+if [[ "${CLAUDE_CODE_REMOTE:-}" == true ]] && ! bash "$(git rev-parse --show-toplevel)/scripts/owed-legs.sh" has-committed microbench; then
+  bash "$(git rev-parse --show-toplevel)/scripts/owed-legs.sh" record microbench cloud \
+    "a cloud session cannot judge microbench ratios (shared VM): run scripts/microbench-leg.sh --verify on a quiet PC"
+  echo "[pre-push] REFUSED (DEC-597): the owed microbench entry is now in docs/plans/SLICE-STATE.md;" >&2
+  echo "[pre-push] commit that file and push again (nothing else changes)." >&2
+  exit 1
+fi
+
 # Build NON-incrementally for the gate. This box links with `mold` (machine-local, gitignored
 # config), and `mold` + rustc incremental compilation intermittently fail to link with
 # `undefined symbol: anon.<hash>.llvm.<n>` referencing stale `*.rcgu.o` incremental codegen units —
@@ -114,6 +126,8 @@ python3 "$_gate_root/scripts/claude-config-guard.py"
 # deterministic. If the gate stops blocking, THIS fails first.
 echo "[pre-push] test-microbench-gate (the ratchet's own behaviour tests)"
 bash "$_gate_root/scripts/test-microbench-gate.sh"
+echo "[pre-push] test-owed-legs (the OWED list and the microbench leg's own behaviour tests, DEC-597)"
+bash "$_gate_root/scripts/test-owed-legs.sh"
 
 # Same reasoning, same failure already observed once: validate-infra.sh HAD a behaviour suite
 # (scripts/test-validate-infra.sh) that no gate ever ran, so a check could go dark unnoticed — and
@@ -194,12 +208,13 @@ echo "[pre-push] cargo build --release"
 cargo build --release
 
 echo "[pre-push] microbench-gate (G-8 mandate ratchet — no WIN->LOSS flip, output-identity holds)"
-# Self-skips (exit 0) if docker or the release binary is absent — a push is never wedged by missing
-# infra. Blocks with exit 1 on a WIN->LOSS flip (a feature that beat release-php now loses), a
-# VM-vs-php output-identity break or an OWED loss deepening — all load-insensitive — and with exit 2
-# (setup error) on a malformed bench/micro-baseline.json ratio. VM-perf regression is gated robustly by
-# perf-gate.sh (same-process tree÷VM). Ratchet: after the JIT lands a WIN, run
-# `bash scripts/microbench-gate.sh --emit` so the flip check protects it.
-bash "$_gate_root/scripts/microbench-gate.sh"
+# Through scripts/microbench-leg.sh (DEC-597, DEC-598): the gate blocks with exit 1 on a VM-vs-php output-identity
+# break (everywhere) and on a confirmed WIN->LOSS flip or an OWED loss deepening (on the PC; in a cloud session a ratio
+# verdict is recorded OWED instead), and with exit 2 on a malformed bench/micro-baseline.json ratio. Whatever it could
+# not measure (load, no comparator, a cloud VM, an unconfirmed suspect, a bench missing from the baseline) becomes an
+# OWED entry in docs/plans/SLICE-STATE.md, cleared only by a real pass on the PC (`scripts/microbench-leg.sh --verify`).
+# VM-perf regression is gated robustly by perf-gate.sh (same-process tree÷VM). Ratchet: after the JIT lands a WIN,
+# run `bash scripts/microbench-gate.sh --emit` on a quiet PC so the flip check protects it.
+bash "$_gate_root/scripts/microbench-leg.sh"
 
 echo "[pre-push] OK"

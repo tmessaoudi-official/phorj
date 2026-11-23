@@ -320,11 +320,12 @@ if [[ -n "$win_feat" ]]; then
   else echo "  ok   19 a malformed ratio is printed %q-quoted"; fi
 fi
 
-# 20. A cloud session (D6, cloud audit 2026-11-23): a shared VM flipped a different bench on each run, so the gate
-#     SKIPS there with an OWED verdict, even on a real flip, and REFUSES to emit (D3: the baseline is the PC's alone).
+# 20. A cloud session (DEC-597): the gate still MEASURES and judges there (the identity half is not noise; the leg,
+#     scripts/microbench-leg.sh, turns its ratio verdicts into OWED entries), and it REFUSES to emit (D3: the baseline
+#     is the PC's alone).
 if [[ -n "$win_feat" ]]; then
-  out20="$(CLAUDE_CODE_REMOTE=true MICROBENCH_GATE_JSON="$TMP/flip.json" bash "$GATE" 2>&1)"; rc20=$?
-  if [[ $rc20 == 0 && "$out20" == *"cloud session"*OWED* && "$out20" != *"WIN->LOSS"* ]]; then echo "  ok   20 a cloud session SKIPS, OWED, even on a flip"
+  out20="$(CLAUDE_CODE_REMOTE=true MICROBENCH_GATE_JSON="$TMP/clean.json" bash "$GATE" 2>&1)"; rc20=$?
+  if [[ $rc20 == 0 && "$out20" == *"PASS (ratchet"* ]]; then echo "  ok   20 a cloud session's gating run measures and judges (no skip)"
   else echo "  FAIL 20 cloud session: exit $rc20 ${out20:0:200}"; fails=$((fails + 1)); fi
   cp "$BASELINE" "$TMP/base20.json"
   out20b="$(CLAUDE_CODE_REMOTE=true MICROBENCH_BASELINE="$TMP/base20.json" MICROBENCH_GATE_JSON="$TMP/clean.json" bash "$GATE" --emit 2>&1)"; rc20b=$?
