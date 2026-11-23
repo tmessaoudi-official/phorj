@@ -33,6 +33,31 @@ check() { if eval "$2"; then ok "$1"; else bad "$1 [$2]"; fi; }
 
 TMP=$(mktemp -d /tmp/test-cloud-setup-XXXXXX)
 trap 'rm -rf "$TMP"' EXIT
+
+# Git isolation (B0a, cloud audit 2026-11-23). A cloud session sets a GLOBAL core.hooksPath (the kit's) and injects
+# entries through GIT_CONFIG_COUNT; a bare `git config --get` reads both, so the "left unset" checks failed there
+# while passing on the PC. The suite now runs against a global file of its own that carries a FOREIGN
+# core.hooksPath, so a read of a throwaway repo that is not `--local` fails on the PC too. Set after ROOT is resolved:
+# the real checkout may need the machine's own safe.directory.
+unset GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS
+for v in "${!GIT_CONFIG_KEY_@}" "${!GIT_CONFIG_VALUE_@}"; do unset "$v"; done
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/gitconfig-global"
+printf '[core]\n\thooksPath = /foreign/global/hooks\n' >"$GIT_CONFIG_GLOBAL"
+
+# A guard `rm` first on the suite's own PATH (B0b, same audit): a hosted Claude session puts one there, a /bin/sh
+# stand-in that runs the NEXT rm on PATH. Linked into the closed PATH below it finds no next rm, so the hook's
+# `rm -rf -- "$t"` failed and left its temp dir. The closed PATH must never take a tool from the caller's PATH.
+GUARD="$TMP/guard"; mkdir -p "$GUARD"
+cat >"$GUARD/rm" <<'EOF'
+#!/bin/sh
+self=$(cd "$(dirname "$0")" && pwd); found=0; IFS=:
+for d in $PATH; do
+  if [ "$found" = 1 ] && [ -x "$d/rm" ]; then exec "$d/rm" "$@"; fi
+  [ "$d" = "$self" ] && found=1
+done
+echo "rm-guard: no next rm on PATH" >&2; exit 1
+EOF
+chmod +x "$GUARD/rm"; PATH="$GUARD:$PATH"
 echo "cloud-setup.sh — $HOOK"
 [[ -f "$HOOK" ]] || { bad "the hook exists"; printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"; exit 1; }
 
@@ -48,15 +73,17 @@ cat "$KEY" "$TMP/othersec.gpg" >"$TMP/withsec.gpg"   # a SECRET key prints `sec`
 mkdir -p "$TMP/nx"; printf '#!/bin/sh\necho fake\n' >"$TMP/nx/cargo-nextest"; chmod +x "$TMP/nx/cargo-nextest"
 tar -czf "$TMP/nextest.tgz" -C "$TMP/nx" cargo-nextest   # NOT the pinned tarball: its sha must be refused
 
-# A closed PATH: fakes first, then only the real tools the hook is allowed to use.
+# A closed PATH: fakes first, then only the real tools the hook is allowed to use, taken from the system directories
+# alone (never the caller's PATH: see the guard above). A tool that is not there is a FAIL, not a silent gap.
 TOOLS="$TMP/tools"; FAKE="$TMP/fake"; mkdir -p "$TOOLS" "$FAKE"
 for t in bash sh env awk sed grep cat mkdir mktemp rm chmod install tar gzip sha256sum gpg git realpath dirname \
          basename head tail tr cut cp mv ln date sleep printf wc timeout; do
-  p="$(command -v "$t" 2>/dev/null)" && [[ "$p" == /* ]] && ln -sf "$p" "$TOOLS/$t"
+  p=""; for d in /usr/bin /bin; do [[ -x "$d/$t" ]] && { p="$d/$t"; break; }; done
+  if [[ -n "$p" ]]; then ln -sf "$p" "$TOOLS/$t"; else bad "fixture: $t is in /usr/bin or /bin"; fi
 done
 NOGPG="$TMP/tools-nogpg"; cp -a "$TOOLS" "$NOGPG"; rm -f "$NOGPG/gpg"   # the same closed PATH, minus gpg
 NOAWK="$TMP/tools-noawk"; cp -a "$TOOLS" "$NOAWK"; rm -f "$NOAWK/awk"   # ... minus awk (the fingerprint filter)
-REAL_GPG="$(command -v gpg)"
+REAL_GPG="$(readlink "$TOOLS/gpg")"
 # fake curl: serves a fixture chosen per run (CS_KEY = file for the sury key URL, CS_FAIL=1 = every download fails)
 cat >"$FAKE/curl" <<'EOF'
 #!/bin/bash
@@ -110,13 +137,17 @@ LEAKED=""
 php_installed() { grep -qE "^apt-get .*install .*php8\.5-cli" "$TMP/calls"; }
 KR="$TMP/p/usr/share/keyrings/debsuryorg-archive-keyring.gpg"
 SRC="$TMP/p/etc/apt/sources.list.d/php.list"
-hooks_path() { git -C "$TMP/repo" config --get core.hooksPath; }
+# --local: the repo's own setting only (a cloud session has a global core.hooksPath; this suite plants a foreign one)
+hooks_path() { git -C "$TMP/repo" config --local --get core.hooksPath; }
 
 # ── 1. Off the cloud: nothing happens ───────────────────────────────────────────────────────────────────────
 fresh; run "$TMP/home" ""
+check "fixture: a non-local read of a throwaway repo sees the foreign global core.hooksPath" \
+  '[[ "$(git -C "$TMP/repo" config --get core.hooksPath)" == /foreign/global/hooks ]]'
+check "fixture: the closed PATH's rm is not the guard first on the caller's PATH" '[[ "$(readlink "$TOOLS/rm")" != "$GUARD/rm" ]]'
 check "PC (no CLAUDE_CODE_REMOTE): exit 0" '[[ $RC -eq 0 ]]'
 check "PC: no output, no download, no apt, no hooksPath" '[[ -z "$OUT" && ! -s $TMP/calls && -z "$(hooks_path)" && ! -e $KR ]]'
-check "PC: phorj.runner left unset (the hooks run through docker)" '[[ -z "$(git -C "$TMP/repo" config --get phorj.runner)" ]]'
+check "PC: phorj.runner left unset (the hooks run through docker)" '[[ -z "$(git -C "$TMP/repo" config --local --get phorj.runner)" ]]'
 fresh; run "$TMP/home" true
 check "stray CLAUDE_CODE_REMOTE=true with HOME not /root: no-op" '[[ $RC -eq 0 && -z "$OUT" && ! -s $TMP/calls && -z "$(hooks_path)" ]]'
 fresh; run /root ""
@@ -138,7 +169,7 @@ check "apt-get update runs, then the four php8.5 packages are installed" \
 check "php8.5 with bcmath is reported present after the install" 'grep -qE "INFO \| php: .*bcmath" <<<"$OUT"'
 check "core.hooksPath = scripts/git-hooks" '[[ "$(hooks_path)" == scripts/git-hooks ]]'
 check "phorj.runner = host (scripts/dk runs on this machine: no docker in a cloud session)" \
-  '[[ "$(git -C "$TMP/repo" config --get phorj.runner)" == host ]]'
+  '[[ "$(git -C "$TMP/repo" config --local --get phorj.runner)" == host ]]'
 check "the php packages are the minor docker/Dockerfile names" \
   'grep -qE "^apt-get .*install .*php$(sed -n "s/^ARG PHP_MINOR=//p" "$ROOT/docker/Dockerfile")-cli" "$TMP/calls"'
 check "a nextest download that is not the pinned tarball is refused" \

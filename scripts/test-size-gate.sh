@@ -93,11 +93,17 @@ out="$(gate)"; rc=$?
 
 # Round 5: an UNREADABLE baseline is named as such — the NUL probe's failed redirect used to report
 # "contains a NUL byte", a cause the reader would never find.
-row 600 src/g.rs; chmod 000 "$TMP/scripts/size-baseline.txt"
-out="$(gate)"; rc=$?
-chmod 644 "$TMP/scripts/size-baseline.txt"
-[[ $rc -ne 0 && "$out" == *"cannot read"* && "$out" != *"NUL"* ]] && ok "an unreadable baseline fails closed, named unreadable" \
-                                                                  || bad "unreadable baseline: rc=$rc ${out:0:200}"
+# Root reads a mode-000 file, so the case cannot be built as root (a cloud session runs as root: cloud audit
+# 2026-11-23, B0c): it is a loud SKIP there, still run on the PC (the image runs as the developer's uid) and in CI.
+if [[ "$(id -u)" == 0 ]]; then
+  printf '  SKIP — an unreadable baseline: running as root, which reads a mode-000 file (run as a normal user)\n'
+else
+  row 600 src/g.rs; chmod 000 "$TMP/scripts/size-baseline.txt"
+  out="$(gate)"; rc=$?
+  chmod 644 "$TMP/scripts/size-baseline.txt"
+  [[ $rc -ne 0 && "$out" == *"cannot read"* && "$out" != *"NUL"* ]] && ok "an unreadable baseline fails closed, named unreadable" \
+                                                                    || bad "unreadable baseline: rc=$rc ${out:0:200}"
+fi
 
 # ── 5. Output never carries raw control bytes from a row or a committed FILENAME (both free text) ─
 printf 'abc\tsrc/x\033[31m.rs\n' > "$TMP/scripts/size-baseline.txt"

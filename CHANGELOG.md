@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the pre-push gate's own suites pass in a claude.ai cloud session again (cloud audit 2026-11-23, B0)
+
+Every cloud pre-push was red for three environmental reasons, none of them in the code under test.
+`scripts/test-cloud-setup.sh` read each throwaway repo's `core.hooksPath` without `--local`, so the kit's GLOBAL
+`core.hooksPath` failed every "left unset" check; it now reads `--local`, and runs against a global git config of its
+own that carries a foreign `core.hooksPath` (the `GIT_CONFIG_COUNT` family unset), so the same mistake fails on the PC.
+Its closed PATH linked tools from the caller's PATH, where a hosted session puts a guard `rm` that runs "the next rm on
+PATH": inside the closed PATH there is none, so the hook's temp dirs leaked; tools now come from `/usr/bin` and `/bin`
+only (a missing one is a FAIL), and a guard `rm` first on the suite's own PATH keeps the case on the PC.
+`.claude/hooks/test-lint-on-write.sh` resolves its closed-PATH tools the same way. The unreadable-baseline cases of
+`scripts/test-size-gate.sh` and `test-lint-on-write.sh` are a loud SKIP as root (a cloud session runs as root, and root
+reads a mode-000 file); they still run as the developer's uid in the image and in CI.
+
 ### Changed — no `return`, `break` or `continue` may leave a `finally` block (`E-FINALLY-EXIT`, DEC-595, DEC-596, 2026-11-23)
 
 `try { throw new LostError("x"); } finally { return 3; }` returned 3 and silently lost the error on every leg (PHP 8.6

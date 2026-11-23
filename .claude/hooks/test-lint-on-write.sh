@@ -249,11 +249,16 @@ rm -f "$TMP/scripts/size-baseline.txt"
 r="$(run "$TMP/src/mid4.rs")"
 [[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" != *"malformed"* && "$(err_of "$r")" != *"awk"* ]] && ok "hook: no baseline file → no row complaint" \
                                                                                               || bad "hook: missing baseline: '$(err_of "$r")'"
-: > "$TMP/scripts/size-baseline.txt"; chmod 000 "$TMP/scripts/size-baseline.txt"
-r="$(run "$TMP/src/mid4.rs")"
-chmod 644 "$TMP/scripts/size-baseline.txt"
-[[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" != *"malformed"* && "$(err_of "$r")" != *"awk"* ]] && ok "hook: an unreadable baseline → no false 'malformed'" \
-                                                                                              || bad "hook: unreadable baseline: '$(err_of "$r")'"
+# Root reads a mode-000 file, so as root this case would pass without testing anything (cloud audit 2026-11-23, B0c).
+if [[ "$(id -u)" == 0 ]]; then
+  printf '  skip — hook: an unreadable baseline: running as root, which reads a mode-000 file\n'; SKIP=$((SKIP+1))
+else
+  : > "$TMP/scripts/size-baseline.txt"; chmod 000 "$TMP/scripts/size-baseline.txt"
+  r="$(run "$TMP/src/mid4.rs")"
+  chmod 644 "$TMP/scripts/size-baseline.txt"
+  [[ "$(rc_of "$r")" == 0 && "$(err_of "$r")" != *"malformed"* && "$(err_of "$r")" != *"awk"* ]] && ok "hook: an unreadable baseline → no false 'malformed'" \
+                                                                                                || bad "hook: unreadable baseline: '$(err_of "$r")'"
+fi
 rm -f "$TMP/src/mid4.rs"
 # A path holding a BACKSLASH is matched byte for byte, as the gate does: `awk -v` would turn `\t` into a
 # TAB and miss the row (round 4, correctness N-R4-4 / safety N2). Grandfathered at 600, 550 lines: silent.
@@ -407,8 +412,11 @@ rm -f "$TMP/scripts/claude-config-guard.py" "$TMP/scripts/php-forward-probe.sh"
 # ── 11. No jq: say so once per session instead of checking nothing in silence ───────
 # PATH holds only what the hook needs before the jq check; HOME has no log-helpers, so log_obs is the stub.
 NOJQ="$TMP/nojq"; mkdir -p "$NOJQ/bin" "$NOJQ/home" "$NOJQ/tmp"
-ln -s "$(command -v cat)" "$NOJQ/bin/cat"
-BASH_BIN="$(command -v bash)"; PY_BIN="$(command -v python3)"
+# From the system directories, never the caller's PATH, where a hosted session may put a guard wrapper first
+# (cloud audit 2026-11-23, B0b; the same rule as scripts/test-cloud-setup.sh's closed PATH).
+sysbin() { local d; for d in /usr/bin /bin; do [[ -x "$d/$1" ]] && { printf '%s' "$d/$1"; return 0; }; done; return 1; }
+ln -s "$(sysbin cat)" "$NOJQ/bin/cat"
+BASH_BIN="$(sysbin bash)"; PY_BIN="$(sysbin python3)"
 nojq() { printf '{"session_id":"%s","tool_input":{"file_path":"%s"}}' "$1" "$TMP/src/huge.rs" \
          | PATH="$NOJQ/bin" HOME="$NOJQ/home" TMPDIR="$NOJQ/tmp" CLAUDE_PROJECT_DIR="$TMP" "$BASH_BIN" "$SCRIPT" 2>/dev/null; }
 first="$(nojq sess-a)"; rc=$?
