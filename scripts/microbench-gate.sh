@@ -163,11 +163,11 @@ else
     # until it existed, this branch accepted the box's `ZTS DEBUG GCOV` oracle — it passes the JIT
     # probe — so a day docker went down would have silently inflated every ratio, with the fallback
     # banner as the only trace. That was latent, never live (the banner appears in no push log).
-    if [[ -n "${PHORJ_PHP:-}" && -x "${PHORJ_PHP:-}" ]] && "$PHORJ_PHP" $JIT_PROBE -r \
-      'exit((opcache_get_status(false)["jit"]["on"] ?? false) ? 0 : 1);' >/dev/null 2>&1 \
-      && _php_not_debug "$PHORJ_PHP"; then
+    # MICROBENCH_IDENTITY_ONLY=1 (a cloud run, DEC-597) waives the JIT: identity needs none, and its ratios are OWED.
+    if [[ -n "${PHORJ_PHP:-}" && -x "${PHORJ_PHP:-}" ]] && _php_not_debug "$PHORJ_PHP" && { "$PHORJ_PHP" $JIT_PROBE -r \
+      'exit((opcache_get_status(false)["jit"]["on"] ?? false) ? 0 : 1);' >/dev/null 2>&1 || [[ "${MICROBENCH_IDENTITY_ONLY:-}" == 1 ]]; }; then
       export MICROBENCH_PHP_BIN="$PHORJ_PHP"
-      echo "microbench-gate: docker unusable — using the local release php+JIT ($PHORJ_PHP)" >&2
+      echo "microbench-gate: docker unusable — using the local release php ($PHORJ_PHP; JIT-probed unless MICROBENCH_IDENTITY_ONLY)" >&2
       if _php_is_zts "$PHORJ_PHP"; then
         echo "microbench-gate: warning — that php is a ZTS build; the DEC-507 comparator is NTS." >&2
       fi

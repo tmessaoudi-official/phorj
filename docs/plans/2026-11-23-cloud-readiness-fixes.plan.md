@@ -60,11 +60,11 @@
 | 4 | B5 certification-schedule slug (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | CLAUDE.md |
 | 5 | B6 expertise-core re-review (six claims re-checked, the rest not; stale Stmt/Expr counts fixed) (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | .claude/rules/expertise-core.md CLAUDE.md docs/INVARIANTS.md |
 | 6 | C decisions D1-D6 (all ruled 2026-11-23); D6 cloud skip built with B1, replaced by row 7; D1 (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | scripts/microbench-gate.sh scripts/test-microbench-gate.sh |
-| 7 | DEC-597/598/599 durable OWED legs (`feat(gates): a leg that cannot run where it is becomes a durable OWED entry`), defects-first, legs classified | M | done | 1d104c1a d66c0787 | scripts/owed-legs.sh scripts/microbench-leg.sh scripts/gate-legs.tsv scripts/git-hooks/pre-push scripts/git-hooks/pre-commit |
+| 7 | DEC-597/598/599 durable OWED legs (`feat(gates): a leg that cannot run where it is becomes a durable OWED entry`), defects-first, legs classified | M | done | 1d104c1a d66c0787 15c935f6 (`fix(gates): a cloud run checks output identity through a php source mismatch`) | scripts/owed-legs.sh scripts/microbench-leg.sh scripts/gate-legs.tsv scripts/git-hooks/pre-push scripts/git-hooks/pre-commit |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- The D6/D3 measurements (floatmul + mapinsert on the PC, re-emit the 4 recovered benches, the 5 new benches OWED): only when the developer says the PC is quiet.
+- The D6/D3 measurements, only when the developer says the PC is quiet: floatmul + mapinsert re-measured on the PC, then a quiet-PC `scripts/microbench-gate.sh --emit`, which clears the OPEN `microbench-baseline` entry. The gate itself names seven benches there (push of `15c935f6`): five new (coalesceor constmap mapunion throwexpr trimascii) and two RECOVERED (namedtuplefield nestedlist); the cloud audit's other two recovered benches (deepjson, listcontains) no longer report RECOVERED.
 ### Needs research
 ### Fragile
 - B0b's rm-guard is a model of the hosted harness's guard: a fresh cloud session proves it.

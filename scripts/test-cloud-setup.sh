@@ -239,8 +239,8 @@ check "php8.5 installed without bcmath: ERROR" 'grep -qE "ERROR \| php: .*no bcm
 FWD="$(sed -n 's/^ARG FORWARD_PHP_MINOR=//p' "$ROOT/docker/Dockerfile")"
 check "fixture: docker/Dockerfile names FORWARD_PHP_MINOR (8.6), as the fake apt-get assumes" '[[ "$FWD" == 8.6 ]]'
 fresh; run /root true
-check "the forward PHP's cli and bcmath are installed, in an apt call of its own" \
-  'grep -E "^apt-get .*install .*php$FWD-cli" $TMP/calls | grep -q "php$FWD-bcmath" && ! grep -E "^apt-get .*install .*php$FWD-cli" $TMP/calls | grep -q "php8\.5-cli"'
+check "the forward PHP gets the oracle's package set (cli, bcmath, mbstring, sqlite3), in an apt call of its own" \
+  'l="$(grep -E "^apt-get .*install .*php$FWD-cli" $TMP/calls)"; n=0; for x in bcmath mbstring sqlite3; do grep -q "php$FWD-$x" <<<"$l" && n=$((n + 1)); done; [[ $n == 3 ]] && ! grep -q "php8\.5-cli" <<<"$l"'
 check "the forward PHP is reported present (INFO php-forward)" 'grep -qE "INFO \| php-forward: .*php$FWD.*bcmath" <<<"$OUT"'
 fresh; CS_FWD_FAIL=1 run /root true
 check "the forward install fails: a WARN, never an ERROR, and the oracle is still installed" \

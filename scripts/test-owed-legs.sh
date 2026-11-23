@@ -34,6 +34,7 @@ printf '# Slice state\n\nintro\n\n## DEFECT QUEUE (DEC-578)\n\n- one\n' >"$R/doc
 printf '#!/usr/bin/env bash\nexec bash scripts/owed-legs.sh check-staged\n' >"$R/hooks/pre-commit"; chmod +x "$R/hooks/pre-commit"
 git -C "$R" init -q; git -C "$R" add -A; git -C "$R" commit -q -m "chore: the first commit of the fixture"
 git -C "$R" config core.hooksPath hooks
+git -C "$R" config phorj.runner host   # the leg runs its body here; the dk re-exec has its own case (section 3)
 O="$R/docs/plans/SLICE-STATE.md"
 owed() { (cd "$R" && bash scripts/owed-legs.sh "$@"); }
 
@@ -113,6 +114,8 @@ reset_owed; seam "$TMP/new.json"; rc=$?
 check "a bench missing from the baseline opens microbench-baseline, naming it" '[[ $rc == 0 ]] && grep -qE "^- OPEN microbench-baseline .*brandnew" "$O"'
 reset_owed; FAKE_OUT=$'  RECOVERED deepjson: owed at 0.9, now 1.1 (a WIN) — re-emit so the ratchet protects it\nmicrobench-gate: PASS (ratchet: no flips, all output-identical)' fake; rc=$?
 check "a RECOVERED bench opens microbench-baseline" '[[ $rc == 0 ]] && grep -qE "^- OPEN microbench-baseline .*deepjson" "$O"'
+reset_owed; CLAUDE_CODE_REMOTE=true FAKE_OUT=$'  RECOVERED deepjson: owed at 0.9, now 1.1 (a WIN) — re-emit so the ratchet protects it\nmicrobench-gate: PASS (ratchet: no flips, all output-identical)' fake; rc=$?
+check "cloud: a RECOVERED line (a comparator artefact there) opens no microbench-baseline entry" '[[ $rc == 0 ]] && ! grep -q "^- OPEN microbench-baseline" "$O"'
 reset_owed; FAKE_RC=2 FAKE_OUT='microbench-gate: SETUP ERROR — 1 malformed baseline ratio(s)' fake; rc=$?
 check "a setup error stays exit 2 and records nothing" '[[ $rc == 2 ]] && ! grep -q "^- OPEN " "$O"'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=1 FAKE_OUT=$'microbench-gate: harness died' fake; rc=$?
@@ -131,6 +134,12 @@ reset_owed; PATH="$TMP/vbin:$PATH" FAKE_OUT='microbench-gate: PASS (ratchet: no 
 check "--verify: cargo build --release first, then the gate with a 900 s settle" '[[ $rc == 0 ]] && grep -qx "cargo build --release" "$TMP/cargo.calls" && grep -q "settle=900" "$TMP/legout"'
 : >"$TMP/cargo.calls"; CLAUDE_CODE_REMOTE=true PATH="$TMP/vbin:$PATH" fake --verify; rc=$?
 check "--verify in a cloud session: refused (exit 2), nothing built" '[[ $rc == 2 && ! -s "$TMP/cargo.calls" ]]'
+# Off the host runner the leg re-executes through scripts/dk, as the hooks do: never a host cargo (CLAUDE.md).
+R2="$TMP/repo2"; mkdir -p "$R2/scripts"; cp "$ROOT/scripts/microbench-leg.sh" "$ROOT/scripts/dk" "$R2/scripts/"; cp "$ROOT/compose.yaml" "$R2/"
+git -C "$R2" init -q; printf '#!/bin/sh\necho "docker $*" >>"%s/cargo.calls"\nexit 1\n' "$TMP" >"$TMP/vbin/docker"; chmod +x "$TMP/vbin/docker"
+: >"$TMP/cargo.calls"; (cd "$R2" && env -u PHORJ_IN_DOCKER PATH="$TMP/vbin:$PATH" bash scripts/microbench-leg.sh --verify >"$TMP/legout" 2>&1); rc=$?
+check "--verify on a PC host: re-executes through scripts/dk (docker is asked), never a host cargo" \
+  '[[ $rc != 0 ]] && grep -q "^docker" "$TMP/cargo.calls" && ! grep -q "^cargo" "$TMP/cargo.calls"'
 # The cloud path through the REAL gate (no seam): fake php, phg, harness and load, the real baseline's docker source
 # (so a SOURCE MISMATCH, as on a cloud host without docker). An identity break blocks; a flip is OWED.
 printf '#!/bin/sh\nexit 0\n' >"$TMP/fakephp"; cp "$TMP/fakephp" "$TMP/fakephg"

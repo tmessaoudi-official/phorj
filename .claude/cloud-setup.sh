@@ -13,7 +13,7 @@
 #                                          pinned fingerprint, and the keyring apt gets is `gpg --export` of that one
 #                                          fingerprint, never the downloaded file; the patch version floats
 #                                          (scripts/validate-infra.sh forbids patch pins);
-#   3b. PHP <FORWARD_PHP_MINOR> + bcmath — the forward build (8.6), from the same sury source, in its own apt call: what
+#   3b. PHP <FORWARD_PHP_MINOR>          — the forward build (8.6), step 3's package set, from the same sury source, in its own apt call: what
 #                                          `scripts/dk --php 8.6` and scripts/php-forward-probe.sh use here (B2). Not a
 #                                          pre-push need yet, so a failure is a WARN, and it runs LAST (after steps 4-5) so
 #                                          it never spends a needed step's share of the budget; plan step 1c makes 8.6 the oracle;
@@ -139,11 +139,11 @@ php_forward() {
     say WARN "php-forward: no sury apt source (the php step wrote none): php$v not installed, scripts/dk --php $v refuses"
     return 0
   fi
-  if apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "php$v-cli" "php$v-bcmath" \
+  if apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${PHP_PKGS[@]//php$PHP_MINOR-/php$v-}" \
      && p="$(command -v "php$v")" && [[ "$("$p" -m 2>/dev/null | grep -cx bcmath)" != 0 ]]; then
     say INFO "php-forward: $p with bcmath installed from sury"
   else
-    say WARN "php-forward: php$v-cli php$v-bcmath not installed (output above): scripts/dk --php $v refuses; the oracle is unaffected"
+    say WARN "php-forward: ${PHP_PKGS[*]//php$PHP_MINOR-/php$v-} not installed (output above): scripts/dk --php $v refuses; the oracle is unaffected"
   fi
 }
 

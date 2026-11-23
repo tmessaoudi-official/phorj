@@ -18,6 +18,16 @@ every `docker/Dockerfile` ARG is either installed or on that line. The "no docke
 (D2: docker may run there; the host runner is the chosen path). Tests: `scripts/test-cloud-setup.sh` 49 -> 64 cases,
 two sabotages (the forward step removed; dk ignoring `--php 8.6`) each red, restored.
 
+### Fixed — the cloud identity check needs no JIT; `--verify` runs in the image (DEC-597, 6C round 2)
+
+`MICROBENCH_IDENTITY_ONLY=1` also waives the JIT probe of the no-docker fallback (identity needs no JIT; a cloud host's
+php may have none), still refusing a debug build. In the cloud a RECOVERED line no longer opens `microbench-baseline`
+(it compares with a baseline measured on another comparator); a bench missing from the baseline still does.
+`scripts/microbench-leg.sh` re-executes through `scripts/dk` off the host runner, as the hooks do, so `--verify` never
+calls a host cargo. The forward PHP gets the oracle's four packages (cli, bcmath, mbstring, sqlite3), not two. Tests:
+`test-microbench-gate.sh` 21f/21g, `test-owed-legs.sh` 39 -> 41, `test-cloud-setup.sh` (the package set); two sabotages
+(the JIT waiver; the dk re-exec) each red, restored.
+
 ### Fixed — stale facts in always-loaded files (cloud audit 2026-11-23, B5, B6)
 
 CLAUDE.md and `docs/INVARIANTS.md` said `Stmt` has 15 variants (16 since `using`), and INVARIANTS `Expr` 37 (38); the

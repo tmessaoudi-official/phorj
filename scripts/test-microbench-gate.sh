@@ -359,6 +359,18 @@ g21 "$BASELINE" "$TMP/load-low" "$TMP/clean.json"
 t21 "21d php source mismatch: SKIP, the harness never runs" '[[ $rc21 == 0 && "$out21" == *"SOURCE MISMATCH"* && ! -s "$TMP/harness.calls" ]]'
 MICROBENCH_IDENTITY_ONLY=1 g21 "$BASELINE" "$TMP/load-low" "$TMP/ident21.json"
 t21 "21e mismatch with MICROBENCH_IDENTITY_ONLY=1: measures, and an identity break BLOCKS" '[[ $rc21 == 1 && "$out21" == *"output-identity break"* && -s "$TMP/harness.calls" ]]'
+# 21f/g. A cloud host without docker falls back to its own php, which may have no JIT. Identity needs none: with
+#     MICROBENCH_IDENTITY_ONLY=1 the gate measures on it; without, it SKIPs as before. A failing docker shim, and a
+#     release php that answers -m (bcmath, for toolchain.env) but fails the JIT probe.
+mkdir -p "$TMP/nodock"; printf '#!/bin/sh\nexit 1\n' >"$TMP/nodock/docker"
+printf '#!/bin/sh\ncase "$*" in *-m*) printf "Core\\nbcmath\\n";; *opcache*) exit 1;; esac\nexit 0\n' >"$TMP/nojitphp"
+chmod +x "$TMP/nodock/docker" "$TMP/nojitphp"
+g21f() { : >"$TMP/harness.calls"; out21="$(env -u PHORJ_PHP_SOURCE PATH="$TMP/nodock:$PATH" PHORJ_PHP="$TMP/nojitphp" PHG_BIN="$TMP/fakephg" \
+  MICROBENCH_HARNESS="$TMP/harness" HARNESS_JSON="$TMP/ident21.json" MICROBENCH_LOADAVG="$TMP/load-low" bash "$GATE" 2>&1)"; rc21=$?; }
+g21f
+t21 "21f no docker, a php without JIT: SKIP, the harness never runs" '[[ $rc21 == 0 && "$out21" == *"no JIT"* && ! -s "$TMP/harness.calls" ]]'
+MICROBENCH_IDENTITY_ONLY=1 g21f
+t21 "21g ...with MICROBENCH_IDENTITY_ONLY=1: measures on it, and an identity break BLOCKS" '[[ $rc21 == 1 && "$out21" == *"output-identity break"* && -s "$TMP/harness.calls" ]]'
 
 if [[ "$fails" -gt 0 ]]; then
   echo "test-microbench-gate: FAIL — $fails case(s)" >&2

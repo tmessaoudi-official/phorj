@@ -13,12 +13,19 @@
 #     (the ratchet does not protect it until someone re-emits on a quiet PC: DEC-431.1, DEC-365).
 #
 #   scripts/microbench-leg.sh            # what pre-push runs
-#   scripts/microbench-leg.sh --verify   # the step that clears the debt: release build first, a long settle; run it
-#                                        # on the PC, through scripts/dk, when the box is quiet (DEC-598: first work)
+#   scripts/microbench-leg.sh --verify   # the step that clears `microbench`: release build first, a long settle; run
+#                                        # it on the PC when the box is quiet (DEC-598: first work). It re-executes
+#                                        # through scripts/dk itself. `microbench-baseline` is cleared by a quiet-PC
+#                                        # `scripts/microbench-gate.sh --emit` (D3), then a pass.
 # Exit: 0 = nothing blocks (the OWED list says what is still owed), 1 = regression, 2 = setup error.
 # Seams (tests): MICROBENCH_GATE_SCRIPT, plus the gate's own (MICROBENCH_GATE_JSON, MICROBENCH_BASELINE).
 set -uo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Like the hooks: on a PC host, run in the toolchain image (never a host cargo or php, CLAUDE.md); pre-push already
+# runs inside it, and a host-runner checkout (a cloud session) runs here.
+if [[ "${PHORJ_IN_DOCKER:-}" != 1 && "$(git -C "$root" config --get phorj.runner || true)" != host ]]; then
+  exec "$root/scripts/dk" bash "$root/scripts/microbench-leg.sh" "$@"
+fi
 GATE="${MICROBENCH_GATE_SCRIPT:-$root/scripts/microbench-gate.sh}"
 owed() { (cd "$root" && bash scripts/owed-legs.sh "$@"); }
 env=pc; [[ "${CLAUDE_CODE_REMOTE:-}" == true ]] && env=cloud
@@ -59,7 +66,10 @@ elif [[ "$env" == cloud ]]; then
 elif [[ -z "${MICROBENCH_GATE_JSON:-}" ]]; then
   owed clear microbench "microbench-gate PASS"
 fi
-new="$(grep -E '^ *(note [a-z0-9_]+: not in baseline|RECOVERED [a-z0-9_]+)' "$log" | sed -E 's/^ *(note|RECOVERED) ([a-z0-9_]+).*/\2/' | sort -u | tr '\n' ' ')"
+# A RECOVERED line compares a ratio with the baseline, so in the cloud (another comparator) it is an artefact: only a
+# bench missing from the baseline counts there.
+pat='note [a-z0-9_]+: not in baseline'; [[ "$env" == pc ]] && pat="$pat|RECOVERED [a-z0-9_]+"
+new="$(grep -E "^ *($pat)" "$log" | sed -E 's/^ *(note|RECOVERED) ([a-z0-9_]+).*/\2/' | sort -u | tr '\n' ' ')"
 if [[ -n "$new" ]]; then
   owed record microbench-baseline "$env" "not protected by the ratchet until re-emitted on a quiet PC: $new"
 elif [[ "$env" == pc && -z "${MICROBENCH_GATE_JSON:-}" ]]; then
