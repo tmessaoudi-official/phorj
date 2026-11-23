@@ -60,7 +60,7 @@
 | 4 | B5 certification-schedule slug | S | todo | - | CLAUDE.md |
 | 5 | B6 expertise-core re-review | S | todo | - | .claude/rules/expertise-core.md |
 | 6 | C decisions D1-D6 (all ruled 2026-11-23); D6 cloud skip built with B1, replaced by row 7 | S | doing | - | scripts/microbench-gate.sh scripts/test-microbench-gate.sh |
-| 7 | DEC-597/598/599 durable OWED legs, defects-first, legs classified | M | doing | - | scripts/owed-legs.sh scripts/microbench-leg.sh scripts/gate-legs.tsv scripts/git-hooks/pre-push scripts/git-hooks/pre-commit |
+| 7 | DEC-597/598/599 durable OWED legs (`feat(gates): a leg that cannot run where it is becomes a durable OWED entry`), defects-first, legs classified | M | doing | 1d104c1a | scripts/owed-legs.sh scripts/microbench-leg.sh scripts/gate-legs.tsv scripts/git-hooks/pre-push scripts/git-hooks/pre-commit |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input

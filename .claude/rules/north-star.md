@@ -26,6 +26,11 @@ with no park left (DEC-493), built defects-first (DEC-578), with staged stable r
      reason for it.
    - A defect whose fix needs a ruling does not block: record the question (Invariant 15), raise it at the closing
      check-in, take the next defect.
+   - Owed gate legs come first (DEC-598). An OPEN entry in the OWED GATE LEGS section of
+     `docs/plans/SLICE-STATE.md` (a leg that could not run where it was, DEC-597) is the first work of the next PC
+     session that can run it (`scripts/microbench-leg.sh --verify` on a quiet box). What it finds enters the defect
+     queue: an output-identity break is P0, a WIN->LOSS flip confirmed by the gate's own re-measure is P1; a loss
+     already carried as `_owed` in `bench/micro-baseline.json` keeps its axis-1 status.
    - This is the ordering rule. It supersedes the orders stated in `docs/plans/MASTER-PLAN.md` (the "Active
      programme" and "Next" rows, §0 THE QUEUE, §0.06) and the "scout is the forcing function" headline of
      SLICE-STATE; their rows stay queued.
@@ -41,7 +46,7 @@ with no park left (DEC-493), built defects-first (DEC-578), with staged stable r
 ## The fifteen axes (list closed, DEC-580)
 | # | Axis | Bar | Checker today |
 |---|------|-----|---------------|
-| 1 | Speed | every benched feature beats release PHP + JIT (ratio above 1.0) or is flagged in flight (DEC-269, Invariant 18); in the scout campaign a loss that cannot be flipped stops the lane and escalates (DEC-507); no flag survives to the goal (DEC-493) | armed: `scripts/microbench-gate.sh` (pre-push, in the toolchain image against its php; skips under load), `scripts/perf-gate.sh` (CI). Losses carried: `_owed` in `bench/micro-baseline.json` |
+| 1 | Speed | every benched feature beats release PHP + JIT (ratio above 1.0) or is flagged in flight (DEC-269, Invariant 18); in the scout campaign a loss that cannot be flipped stops the lane and escalates (DEC-507); no flag survives to the goal (DEC-493) | armed: `scripts/microbench-gate.sh` through `scripts/microbench-leg.sh` (pre-push, in the toolchain image against its php; a load skip or a cloud verdict is recorded OWED, DEC-597), `scripts/perf-gate.sh` (CI). Losses carried: `_owed` in `bench/micro-baseline.json` |
 | 2 | Correctness | no open defect of rule 1's first two kinds: the legs agree, and on the right behaviour | armed for the shipped corpus: `tests/differential.rs`, `tests/conformance.rs`. Owed: the defect queue as a counted check |
 | 3 | Robustness and security | no input aborts a `phg` process; no memory growth in a `phg serve` soak; every PHP footgun class Phorj removes has a rejecting test; no reachable advisory | armed: CI job `unsafe-island`. Owed: fuzzing (needs a dependency ruling), soak test, footgun suite, advisory check |
 | 4 | Learnability and tooling | every stable construct and native has a doc entry with a runnable example; a tutorial and a PHP migration guide exist; the LSP serves every construct (Invariant 17) | partly armed: `scripts/surface-ratchet.sh` (a floor that only rises). Owed: docs coverage check, tutorial, migration guide |
@@ -63,5 +68,5 @@ with no park left (DEC-493), built defects-first (DEC-578), with staged stable r
   release; `SEMVER.md` promises a `W-DEPRECATED` grace release.
 - The grades of the defect queue: an entry's grade is a proposal until the developer ratifies it.
 - Whether a perf row is a feature row under rule 1: the definition does not name perf work, yet the ruling paused
-  one (readiness row 19).
+  one (readiness row 19). DEC-598 settles only the regressions an owed or gating leg confirms, not new perf work.
 - The budgets and ceilings of axes 7, 12 and 14.

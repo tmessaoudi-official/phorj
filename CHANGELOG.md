@@ -21,6 +21,12 @@ first entry is real: the microbench leg was skipped on the push of `51aad5f8` (l
 (26 cases: the ledger, check-staged through real pathspec commits, the leg driven through the gate's JSON seam), and
 `scripts/test-microbench-gate.sh` case 20 (a cloud gating run measures).
 
+Every pre-push leg now has a row in `scripts/gate-legs.tsv` (everywhere / owed / pc-only / info), checked both ways by
+`scripts/test-gate-legs.sh`, so a new leg cannot go unclassified for a cloud session. `scripts/test-docker.sh` (the
+`scripts/dk` host contract, which ran in no hook and no workflow) runs on every PC push, before the dk re-exec
+(DEC-599); the live DB and mail round-trips, which self-skip on every machine, are queued as `LIVE-ROUNDTRIPS-NOWHERE`.
+North-star rule 1 now puts owed legs first (DEC-598): a confirmed flip is P1, an identity break P0.
+
 ### Fixed — a cloud session gates against the right PHP, and its pre-push no longer fails on benchmark noise (cloud audit 2026-11-23, B1, D6)
 
 On the host runner (`phorj.runner=host`, a cloud session) `scripts/dk` now sources `scripts/toolchain.env` before it runs

@@ -18,6 +18,10 @@ set -euo pipefail
 # provisioned by .claude/cloud-setup.sh sets `git config phorj.runner host` and runs here directly; dk refuses to
 # guess that from a missing docker.
 if [[ "${PHORJ_IN_DOCKER:-}" != 1 && "$(git config --get phorj.runner || true)" != host ]]; then
+  # DEC-599: scripts/dk's host contract (tools, uid, stdin, env, the loud failure) needs the host's docker, so it runs
+  # here, before the re-exec, on every PC push; a cloud session never reaches this block (scripts/gate-legs.tsv: pc-only).
+  echo "[pre-push] test-docker (the scripts/dk host contract, DEC-599)"
+  bash "$(git rev-parse --show-toplevel)/scripts/test-docker.sh" </dev/null
   _hook="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
   exec "$(git rev-parse --show-toplevel)/scripts/dk" "$_hook" "$@"
 fi
@@ -128,6 +132,8 @@ echo "[pre-push] test-microbench-gate (the ratchet's own behaviour tests)"
 bash "$_gate_root/scripts/test-microbench-gate.sh"
 echo "[pre-push] test-owed-legs (the OWED list and the microbench leg's own behaviour tests, DEC-597)"
 bash "$_gate_root/scripts/test-owed-legs.sh"
+echo "[pre-push] test-gate-legs (every pre-push leg classified in scripts/gate-legs.tsv, DEC-597)"
+bash "$_gate_root/scripts/test-gate-legs.sh"
 
 # Same reasoning, same failure already observed once: validate-infra.sh HAD a behaviour suite
 # (scripts/test-validate-infra.sh) that no gate ever ran, so a check could go dark unnoticed — and

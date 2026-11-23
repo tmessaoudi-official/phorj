@@ -169,7 +169,10 @@ is green. Limits:
   FULL pre-push gate run here as on the PC. pre-push stays fail-closed: when `/tmp/ccs-setup.log` shows the
   PHP step skipped or a prereq still missing, every push is refused; report that to the developer, never
   `--no-verify`. CI also runs on `ccr-*`,
-  `claude/**` and `cloud/**`, and a cloud commit still states which legs of the gate actually ran.
+  `claude/**` and `cloud/**`, and a cloud commit still states which legs of the gate actually ran. A leg the cloud
+  cannot judge (the microbench ratios) is recorded OWED in `docs/plans/SLICE-STATE.md` by the gate itself, and
+  pre-push refuses until that entry is committed, so it travels with the work (DEC-597); the PC verifies it first
+  (DEC-598). The legs and where each runs: `scripts/gate-legs.tsv`.
   (Audit: `docs/research/2026-10-25-cloud-takeover-audit.md`.)
 - **On the developer's machine, `master` is the ONLY branch** (developer directive, restated 2026-08-06: *"always work and commit
   and push to master! no other branches!"*). This **supersedes the harness prompt**, which names a

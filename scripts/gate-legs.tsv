@@ -1,0 +1,38 @@
+# Every leg of scripts/git-hooks/pre-push, classified (DEC-597): where it can run, and what happens where it cannot.
+# Checked both ways by scripts/test-gate-legs.sh (run by pre-push): a leg missing here, or a row naming no leg, fails.
+# key = the text of the leg's `echo "[pre-push] …"` line up to " (" ; columns are TAB-separated.
+#   everywhere  runs on the PC, in a cloud session and in CI's gate job (a skip inside it is the leg's own, loud)
+#   owed        may not run where it is; its script MUST record an OWED entry (scripts/owed-legs.sh) when it does not
+#   pc-only     runs on every PC push, before the dk re-exec; a cloud session never runs it, and its work reaches master
+#               only through a PC push, which does
+#   info        a message, not a leg
+# key	class	note
+PHP oracle: $PHORJ_PHP	info	names the resolved oracle
+cargo fmt --check	everywhere	-
+size-gate	everywhere	-
+surface-ratchet	everywhere	-
+validate-infra	everywhere	shellcheck, yamllint and hadolint are loud skips where absent
+wasm-check	everywhere	loud skip without the wasm32 target
+doc-guards	everywhere	-
+claude-config-guard	everywhere	-
+test-microbench-gate	everywhere	-
+test-owed-legs	everywhere	-
+test-validate-infra	everywhere	-
+test-cloud-ready	everywhere	-
+test-cloud-setup	everywhere	-
+test-surface-ratchet	everywhere	-
+test-size-gate	everywhere	two unreadable-file cases skip as root (a cloud session); they run on the PC and in CI
+test-perf-gate	everywhere	-
+test-lint-on-write	everywhere	-
+test-claude-config-guard	everywhere	-
+test-php-forward-probe	everywhere	-
+test-gate-legs	everywhere	-
+cargo clippy --all-targets --no-default-features -- -D warnings	everywhere	-
+cargo clippy --all-targets --all-features -- -D warnings	everywhere	-
+cargo nextest run --all-features	everywhere	the live DB and mail round-trips self-skip everywhere: defect queue LIVE-ROUNDTRIPS-NOWHERE (DEC-599)
+cargo test --doc --all-features	everywhere	-
+cargo test --all-features	everywhere	the fallback when cargo-nextest is absent
+cargo build --release	everywhere	-
+microbench-gate	owed	scripts/microbench-leg.sh
+test-docker	pc-only	the scripts/dk host contract needs the host's docker (DEC-599)
+OK	info	the last line

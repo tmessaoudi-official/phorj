@@ -44,6 +44,16 @@ not in `CLAUDE.md`.
   machine with a newer PHP, so it turns red in the commit that fixes PHP86-DEPRECATED-NAMES and changes there.
   At write time `.claude/hooks/lint-on-write.sh` relays both, warn-only, for the file just written.
 
+- **Owed legs and the leg table** (DEC-597, DEC-598, DEC-599, 2026-11-23). pre-push runs the microbench through
+  `scripts/microbench-leg.sh`, which blocks on an output-identity break everywhere and on a confirmed flip on the PC,
+  and records anything it could not judge (a load skip, no comparator, a cloud session's ratios, an unconfirmed
+  suspect, a bench missing from the baseline) with `scripts/owed-legs.sh` in SLICE-STATE's OWED GATE LEGS section.
+  Only a real PC pass clears an entry (`microbench-leg.sh --verify`). pre-commit's `owed-legs.sh check-staged`
+  refuses a commit that deletes an OPEN entry or leaves a new one uncommitted; a cloud pre-push refuses until the
+  entry is committed. Every pre-push leg has a row in `scripts/gate-legs.tsv` (everywhere / owed / pc-only / info),
+  checked both ways by `scripts/test-gate-legs.sh`: a new leg fails pre-push until it is classified. `test-docker.sh`
+  is the one pc-only leg: it runs before the dk re-exec, stdin closed.
+
 - **The hooks run in the toolchain image** (2026-11-19, `docs/plans/2026-11-19-dockerize.plan.md`). Each hook's first
   step re-executes it through `scripts/dk`, which mounts the repo at its host path and forwards git's hook variables:
   a pathspec commit hands pre-commit a temporary `GIT_INDEX_FILE` inside `.git/`, which resolves in the container
