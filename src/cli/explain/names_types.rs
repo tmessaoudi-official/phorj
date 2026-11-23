@@ -72,7 +72,11 @@ pub(super) fn text(code: &str) -> Option<&'static str> {
              is a PHP parse error, so Phorj rejects them there rather than emitting invalid PHP. The\n\
              check is kind-aware — the type words (`int`/`float`/`object`/…) are legal PHP *function*\n\
              names but illegal as *class* names. Rename the function/class/type (the value/parameter/\n\
-             field/method name can keep the word).\n"
+             field/method name can keep the word).\n\n\
+             `Is` and `Let` (any case) are refused as a class/enum/interface/trait name for a\n\
+             different reason: PHP 8.6 deprecates them there, so the transpiled program would print a\n\
+             `Deprecated:` line (DEC-594). A FUNCTION named `let`, `is` or `readonly` is not refused:\n\
+             it is renamed in the PHP output (`let_`), like a function named after a PHP builtin.\n"
         }
         "E-PKG-PATH" => {
             "E-PKG-PATH — a file's `package` does not match its location.\n\n\

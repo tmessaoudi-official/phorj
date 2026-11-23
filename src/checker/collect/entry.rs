@@ -116,9 +116,15 @@ impl Checker {
             // body), so they are exempt (legal as `->list()` / `->var()`).
             if let Some((name, span, kind)) = reserved_symbol_decl(item) {
                 if is_php_reserved_symbol_name(name, kind) {
+                    // `Is`/`Let` parse on every PHP; 8.6 deprecates them as a type name (DEC-594).
+                    let why = if matches!(name.to_ascii_lowercase().as_str(), "is" | "let") {
+                        "is deprecated by PHP 8.6 as a type name"
+                    } else {
+                        "is a reserved word in PHP"
+                    };
                     self.err_coded(
                         span,
-                        format!("`{name}` is a reserved word in PHP and cannot name a {kind}"),
+                        format!("`{name}` {why} and cannot name a {kind}"),
                         "E-RESERVED-NAME",
                         Some(format!(
                             "`{name}` is fine as a variable, parameter, field, or method name — rename this {kind}"

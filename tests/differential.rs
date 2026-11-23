@@ -8120,6 +8120,31 @@ function main(): void {
     );
 }
 
+/// DEC-594: a function named `let`, `is` or `readonly` (each deprecated as a PHP function name by
+/// 8.6) is renamed in the PHP output, at its definition AND at every way of calling it — directly,
+/// through UFCS and as a function value — so the PHP leg prints no `Deprecated:` line on 8.6 (CLI
+/// `php -n` prints it to stdout, so this case fails on `gate-php86` if a call site escapes the rename).
+#[test]
+fn functions_named_after_8_6_deprecated_words_run_on_every_leg() {
+    agree_out_php(
+        "import Core.Output;
+function let(int x): int { return x + 1; }
+function is(int x): bool { return x > 0; }
+function readonly(string s): string { return \"[{s}]\"; }
+#[Entry(kind: EntryKind.Cli)]
+function main(): void {
+    int a = let(1);
+    int b = 2.let();
+    var f = let;
+    var g = readonly;
+    Output.printLine(\"{a} {b} {f(3)} {is(a)} {readonly(\\\"x\\\")} {g(\\\"y\\\")} {\\\"z\\\".readonly()}\");
+}
+",
+        "2 3 4 true [x] [y] [z]\n",
+        "php86_deprecated_fn_names",
+    );
+}
+
 /// DEC-524 (scout row 5j): an immutable field with no initializer, assigned exactly once on every path
 /// of its own class's constructor — both arms of an `if`, then read after — prints identically on the
 /// VM, the tree-walker and transpiled PHP (phorj emits no PHP `readonly`, so the PHP leg is a plain

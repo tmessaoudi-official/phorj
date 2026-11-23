@@ -13,7 +13,9 @@ transpiles to `trim($s, " \t\n\r\0\x0B\x0C")`, the list explicit so PHP 8.5 agre
 A `trim($s)` lifted from code that runs on PHP 8.5 now strips a form feed the original kept: disclosed as
 TRIM-FORM-FEED-LIFT-85 and asserted by `trim_of_a_form_feed_follows_php_8_6` on both minors. PHP 8.6 also deprecates a
 function named `let`, `is` or `readonly` and a type named `Is` or `Let`; such a function is now renamed in the PHP
-output (`let_`), as `clamp` is, and such a type is `E-RESERVED-NAME` on every leg (DEC-594). The `trimascii` microbench
+output (`let_`), as `clamp` is, at every call site (direct, UFCS, function value: differential
+`functions_named_after_8_6_deprecated_words_run_on_every_leg`), and such a type is `E-RESERVED-NAME` on every leg, its
+message and `phg explain` saying PHP 8.6 deprecates it (DEC-594). The `trimascii` microbench
 input swaps its form feed for a vertical tab, so its PHP side (bare `trim()`) prints the same checksum on 8.5 and 8.6.
 Tests: `tests/php_86_compat.rs`, `trim_ascii_is_php_trim_on_every_leg`, the `trim_ascii` unit tests. Plan:
 `docs/plans/2026-11-23-php86-floor-and-bridge.plan.md`.

@@ -83,6 +83,11 @@ fn a_user_type_named_after_an_8_6_deprecated_word_is_rejected() {
         ] {
             let err = transpile(&decl).expect_err(&format!("`{decl}` must be reserved"));
             assert!(err.contains("E-RESERVED-NAME"), "{decl}: {err}");
+            // The word is a parse error on no PHP: the message must say why it is refused.
+            assert!(
+                err.contains("PHP 8.6"),
+                "{decl}: the message must name 8.6: {err}"
+            );
         }
     }
 }
