@@ -55,11 +55,11 @@
 |---|------|------|-------|----------|-------|
 | 0 | B0 cloud pre-push suites (`test(cloud): the pre-push suites pass in a cloud session again`) | M | done | 51aad5f8 | scripts/test-cloud-setup.sh scripts/test-size-gate.sh .claude/hooks/test-lint-on-write.sh |
 | 1 | B1 host-runner PHP resolution (`fix(cloud): dk resolves the PHP oracle on the host runner`) | S | done | 9bf7fc57 | scripts/dk scripts/test-cloud-setup.sh |
-| 2 | B2 PHP 8.6 in the cloud | M | doing | - | .claude/cloud-setup.sh scripts/dk scripts/test-cloud-setup.sh |
-| 3 | B4 docker-in-the-cloud wording (per D2) | S | doing | - | .claude/cloud-setup.sh scripts/dk scripts/test-cloud-setup.sh CLAUDE.md |
-| 4 | B5 certification-schedule slug | S | doing | - | CLAUDE.md |
-| 5 | B6 expertise-core re-review (claims re-checked; stale Stmt/Expr counts fixed) | S | doing | - | .claude/rules/expertise-core.md CLAUDE.md docs/INVARIANTS.md |
-| 6 | C decisions D1-D6 (all ruled 2026-11-23); D6 cloud skip built with B1, replaced by row 7 | S | doing | - | scripts/microbench-gate.sh scripts/test-microbench-gate.sh |
+| 2 | B2 PHP 8.6 in the cloud (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | M | done | ea126849 | .claude/cloud-setup.sh scripts/dk scripts/test-cloud-setup.sh |
+| 3 | B4 docker-in-the-cloud wording (per D2) (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | .claude/cloud-setup.sh scripts/dk scripts/test-cloud-setup.sh CLAUDE.md |
+| 4 | B5 certification-schedule slug (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | CLAUDE.md |
+| 5 | B6 expertise-core re-review (six claims re-checked, the rest not; stale Stmt/Expr counts fixed) (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | .claude/rules/expertise-core.md CLAUDE.md docs/INVARIANTS.md |
+| 6 | C decisions D1-D6 (all ruled 2026-11-23); D6 cloud skip built with B1, replaced by row 7; D1 (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | scripts/microbench-gate.sh scripts/test-microbench-gate.sh |
 | 7 | DEC-597/598/599 durable OWED legs (`feat(gates): a leg that cannot run where it is becomes a durable OWED entry`), defects-first, legs classified | M | done | 1d104c1a d66c0787 | scripts/owed-legs.sh scripts/microbench-leg.sh scripts/gate-legs.tsv scripts/git-hooks/pre-push scripts/git-hooks/pre-commit |
 <!-- /progress-block -->
 ### Blocked
@@ -68,4 +68,5 @@
 ### Needs research
 ### Fragile
 - B0b's rm-guard is a model of the hosted harness's guard: a fresh cloud session proves it.
+- Needs a fresh cloud session to prove: B0 (the rm-guard and GIT_CONFIG models), B1, B2 (the forward install inside the 120 s budget), the cloud pre-push refusal flow, and the cloud identity check (which php the gate resolves there, and whether its JIT probe passes).
 ### Known issues

@@ -67,7 +67,8 @@ stay in `.claude/agents/`.
   runner (D2, 2026-11-23: docker may run there, but the host runner is the proven path): `.claude/cloud-setup.sh`
   installs the Dockerfile's versions of every pre-push need, PHP 8.5 and 8.6 included, and sets
   `git config phorj.runner host`. CI-only in a cloud session (D1): zig + cargo-zigbuild, wasm-pack, node and the
-  pdo_mysql/pdo_pgsql extensions; CI runs them on every cloud branch.
+  pdo_mysql/pdo_pgsql extensions; CI's image carries them on every cloud branch (the live DB round-trips still run
+  nowhere: LIVE-ROUNDTRIPS-NOWHERE).
 
   | command | runs | replaces |
   |---|---|---|

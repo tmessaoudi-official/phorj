@@ -15,7 +15,8 @@
 #                                          (scripts/validate-infra.sh forbids patch pins);
 #   3b. PHP <FORWARD_PHP_MINOR> + bcmath — the forward build (8.6), from the same sury source, in its own apt call: what
 #                                          `scripts/dk --php 8.6` and scripts/php-forward-probe.sh use here (B2). Not a
-#                                          pre-push need yet, so a failure is a WARN; plan step 1c makes 8.6 the oracle;
+#                                          pre-push need yet, so a failure is a WARN, and it runs LAST (after steps 4-5) so
+#                                          it never spends a needed step's share of the budget; plan step 1c makes 8.6 the oracle;
 #   4. cargo-nextest                     — a pinned release, sha256-checked (the hooks fall back to cargo test without it);
 #   5. llvm-objcopy                      — checked only: tests/build.rs asserts it; a WARN names the remedy.
 # Rules: a no-op off the cloud (the kit's own test, inline: this runs even when the kit's install failed); idempotent;
@@ -175,7 +176,7 @@ say INFO "start in $(pwd)"
 timed hooksPath hooks_path
 timed prereqs prereqs
 timed php php_oracle
-timed php-forward php_forward
 timed nextest nextest
 timed llvm-objcopy objcopy
+timed php-forward php_forward   # last: the one optional step, so it never costs a needed one the shared time budget
 exit 0

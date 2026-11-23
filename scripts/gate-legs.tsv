@@ -1,7 +1,8 @@
 # Every leg of scripts/git-hooks/pre-push, classified (DEC-597): where it can run, and what happens where it cannot.
 # Checked both ways by scripts/test-gate-legs.sh (run by pre-push): a leg missing here, or a row naming no leg, fails.
 # key = the text of the leg's `echo "[pre-push] …"` line up to " (" ; columns are TAB-separated.
-#   everywhere  runs on the PC, in a cloud session and in CI's gate job (a skip inside it is the leg's own, loud)
+#   everywhere  runs in every pre-push, PC and cloud (a skip inside it is the leg's own, loud). CI is a separate list:
+#               its gate job runs fmt, clippy and the test suite, none of the script suites below
 #   owed        may not run where it is; its script MUST record an OWED entry (scripts/owed-legs.sh) when it does not
 #   pc-only     runs on every PC push, before the dk re-exec; a cloud session never runs it, and its work reaches master
 #               only through a PC push, which does
@@ -21,9 +22,9 @@ test-validate-infra	everywhere	-
 test-cloud-ready	everywhere	-
 test-cloud-setup	everywhere	-
 test-surface-ratchet	everywhere	-
-test-size-gate	everywhere	two unreadable-file cases skip as root (a cloud session); they run on the PC and in CI
+test-size-gate	everywhere	its unreadable-baseline case skips as root (a cloud session); it runs on the PC (the image runs as the developer's uid)
 test-perf-gate	everywhere	-
-test-lint-on-write	everywhere	-
+test-lint-on-write	everywhere	its unreadable-baseline case skips as root (a cloud session); it runs on the PC
 test-claude-config-guard	everywhere	-
 test-php-forward-probe	everywhere	-
 test-gate-legs	everywhere	-

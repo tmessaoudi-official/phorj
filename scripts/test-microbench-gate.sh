@@ -28,9 +28,9 @@ GATE="$ROOT/scripts/microbench-gate.sh"
 BASELINE="$ROOT/bench/micro-baseline.json"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-# This suite runs in a cloud pre-push too, where CLAUDE_CODE_REMOTE=true makes the gate skip (case 20): every other
-# case must see the PC's behaviour, so the variable is dropped here and set only where a case asks for it.
-unset CLAUDE_CODE_REMOTE
+# This suite runs in a cloud pre-push too: every case must see the PC's behaviour, so the cloud and the leg's knobs are
+# dropped here and set only where a case asks for them (cases 20, 21).
+unset CLAUDE_CODE_REMOTE MICROBENCH_MAX_LOAD MICROBENCH_SETTLE_SECS MICROBENCH_IDENTITY_ONLY MICROBENCH_LOADAVG MICROBENCH_HARNESS
 
 command -v jq >/dev/null 2>&1 || { echo "test-microbench-gate: jq required — SKIP" >&2; exit 0; }
 [[ -f "$BASELINE" ]] || { echo "test-microbench-gate: no baseline — SKIP" >&2; exit 0; }
@@ -332,6 +332,33 @@ if [[ -n "$win_feat" ]]; then
   if [[ $rc20b == 2 && "$out20b" == *"cloud session"* ]] && cmp -s "$BASELINE" "$TMP/base20.json"; then echo "  ok   20b a cloud session REFUSES to emit, baseline untouched"
   else echo "  FAIL 20b cloud emit: exit $rc20b ${out20b:0:200}"; fails=$((fails + 1)); fi
 fi
+
+# 21. The guards BEFORE measurement, through the real path (no JSON seam): a fake release php, a fake phg and a fake
+#     harness (MICROBENCH_HARNESS) stand in for docker and the benches; MICROBENCH_LOADAVG fakes /proc/loadavg. Pins the
+#     knobs scripts/microbench-leg.sh sets (DEC-597): MICROBENCH_MAX_LOAD lifts the load guard, MICROBENCH_IDENTITY_ONLY
+#     measures through a php SOURCE MISMATCH (identity needs no baseline), and without them both still SKIP.
+printf '#!/bin/sh\nexit 0\n' >"$TMP/fakephp"; printf '#!/bin/sh\nexit 0\n' >"$TMP/fakephg"
+printf '#!/bin/sh\necho called >>"%s/harness.calls"\ncat "$HARNESS_JSON"\n' "$TMP" >"$TMP/harness"
+chmod +x "$TMP/fakephp" "$TMP/fakephg" "$TMP/harness"
+jq --arg p "$TMP/fakephp" '._baseline_php = $p' "$BASELINE" >"$TMP/base21.json"
+printf '9.99 9.99 9.99 1/100 1\n' >"$TMP/load-high"; printf '0.10 0.10 0.10 1/100 1\n' >"$TMP/load-low"
+jq --arg f "${win_feat:-x}" 'map(if .feature == $f then .identical = false else . end)' "$TMP/clean.json" >"$TMP/ident21.json"
+g21() {   # $1 = baseline, $2 = loadavg file, $3 = harness json; extra env before the call
+  : >"$TMP/harness.calls"
+  out21="$(MICROBENCH_PHP_BIN="$TMP/fakephp" PHG_BIN="$TMP/fakephg" MICROBENCH_HARNESS="$TMP/harness" HARNESS_JSON="$3" \
+    MICROBENCH_BASELINE="$1" MICROBENCH_LOADAVG="$2" MICROBENCH_SETTLE_SECS=0 bash "$GATE" 2>&1)"; rc21=$?
+}
+t21() { if eval "$2"; then echo "  ok   $1"; else echo "  FAIL $1: exit $rc21 ${out21:0:240}"; fails=$((fails + 1)); fi; }
+g21 "$TMP/base21.json" "$TMP/load-low" "$TMP/clean.json"
+t21 "21a quiet box, matching source: the harness runs and the gate PASSES" '[[ $rc21 == 0 && "$out21" == *"PASS (ratchet"* && -s "$TMP/harness.calls" ]]'
+g21 "$TMP/base21.json" "$TMP/load-high" "$TMP/clean.json"
+t21 "21b loaded box: SKIP, the harness never runs" '[[ $rc21 == 0 && "$out21" == *"too loaded"* && ! -s "$TMP/harness.calls" ]]'
+MICROBENCH_MAX_LOAD=1000 g21 "$TMP/base21.json" "$TMP/load-high" "$TMP/clean.json"
+t21 "21c loaded box with MICROBENCH_MAX_LOAD=1000 (the cloud leg): measures" '[[ $rc21 == 0 && "$out21" == *"PASS (ratchet"* && -s "$TMP/harness.calls" ]]'
+g21 "$BASELINE" "$TMP/load-low" "$TMP/clean.json"
+t21 "21d php source mismatch: SKIP, the harness never runs" '[[ $rc21 == 0 && "$out21" == *"SOURCE MISMATCH"* && ! -s "$TMP/harness.calls" ]]'
+MICROBENCH_IDENTITY_ONLY=1 g21 "$BASELINE" "$TMP/load-low" "$TMP/ident21.json"
+t21 "21e mismatch with MICROBENCH_IDENTITY_ONLY=1: measures, and an identity break BLOCKS" '[[ $rc21 == 1 && "$out21" == *"output-identity break"* && -s "$TMP/harness.calls" ]]'
 
 if [[ "$fails" -gt 0 ]]; then
   echo "test-microbench-gate: FAIL — $fails case(s)" >&2

@@ -22,15 +22,17 @@ two sabotages (the forward step removed; dk ignoring `--php 8.6`) each red, rest
 
 CLAUDE.md and `docs/INVARIANTS.md` said `Stmt` has 15 variants (16 since `using`), and INVARIANTS `Expr` 37 (38); the
 certification-schedule path in CLAUDE.md named this machine's project slug, which differs in a cloud session.
-`.claude/rules/expertise-core.md` was re-checked claim by claim (DEC-568 still PENDING, the LSP still advertises only
-signature help, no `Any` in `src/types.rs`) and its review date bumped.
+In `.claude/rules/expertise-core.md`, the claims re-checked against the code were: DEC-568 still PENDING, the LSP still
+advertises only signature help, no `Any` in `src/types.rs`, `E-INJECTED-TYPE-BARE` and the bare `agree()` still there, and
+the variant counts (item 5); the review date was bumped. The rest of its items were not re-checked.
 
 ### Added — a gate leg that cannot run where it is becomes a durable OWED entry, verified first on the PC (DEC-597, DEC-598)
 
 The microbench leg used to vanish silently: a load SKIP on the PC printed one line in a push log, and the first cloud fix
 (`9bf7fc57`, below) skipped the whole gate in a cloud session, its identity check included. Now pre-push runs
-`scripts/microbench-leg.sh`, which wraps `scripts/microbench-gate.sh`: an output-identity break blocks everywhere (when a
-PHP comparator resolves); a confirmed WIN->LOSS flip blocks on the PC; in a cloud session the gate measures regardless of
+`scripts/microbench-leg.sh`, which wraps `scripts/microbench-gate.sh`: an output-identity break blocks everywhere a PHP
+comparator with a JIT resolves (in a cloud session the gate measures through a php SOURCE MISMATCH for identity, since
+identity needs no baseline; with no usable php it SKIPs, and that SKIP is recorded OWED); a confirmed WIN->LOSS flip blocks on the PC; in a cloud session the gate measures regardless of
 load and every ratio verdict is recorded OWED. Every SKIP, every unconfirmed suspect and every bench missing from the
 baseline is recorded too, by `scripts/owed-legs.sh`, in a new `OWED GATE LEGS` section of `docs/plans/SLICE-STATE.md`;
 only a real pass on the PC turns an entry CLEARED (`scripts/microbench-leg.sh --verify`: release build, long settle, run
@@ -68,7 +70,7 @@ PATH": inside the closed PATH there is none, so the hook's temp dirs leaked; too
 only (a missing one is a FAIL), and a guard `rm` first on the suite's own PATH keeps the case on the PC.
 `.claude/hooks/test-lint-on-write.sh` resolves its closed-PATH tools the same way. The unreadable-baseline cases of
 `scripts/test-size-gate.sh` and `test-lint-on-write.sh` are a loud SKIP as root (a cloud session runs as root, and root
-reads a mode-000 file); they still run as the developer's uid in the image and in CI.
+reads a mode-000 file); they still run as the developer's uid in the image on the PC (CI runs none of the script suites: corrected 2026-11-23).
 
 ### Changed — no `return`, `break` or `continue` may leave a `finally` block (`E-FINALLY-EXIT`, DEC-595, DEC-596, 2026-11-23)
 

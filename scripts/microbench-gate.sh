@@ -21,6 +21,8 @@
 # Env:    MICROBENCH_GATE_JSON=<file>  use that microbench-JSON instead of running the harness
 #                                      (docker-free, deterministic — for tests); microbench.sh's own
 #                                      (PHG_BIN, MICROBENCH_RUNS, MICROBENCH_PHP_IMAGE) otherwise.
+#         MICROBENCH_LOADAVG, MICROBENCH_HARNESS (test seams); MICROBENCH_MAX_LOAD, MICROBENCH_SETTLE_SECS and
+#         MICROBENCH_IDENTITY_ONLY=1 (measure through a php source mismatch) are what scripts/microbench-leg.sh sets.
 # Requires docker + the release binary (unless the JSON seam is set). Either absent => SKIP with a
 # warning (a push is never wedged by missing infra). Exit 0 pass/skip, 1 regression, 2 setup error
 # (including a malformed baseline ratio — behaviour suite: scripts/test-microbench-gate.sh).
@@ -210,7 +212,10 @@ else
       echo "  here — flip, recovery, owed-deepening — would be an artefact of the comparator rather" >&2
       echo "  than of phorj. The verdict is OWED. Re-emit on the intended source to resolve it:" >&2
       echo "    bash scripts/microbench-gate.sh --emit" >&2
-      exit 0
+      # DEC-597: output identity needs no baseline (this run's VM against this run's php), so a cloud run
+      # (scripts/microbench-leg.sh sets the knob) measures anyway; the leg records every ratio verdict OWED.
+      [[ "${MICROBENCH_IDENTITY_ONLY:-}" == 1 ]] || exit 0
+      echo "microbench-gate: MICROBENCH_IDENTITY_ONLY=1 — measuring for output identity; ratio verdicts are not comparable" >&2
     fi
   fi
   BIN="${PHG_BIN:-$ROOT/target/release/phg}"
@@ -249,12 +254,12 @@ else
   # a flaky operation; it is waiting for a known, self-inflicted, self-clearing condition.
   _settle="${MICROBENCH_SETTLE_SECS:-90}"
   _waited=0
-  _load1="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)"
+  _load1="$(cut -d' ' -f1 "${MICROBENCH_LOADAVG:-/proc/loadavg}" 2>/dev/null || echo 0)"
   while awk -v l="$_load1" -v m="$_maxload" 'BEGIN{exit (l>m)?0:1}' && [[ "$_waited" -lt "$_settle" ]]; do
     [[ "$_waited" == 0 ]] && echo "microbench-gate: 1-min load $_load1 > $_maxload (the pre-push lane's own build) — waiting up to ${_settle}s for it to settle" >&2
     sleep 5
     _waited=$((_waited + 5))
-    _load1="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)"
+    _load1="$(cut -d' ' -f1 "${MICROBENCH_LOADAVG:-/proc/loadavg}" 2>/dev/null || echo 0)"
   done
   if awk -v l="$_load1" -v m="$_maxload" 'BEGIN{exit (l>m)?0:1}'; then
     if [[ "$EMIT" == 1 ]]; then
@@ -270,7 +275,7 @@ else
     exit 0
   fi
   [[ "$_waited" -gt 0 ]] && echo "microbench-gate: load settled to $_load1 after ${_waited}s — measuring" >&2
-  json="$(bash "$ROOT/scripts/microbench.sh" --json)" || {
+  json="$(bash "${MICROBENCH_HARNESS:-$ROOT/scripts/microbench.sh}" --json)" || {
     echo "microbench-gate: harness run failed" >&2
     exit 2
   }
@@ -421,7 +426,7 @@ done < <(jq -r '.[] | [.feature, .ratio, .identical, (.vm_ns // null), (.vm_wors
 # it is a correctness signal, not a timing one, and blocks on sight.
 if [[ ${#suspects[@]} -gt 0 && -z "${MICROBENCH_GATE_JSON:-}" ]]; then
   echo "microbench-gate: re-measuring ${#suspects[@]} suspect(s) to confirm: ${suspects[*]}"
-  if confirm_json="$(bash "$ROOT/scripts/microbench.sh" --json "${suspects[@]}" 2>/dev/null)"; then
+  if confirm_json="$(bash "${MICROBENCH_HARNESS:-$ROOT/scripts/microbench.sh}" --json "${suspects[@]}" 2>/dev/null)"; then
     while IFS=$'\t' read -r feat ratio; do
       [[ -n "$feat" ]] || continue
       b_ratio="$(jq -r --arg f "$feat" "$RATIO_OF" --arg t features "$BASELINE")"

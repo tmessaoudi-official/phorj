@@ -22,7 +22,10 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GATE="${MICROBENCH_GATE_SCRIPT:-$root/scripts/microbench-gate.sh}"
 owed() { (cd "$root" && bash scripts/owed-legs.sh "$@"); }
 env=pc; [[ "${CLAUDE_CODE_REMOTE:-}" == true ]] && env=cloud
-if [[ "$env" == cloud ]]; then export MICROBENCH_MAX_LOAD=1000; fi   # measure anyway: the ratios are not trusted there
+# A cloud run measures anyway: past the load guard, and past a php SOURCE MISMATCH (a cloud host without docker measures
+# on its own php8.5, not the baseline's `docker php:8.5-cli`), since output identity needs no baseline. Its ratios are
+# never a verdict; everything below records them OWED.
+if [[ "$env" == cloud ]]; then export MICROBENCH_MAX_LOAD=1000 MICROBENCH_IDENTITY_ONLY=1; fi
 if [[ "${1:-}" == --verify ]]; then
   [[ "$env" == pc ]] || { echo "microbench-leg: --verify clears debt and runs on the PC only (DEC-598)" >&2; exit 2; }
   (cd "$root" && cargo build --release) || exit 2   # measure HEAD, never a stale binary
@@ -36,8 +39,13 @@ grep -qE '^ *FAIL [a-z0-9_]+: output-identity break' "$log" && exit 1   # the be
 
 reason() { grep -m1 -E "$1" "$log" | sed -E 's/^ *(microbench-gate: )?//'; }
 if [[ "$rc" != 0 ]]; then
-  [[ "$env" == cloud ]] || exit 1
-  owed record microbench cloud "unconfirmed timing flips on a shared VM: $(grep -E '^ *FAIL [a-z0-9_]+:' "$log" | sed -E 's/^ *FAIL ([a-z0-9_]+):.*/\1/' | sort -u | tr '\n' ' ')"
+  [[ "$env" == cloud ]] || exit "$rc"
+  # Only timing verdicts become OWED: every FAIL line a flip or a deepening, and at least one. Anything else (a gate that
+  # died, a FAIL of another kind) propagates, never read as noise.
+  fails="$(grep -E '^ *FAIL [a-z0-9_]+:' "$log" || true)"
+  timing="$(grep -E '^ *FAIL [a-z0-9_]+: (WIN->LOSS flip|an OWED loss DEEPENED)' <<<"$fails" || true)"
+  [[ -n "$fails" && "$fails" == "$timing" ]] || exit "$rc"
+  owed record microbench cloud "unconfirmed timing verdicts on a shared VM: $(sed -E 's/^ *FAIL ([a-z0-9_]+):.*/\1/' <<<"$timing" | sort -u | tr '\n' ' ')"
   exit 0
 fi
 if ! grep -q 'PASS (ratchet' "$log"; then
