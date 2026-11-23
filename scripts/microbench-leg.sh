@@ -21,6 +21,9 @@
 # Seams (tests): MICROBENCH_GATE_SCRIPT, plus the gate's own (MICROBENCH_GATE_JSON, MICROBENCH_BASELINE).
 set -uo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# MICROBENCH_ONLY is this leg's own (the confirming re-run below): an inherited one would make the main run partial,
+# and a partial pass must never clear debt (6C 2026-11-23).
+unset MICROBENCH_ONLY
 # Like the hooks: on a PC host, run in the toolchain image (never a host cargo or php, CLAUDE.md); pre-push already
 # runs inside it, and a host-runner checkout (a cloud session) runs here.
 if [[ "${PHORJ_IN_DOCKER:-}" != 1 && "$(git -C "$root" config --get phorj.runner || true)" != host ]]; then

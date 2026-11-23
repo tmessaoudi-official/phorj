@@ -25,7 +25,10 @@ A RECOVERED line is one sample: deepjson measured 0.975 at the re-baseline and 1
 the RECOVERED benches alone (new `MICROBENCH_ONLY`, which `--emit` refuses: a partial run never writes the baseline)
 and opens the entry only when the re-run agrees; a re-run that cannot measure leaves the entry as it was, and an
 identity break in it blocks. Tests, red first: `test-owed-legs.sh` 42 -> 46, `test-microbench-gate.sh` 21h/21i;
-three sabotages (no confirmation; the harness ignoring `MICROBENCH_ONLY`; no emit refusal) each red, restored.
+three sabotages (no confirmation; the harness ignoring `MICROBENCH_ONLY`; no emit refusal) each red, restored. Then
+(6C): a case through the REAL gate shows a one-bench run still prints RECOVERED and PASS, so the leg opens the entry;
+and the leg unsets an inherited `MICROBENCH_ONLY` (`scripts/dk` forwards it), since a partial main run would have
+cleared debt (red first, sabotaged). 46 -> 48.
 
 ### Changed — a cloud session prints what is owed and is never refused for it (DEC-597 refined)
 

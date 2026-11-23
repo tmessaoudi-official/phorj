@@ -127,6 +127,8 @@ check "a re-run that cannot measure leaves microbench-baseline as it was (neithe
   '[[ $rc == 0 ]] && grep -q "^- OPEN microbench-baseline .*not protected: deepjson" "$O" && ! grep -q "^- CLEARED microbench-baseline" "$O"'
 reset_owed; FAKE_OUT="$REC" FAKE_OUT2=$'  FAIL deepjson: output-identity break\nmicrobench-gate: FAIL — 1' FAKE_RC=0 fake; rc=$?
 check "an output-identity break in the confirming re-run blocks (exit 1)" '[[ $rc == 1 ]]'
+reset_owed; MICROBENCH_ONLY=alpha FAKE_OUT='microbench-gate: PASS (ratchet: no flips, all output-identical)' fake; rc=$?
+check "an inherited MICROBENCH_ONLY never reaches the main run (a partial pass must not clear debt)" 'grep -q "only=$" "$TMP/legout" && ! grep -q "only=alpha" "$TMP/legout"'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_OUT=$'  RECOVERED deepjson: owed at 0.9, now 1.1 (a WIN) — re-emit so the ratchet protects it\nmicrobench-gate: PASS (ratchet: no flips, all output-identical)' fake; rc=$?
 check "cloud: a RECOVERED line (a comparator artefact there) opens no microbench-baseline entry" '[[ $rc == 0 ]] && ! grep -q "^- OPEN microbench-baseline" "$O"'
 reset_owed; FAKE_RC=2 FAKE_OUT='microbench-gate: SETUP ERROR — 1 malformed baseline ratio(s)' fake; rc=$?
@@ -170,6 +172,17 @@ reset_owed; real "$TMP/ident.json"; rc=$?
 check "cloud, real gate, loaded, source mismatch: an identity break BLOCKS (exit 1)" '[[ $rc == 1 ]] && grep -q "output-identity break" "$TMP/legout"'
 reset_owed; real "$TMP/flip.json"; rc=$?
 check "cloud, real gate, loaded, source mismatch: a flip is printed OWED, exit 0" '[[ $rc == 0 ]] && ! grep -q "^- OPEN " "$O" && grep -qE "^microbench-leg: OWED \\(cloud, not recorded.*$win" "$TMP/legout"'
+# The confirming re-run through the REAL gate (PC, quiet, matching source): a one-bench harness result still prints the
+# RECOVERED line and ends in PASS, so the leg opens microbench-baseline (6C 2026-11-23: only the fake gate had met it).
+own="$(jq -r '._owed | keys[0]' "$B")"
+jq --arg p "$TMP/fakephp" '._baseline_php = $p' "$B" >"$TMP/pc-base.json"
+jq --arg f "$own" '[.[] | select(.feature == $f) | .ratio = 1.5]' "$TMP/clean.json" >"$TMP/rec.json"
+printf '0.10 0.10 0.10 1/100 1\n' >"$TMP/load-low"
+reset_owed; (cd "$R" && MICROBENCH_BASELINE="$TMP/pc-base.json" MICROBENCH_PHP_BIN="$TMP/fakephp" PHG_BIN="$TMP/fakephg" \
+  MICROBENCH_HARNESS="$TMP/harness" HARNESS_JSON="$TMP/rec.json" MICROBENCH_LOADAVG="$TMP/load-low" MICROBENCH_SETTLE_SECS=0 \
+  bash scripts/microbench-leg.sh >"$TMP/legout" 2>&1); rc=$?
+check "PC, real gate: a confirmed RECOVERED bench ($own) opens microbench-baseline after the re-run" \
+  '[[ $rc == 0 ]] && [[ $(grep -c "RECOVERED $own" "$TMP/legout") -ge 2 ]] && grep -q "re-measuring RECOVERED" "$TMP/legout" && grep -qE "^- OPEN microbench-baseline .*$own" "$O"'
 fi
 
 # ── 4. A cloud pre-push is never refused for an owed leg (DEC-597 refinement, 2026-11-23) ─────────────────
