@@ -491,6 +491,7 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 - CLEARED microbench-baseline since d66c0787 `feat(gates): every pre-push leg is classified, test-docker runs on eve` (2026-11-23, pc) by a PASS at a2d23a40 (2026-11-23, microbench-gate PASS with every bench in the baseline)
 - CLEARED microbench since 0ee17780 `fix(gates): the cloud identity check needs no JIT, --verify runs in th` (2026-11-23, pc) by a PASS at 4e6b1651 (2026-11-23, microbench-gate PASS)
 - CLEARED microbench-baseline since cef9aca1 `fix(gates): a cloud session prints what is owed and is never refused f` (2026-11-23, pc) by a PASS at fa2a13e0 (2026-11-23, microbench-gate PASS with every bench in the baseline)
+- OPEN microbench since af5b2d06 `fix(gates): a RECOVERED reading is re-measured before it opens microbe` (2026-11-23, pc): 1-min load 5.61 still > 2.5 after 90s — SKIP the G-8 ratchet (box too loaded to measure absolute VM-vs-php ratios reliably; perf-gate.sh still gates VM regressions). Not a regression; the verdict is
 <!-- /owed-legs -->
 
 ## DEFECT QUEUE (DEC-578) — the ONE list; grades RATIFIED 2026-11-17 (seeded 2026-11-13)
