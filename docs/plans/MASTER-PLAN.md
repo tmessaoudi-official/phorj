@@ -104,6 +104,9 @@
 | DEC-578 | Defects first, severity-gated: no new feature row while a P0/P1 defect is open; a defect awaiting a ruling does not block; three in-progress feature rows paused. Supersedes, as the ordering rule, the orders in §0's "Active programme" and "Next" rows, §0 THE QUEUE and §0.06 | RULED 2026-11-13 — defect queue seeded; grades RATIFIED 2026-11-17 (SLICE-STATE § DEFECT QUEUE) |
 | DEC-579 | Staged stable pre-1.0 releases; `1.0.0` only at the goal; a `v*` tag is always the developer's explicit instruction | RULED 2026-11-13 — numbering scheme and the fate of DEC-416 after a first stable release OPEN |
 | DEC-580 | Fifteen axes, list closed, each bar armed only with a checker and owed until then; home = `.claude/rules/north-star.md` + `VISION.md` imported by CLAUDE.md | RULED 2026-11-13 — BUILT as the page; the owed checkers are OWED |
+| DEC-591 | Programme order 2026-11-23: R9-AE-4, PHP 8.6 floor, rulings session, defect burn with the bridge's defects first plus the census ratchet, first stable pre-release, then bridge features; DEC-578 not amended | RULED 2026-11-23 — plan `docs/plans/2026-11-23-php86-floor-and-bridge.plan.md` |
+| DEC-592 | PHP 8.6 primary oracle and gate; 8.5 a second gate and the output's compatibility target until the first stable release | RULED 2026-11-23 — QUEUED (step 1); DEC-588 still PENDING |
+| DEC-593 | Lift and transpile bar = a census ratchet on a pinned twes-in commit, the checker of north-star axis 8 | RULED 2026-11-23 — QUEUED (step 3) |
 
 ## 0.08 THE SCOUT FORCING-FUNCTION RULINGS — mirror rows (DEC-504 … DEC-512)
 
