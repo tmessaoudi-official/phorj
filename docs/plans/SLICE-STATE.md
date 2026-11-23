@@ -490,6 +490,7 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 - CLEARED microbench since 9bf7fc57 `fix(cloud): dk resolves the PHP oracle on the host runner; the microbe` (2026-11-23, pc) by a PASS at d66c0787 (2026-11-23, microbench-gate PASS)
 - CLEARED microbench-baseline since d66c0787 `feat(gates): every pre-push leg is classified, test-docker runs on eve` (2026-11-23, pc) by a PASS at a2d23a40 (2026-11-23, microbench-gate PASS with every bench in the baseline)
 - CLEARED microbench since 0ee17780 `fix(gates): the cloud identity check needs no JIT, --verify runs in th` (2026-11-23, pc) by a PASS at 4e6b1651 (2026-11-23, microbench-gate PASS)
+- OPEN microbench-baseline since cef9aca1 `fix(gates): a cloud session prints what is owed and is never refused f` (2026-11-23, pc): not protected by the ratchet until re-emitted on a quiet PC: deepjson 
 <!-- /owed-legs -->
 
 ## DEFECT QUEUE (DEC-578) — the ONE list; grades RATIFIED 2026-11-17 (seeded 2026-11-13)
