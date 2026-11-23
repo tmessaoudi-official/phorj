@@ -213,7 +213,7 @@ else
       echo "  than of phorj. The verdict is OWED. Re-emit on the intended source to resolve it:" >&2
       echo "    bash scripts/microbench-gate.sh --emit" >&2
       # DEC-597: output identity needs no baseline (this run's VM against this run's php), so a cloud run
-      # (scripts/microbench-leg.sh sets the knob) measures anyway; the leg records every ratio verdict OWED.
+      # (scripts/microbench-leg.sh sets the knob) measures anyway; the leg reports every ratio verdict OWED.
       [[ "${MICROBENCH_IDENTITY_ONLY:-}" == 1 ]] || exit 0
       echo "microbench-gate: MICROBENCH_IDENTITY_ONLY=1 — measuring for output identity; ratio verdicts are not comparable" >&2
     fi

@@ -204,9 +204,10 @@ cargo build --release
 echo "[pre-push] microbench-gate (G-8 mandate ratchet — no WIN->LOSS flip, output-identity holds)"
 # Through scripts/microbench-leg.sh (DEC-597, DEC-598): the gate blocks with exit 1 on a VM-vs-php output-identity
 # break (everywhere) and on a confirmed WIN->LOSS flip or an OWED loss deepening (on the PC; in a cloud session a ratio
-# verdict is recorded OWED instead), and with exit 2 on a malformed bench/micro-baseline.json ratio. Whatever it could
-# not measure (load, no comparator, a cloud VM, an unconfirmed suspect, a bench missing from the baseline) becomes an
-# OWED entry in docs/plans/SLICE-STATE.md, cleared only by a real pass on the PC (`scripts/microbench-leg.sh --verify`).
+# verdict is printed OWED instead and the push goes on), and with exit 2 on a malformed bench/micro-baseline.json ratio.
+# On the PC, whatever it could not judge (load, no comparator, an unconfirmed suspect, a bench missing from the
+# baseline) becomes an OWED entry in docs/plans/SLICE-STATE.md, cleared only by a real PC pass
+# (`scripts/microbench-leg.sh --verify`); a cloud session writes none, the push after landing records it (DEC-597).
 # VM-perf regression is gated robustly by perf-gate.sh (same-process tree÷VM). Ratchet: after the JIT lands a WIN,
 # run `bash scripts/microbench-gate.sh --emit` on a quiet PC so the flip check protects it.
 bash "$_gate_root/scripts/microbench-leg.sh"
