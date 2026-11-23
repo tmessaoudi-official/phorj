@@ -3,263 +3,292 @@
   "_owed_comment": "DERIVED at --emit from every feature with ratio < 1.0: the losses we are CARRYING, each with the ratio it lost by. Reported loudly every run and blocked from deepening. A feature leaves this list by being FIXED and re-emitted, never by being edited out — with ONE further case, added by DEC-516 because it happened: a row can also leave because the COMPARATOR changed (the 2026-09-09 re-emit moved the baseline from a phpbrew php-8.5.8 to dockerised php:8.5-cli, and mapget/mapinsert/floatloop/dbwork left `_owed` without anyone fixing anything). That is neither a fix nor a laundering, and it must be disclosed wherever the counts are quoted.",
   "_baseline_php_comment": "The php these ratios were measured against. The gate REFUSES to compare a run measured on a different source (DEC-516): ratios from two php builds are not interchangeable (DEC-423.1). `_baseline_php_build` and `_baseline_php_digest` are what make it re-derivable — the tag moves and a local path can be deleted.",
   "_baseline_php": "docker php:8.5-cli",
-  "_baseline_php_build": "PHP 8.5.10 (cli) (built: Aug 31 2026 19:13:21) (NTS)",
-  "_baseline_php_digest": "php@sha256:9ebdf4c28ab12c02085e171c31e22ac5f7bbb6a9f6927e3bc3dfe7ee23df51e0",
+  "_baseline_php_build": "PHP 8.5.13 (cli) (built: Nov 19 2026 14:29:14) (NTS)",
+  "_baseline_php_digest": "",
   "_owed": {
+    "coalesceor": {
+      "ratio": 0.026
+    },
+    "constmap": {
+      "ratio": 0.008
+    },
     "deepjson": {
-      "ratio": 0.972
+      "ratio": 0.975
     },
     "fsforeachline": {
-      "ratio": 0.302
+      "ratio": 0.329
     },
     "fslines": {
-      "ratio": 0.130
+      "ratio": 0.119
     },
     "jsonround": {
-      "ratio": 0.323
+      "ratio": 0.311
     },
     "listcontains": {
-      "ratio": 0.837
+      "ratio": 0.743
     },
-    "namedtuplefield": {
-      "ratio": 0.027
-    },
-    "nestedlist": {
-      "ratio": 0.030
+    "mapunion": {
+      "ratio": 0.070
     },
     "queryparse": {
-      "ratio": 0.291
+      "ratio": 0.287
     },
     "spaceshipsort": {
-      "ratio": 0.487
+      "ratio": 0.459
     },
     "strappend": {
-      "ratio": 0.527
+      "ratio": 0.486
+    },
+    "throwexpr": {
+      "ratio": 0.025
+    },
+    "trimascii": {
+      "ratio": 0.059
     }
   },
   "features": {
     "closurecall": {
-      "ratio": 2.071,
+      "ratio": 2.231,
+      "identical": true
+    },
+    "coalesceor": {
+      "ratio": 0.026,
+      "identical": true
+    },
+    "constmap": {
+      "ratio": 0.008,
       "identical": true
     },
     "dbwork": {
-      "ratio": 1.004,
+      "ratio": 1.050,
       "identical": true
     },
     "deepjson": {
-      "ratio": 0.972,
+      "ratio": 0.975,
       "identical": true
     },
     "enum": {
-      "ratio": 1.622,
+      "ratio": 1.948,
       "identical": true
     },
     "fibrec": {
-      "ratio": 1.880,
+      "ratio": 1.923,
       "identical": true
     },
     "floatarith": {
-      "ratio": 4.097,
+      "ratio": 4.252,
       "identical": true
     },
     "floatloop": {
-      "ratio": 1.013,
+      "ratio": 1.003,
       "identical": true
     },
     "floatmul": {
-      "ratio": 1.185,
+      "ratio": 1.001,
       "identical": true
     },
     "forin": {
-      "ratio": 1.639,
+      "ratio": 1.531,
       "identical": true
     },
     "fsforeachline": {
-      "ratio": 0.302,
+      "ratio": 0.329,
       "identical": true
     },
     "fslines": {
-      "ratio": 0.130,
+      "ratio": 0.119,
       "identical": true
     },
     "hofpipe": {
-      "ratio": 10.154,
+      "ratio": 7.115,
       "identical": true
     },
     "intadd": {
-      "ratio": 1.515,
+      "ratio": 1.466,
       "identical": true
     },
     "interp": {
-      "ratio": 2.996,
+      "ratio": 2.790,
       "identical": true
     },
     "isemail": {
-      "ratio": 13.308,
+      "ratio": 16.037,
       "identical": true
     },
     "isurl": {
-      "ratio": 12.046,
+      "ratio": 13.909,
       "identical": true
     },
     "jsonround": {
-      "ratio": 0.323,
+      "ratio": 0.311,
       "identical": true
     },
     "listappend": {
-      "ratio": 1.146,
+      "ratio": 1.117,
       "identical": true
     },
     "listcontains": {
-      "ratio": 0.837,
+      "ratio": 0.743,
       "identical": true
     },
     "listfilter": {
-      "ratio": 9.172,
+      "ratio": 9.762,
       "identical": true
     },
     "listindex": {
-      "ratio": 1.512,
+      "ratio": 1.795,
       "identical": true
     },
     "listmap": {
-      "ratio": 10.772,
+      "ratio": 7.201,
       "identical": true
     },
     "listreduce": {
-      "ratio": 17.214,
+      "ratio": 14.725,
       "identical": true
     },
     "mapfilter": {
-      "ratio": 3.801,
+      "ratio": 4.242,
       "identical": true
     },
     "mapget": {
-      "ratio": 1.165,
+      "ratio": 1.250,
       "identical": true
     },
     "maphas": {
-      "ratio": 1.431,
+      "ratio": 1.653,
       "identical": true
     },
     "mapinsert": {
-      "ratio": 1.139,
+      "ratio": 1.096,
       "identical": true
     },
     "mapkeys": {
-      "ratio": 1.122,
+      "ratio": 1.090,
       "identical": true
     },
     "mapmap": {
-      "ratio": 2.218,
+      "ratio": 2.249,
       "identical": true
     },
     "mapmerge": {
-      "ratio": 2.085,
+      "ratio": 2.204,
+      "identical": true
+    },
+    "mapunion": {
+      "ratio": 0.070,
       "identical": true
     },
     "mapvalues": {
-      "ratio": 1.040,
+      "ratio": 1.173,
       "identical": true
     },
     "match": {
-      "ratio": 6.607,
+      "ratio": 6.949,
       "identical": true
     },
     "mathabs": {
-      "ratio": 1.934,
+      "ratio": 1.950,
       "identical": true
     },
     "mathmax": {
-      "ratio": 1.703,
+      "ratio": 1.614,
       "identical": true
     },
     "mathmin": {
-      "ratio": 1.705,
+      "ratio": 1.723,
       "identical": true
     },
     "mathsign": {
-      "ratio": 2.067,
+      "ratio": 1.809,
       "identical": true
     },
     "maxby": {
-      "ratio": 5.687,
+      "ratio": 7.127,
       "identical": true
     },
     "methodcall": {
-      "ratio": 2.820,
+      "ratio": 2.781,
       "identical": true
     },
     "minby": {
-      "ratio": 5.780,
+      "ratio": 6.850,
       "identical": true
     },
     "namedtuplefield": {
-      "ratio": 0.027,
+      "ratio": 1.385,
       "identical": true
     },
     "nestedlist": {
-      "ratio": 0.030,
+      "ratio": 1.003,
       "identical": true
     },
     "objalloc": {
-      "ratio": 8.674,
+      "ratio": 8.275,
       "identical": true
     },
     "queryparse": {
-      "ratio": 0.291,
+      "ratio": 0.287,
       "identical": true
     },
     "setcontains": {
-      "ratio": 1.022,
+      "ratio": 1.133,
       "identical": true
     },
     "setdifference": {
-      "ratio": 31.477,
+      "ratio": 30.179,
       "identical": true
     },
     "setintersection": {
-      "ratio": 1.667,
+      "ratio": 1.532,
       "identical": true
     },
     "setunion": {
-      "ratio": 52.567,
+      "ratio": 52.623,
       "identical": true
     },
     "spaceshipsort": {
-      "ratio": 0.487,
+      "ratio": 0.459,
       "identical": true
     },
     "strappend": {
-      "ratio": 0.527,
+      "ratio": 0.486,
       "identical": true
     },
     "strbuild": {
-      "ratio": 2.223,
+      "ratio": 2.283,
       "identical": true
     },
     "stringconcat": {
-      "ratio": 1.813,
+      "ratio": 1.747,
       "identical": true
     },
     "stringcontains": {
-      "ratio": 3.331,
+      "ratio": 3.773,
       "identical": true
     },
     "sumby": {
-      "ratio": 16.971,
+      "ratio": 17.110,
+      "identical": true
+    },
+    "throwexpr": {
+      "ratio": 0.025,
+      "identical": true
+    },
+    "trimascii": {
+      "ratio": 0.059,
       "identical": true
     },
     "trycatch": {
-      "ratio": 36.619,
+      "ratio": 37.786,
       "identical": true
     },
     "userhof": {
-      "ratio": 14.057,
+      "ratio": 13.742,
       "identical": true
     },
     "webish": {
-      "ratio": 2.285,
+      "ratio": 2.261,
       "identical": true
     }
   }

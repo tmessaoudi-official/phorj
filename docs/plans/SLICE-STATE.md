@@ -489,7 +489,7 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 <!-- owed-legs -->
 - CLEARED microbench since 9bf7fc57 `fix(cloud): dk resolves the PHP oracle on the host runner; the microbe` (2026-11-23, pc) by a PASS at d66c0787 (2026-11-23, microbench-gate PASS)
 - OPEN microbench-baseline since d66c0787 `feat(gates): every pre-push leg is classified, test-docker runs on eve` (2026-11-23, pc): not protected by the ratchet until re-emitted on a quiet PC: coalesceor constmap mapunion namedtuplefield nestedlist throwexpr trimascii 
-- OPEN microbench since 0ee17780 `fix(gates): the cloud identity check needs no JIT, --verify runs in th` (2026-11-23, pc): 1-min load 3.00 still > 2.5 after 90s — SKIP the G-8 ratchet (box too loaded to measure absolute VM-vs-php ratios reliably; perf-gate.sh still gates VM regressions). Not a regression; the verdict is
+- CLEARED microbench since 0ee17780 `fix(gates): the cloud identity check needs no JIT, --verify runs in th` (2026-11-23, pc) by a PASS at 4e6b1651 (2026-11-23, microbench-gate PASS)
 <!-- /owed-legs -->
 
 ## DEFECT QUEUE (DEC-578) — the ONE list; grades RATIFIED 2026-11-17 (seeded 2026-11-13)

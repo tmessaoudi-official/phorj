@@ -18,6 +18,15 @@ every `docker/Dockerfile` ARG is either installed or on that line. The "no docke
 (D2: docker may run there; the host runner is the chosen path). Tests: `scripts/test-cloud-setup.sh` 49 -> 64 cases,
 two sabotages (the forward step removed; dk ignoring `--php 8.6`) each red, restored.
 
+### Changed — the G-8 microbench baseline re-emitted on a quiet PC (D3, DEC-598)
+
+`scripts/microbench-leg.sh --verify` passed against the committed baseline first (no flips, all output-identical;
+floatmul 1.051 and dbwork 1.076 on the PC, so the cloud audit's floatmul flip does not reproduce). Then a 7-run
+`--emit` at load 0.68: namedtuplefield (1.385) and nestedlist (1.003) are WINs again and protected by the ratchet;
+five new benches enter `_owed` as carried losses (coalesceor 0.026, constmap 0.008, mapunion 0.07, throwexpr 0.025,
+trimascii 0.059); 13 carried losses, was 10. The comparator moved from PHP 8.5.10 to 8.5.13 (the image's floating
+patch). A 3-run emit was discarded first: one noisy sample wrote floatmul and dbwork, both WINs, as carried losses.
+
 ### Fixed — the cloud identity check needs no JIT; `--verify` runs in the image (DEC-597, 6C round 2)
 
 `MICROBENCH_IDENTITY_ONLY=1` also waives the JIT probe of the no-docker fallback (identity needs no JIT; a cloud host's

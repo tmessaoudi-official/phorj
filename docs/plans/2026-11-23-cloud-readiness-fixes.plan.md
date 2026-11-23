@@ -17,6 +17,9 @@
 - [2026-11-23 18:48] AGREED: D3 — the step-1c perf rebaseline (8.6 + JIT comparator) is emitted on the PC only, when the developer says it is quiet, through the gate's emit load guard (0.7). Alternatives: a CI runner.
 - [2026-11-23 18:48] AGREED: B1 approach (a): scripts/dk's host branch sources scripts/toolchain.env before exec, so every host-runner call resolves PHP as pre-push does; step 1c moves that one resolver to 8.6. Alternatives: update-alternatives; both.
 - [2026-11-23 19:09] AGREED: DEC-597 (option A) supersedes the D6 skip: the cloud runs the microbench benches (an output-identity break blocks, a ratio flip is recorded), every leg that cannot run where it is writes a durable OWED entry into SLICE-STATE, cleared only by a real PC pass; a test classifies every pre-push leg. DEC-598 (a): owed legs are verified first on the PC; a confirmed flip is P1, an identity break P0, carried _owed losses unchanged. DEC-599: test-docker.sh into the PC pre-push; DB/mail CI services queued (LIVE-ROUNDTRIPS-NOWHERE, P2 proposed). Alternatives: B (cloud skips, list only); C (rule text only).
+- [2026-11-23 20:29] AGREED: DEC-597 refinement: a cloud session neither writes an OWED entry nor refuses its push; it prints what is owed (an output-identity break still blocks). The developer's push after land.sh (which never pushes) runs the leg on the landed tree and records OWED itself. Alternatives: keep the refusal; keep it with a union-merged separate file.
+- [2026-11-23 20:29] AGREED: LIVE-ROUNDTRIPS-NOWHERE graded P2, ratified (a gate that runs nowhere, not wrong output). Alternative: P1.
+- [2026-11-23 20:29] AGREED: The PC is quiet now: run the D3 re-baseline (microbench-gate.sh --emit) then microbench-leg.sh --verify. Alternative: wait.
 
 ## Formal Plan
 
@@ -64,9 +67,11 @@
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- The D6/D3 measurements, only when the developer says the PC is quiet: floatmul + mapinsert re-measured on the PC, then a quiet-PC `scripts/microbench-gate.sh --emit`, which clears the OPEN `microbench-baseline` entry. The gate itself names seven benches there (push of `15c935f6`): five new (coalesceor constmap mapunion throwexpr trimascii) and two RECOVERED (namedtuplefield nestedlist); the cloud audit's other two recovered benches (deepjson, listcontains) no longer report RECOVERED.
+- DONE 2026-11-23 (the developer: "the PC is quiet now"): `scripts/microbench-leg.sh --verify` PASSED against the committed baseline (no flips, all output-identical; floatmul 1.051, dbwork 1.076: the cloud audit's floatmul flip does not reproduce on the PC), clearing `microbench`. Then a 7-run quiet-PC `--emit` (load 0.68): namedtuplefield 1.385 and nestedlist 1.003 are WINs again, the five new benches enter `_owed` (coalesceor 0.026, constmap 0.008, mapunion 0.07, throwexpr 0.025, trimascii 0.059: stable across two emits), 13 carried losses (was 10). A first 3-run emit was DISCARDED: it recorded floatmul 0.944 and dbwork 0.957, two WINs demoted to carried losses by one noisy sample (`--emit` has no re-measure); the 7-run emit kept both WINs.
 ### Needs research
 ### Fragile
 - B0b's rm-guard is a model of the hosted harness's guard: a fresh cloud session proves it.
 - Needs a fresh cloud session to prove: B0 (the rm-guard and GIT_CONFIG models), B1, B2 (the forward install inside the 120 s budget), the cloud pre-push refusal flow, and the cloud identity check (which php the gate resolves there, and whether its JIT probe passes).
 ### Known issues
+- `_baseline_php_digest` is empty since the 2026-11-19 dockerize: `--emit` runs in the toolchain image, which cannot see the docker digest of its own php; the build line (`PHP 8.5.13 … built: Nov 19 2026`) is the remaining provenance. P3, not fixed here.
+- `--emit` takes one sample per bench (MICROBENCH_RUNS, default 3) with no re-measure, so a near-parity WIN can be written as a carried loss; use MICROBENCH_RUNS=7 and compare with a `--verify` run before committing an emit.
