@@ -2303,7 +2303,8 @@ not a panic:
   **`E-RESERVED-NAME`**: the function-illegal words (`var`/`list`/`print`/`array`/`unset`/`empty`/
   `eval`/`echo`/`clone`/`callable`/… — verified vs PHP 8.5) for a `function`, plus the type words
   (`int`/`float`/`bool`/`string`/`object`/`readonly`/… — legal PHP function names but illegal class
-  names) for a `class`/`enum`/`interface`/`trait`. All remain usable as value/parameter/field/method
+  names) for a `class`/`enum`/`interface`/`trait`, plus `Is`/`Let`, which PHP 8.6 deprecates as a type name (DEC-594,
+  2026-11-23; a function named `let`/`is`/`readonly` is renamed `let_` instead, like a builtin). All remain usable as value/parameter/field/method
   names (legal PHP `$list` / `->list()`). A *type alias* only guards `var` (the contextual-keyword
   collision); the built-in type words are already rejected by the alias arm. **Deferred corner:** a
   *method* named after a word PHP forbids as a method (none in the function/class sets are — PHP
