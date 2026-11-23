@@ -16,7 +16,6 @@
 #   owed-legs.sh record <leg> <env> <reason>   add the OPEN entry unless the leg already has one
 #   owed-legs.sh clear <leg> <evidence>        OPEN -> CLEARED (no-op when the leg is not open)
 #   owed-legs.sh list                          print the OPEN entries (silent when none)
-#   owed-legs.sh has-committed <leg>           exit 0 when HEAD's file already holds an OPEN entry for <leg>
 #   owed-legs.sh check-staged                  the pre-commit check described above
 # PHORJ_OWED_FILE relocates the file (tests); the git subcommands always use the tracked path.
 set -euo pipefail
@@ -71,10 +70,6 @@ case "$cmd" in
   list)
     grep -E '^- OPEN ' "$FILE" 2>/dev/null | sed 's/^/OWED (DEC-597): /' || true
     ;;
-  has-committed)
-    leg_ok "${1:-}"
-    git -C "$root" show "HEAD:$REL" 2>/dev/null | grep -qE "^- OPEN $1 since "
-    ;;
   check-staged)
     head_f="$(git -C "$root" show "HEAD:$REL" 2>/dev/null || true)"
     idx_f="$(git -C "$root" show ":$REL" 2>/dev/null || true)"
@@ -92,5 +87,5 @@ case "$cmd" in
     done < <(grep -E '^- (OPEN|CLEARED) ' "$root/$REL" 2>/dev/null || true)
     exit "$bad"
     ;;
-  *) echo "usage: owed-legs.sh record|clear|list|has-committed|check-staged …" >&2; exit 2 ;;
+  *) echo "usage: owed-legs.sh record|clear|list|check-staged …" >&2; exit 2 ;;
 esac

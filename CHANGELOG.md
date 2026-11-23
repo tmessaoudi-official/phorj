@@ -18,6 +18,16 @@ every `docker/Dockerfile` ARG is either installed or on that line. The "no docke
 (D2: docker may run there; the host runner is the chosen path). Tests: `scripts/test-cloud-setup.sh` 49 -> 64 cases,
 two sabotages (the forward step removed; dk ignoring `--php 8.6`) each red, restored.
 
+### Changed — a cloud session prints what is owed and is never refused for it (DEC-597 refined)
+
+The cloud pre-push refusal is gone, and so is `scripts/owed-legs.sh has-committed`, its only user. In a cloud session
+`scripts/microbench-leg.sh` prints each OWED verdict (`microbench-leg: OWED (cloud, not recorded …)`) and writes no
+entry; an output-identity break still blocks there. The developer's push after landing (the kit's `land.sh` never
+pushes) runs the leg on the landed tree and records whatever it still cannot judge. The refusal cost a refused first
+push per session and a SLICE-STATE conflict on every landing (reproduced). Tests: `test-owed-legs.sh` (the cloud cases
+assert the printed line and an untouched file; the hook fixture reaches the oracle step with no refusal); putting the
+old hook back reddens two cases.
+
 ### Changed — the G-8 microbench baseline re-emitted on a quiet PC (D3, DEC-598)
 
 `scripts/microbench-leg.sh --verify` passed against the committed baseline first (no flips, all output-identical;

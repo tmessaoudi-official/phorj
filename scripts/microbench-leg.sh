@@ -5,8 +5,8 @@
 #   - An OUTPUT-IDENTITY break blocks everywhere: it is a correctness signal, not timing (DEC-598: P0).
 #   - On the PC, a confirmed WIN->LOSS flip blocks (DEC-598: a P1 regression), as the gate always did.
 #   - In a claude.ai cloud session (CLAUDE_CODE_REMOTE=true) the gate measures regardless of load, so the identity half
-#     runs whenever a PHP comparator resolves; ratios from a shared VM are never a verdict, so every cloud run, flip or
-#     not, leaves `microbench` OWED for a quiet PC (two cloud runs flipped two different benches, 2026-11-23).
+#     runs whenever a PHP comparator resolves; ratios from a shared VM are never a verdict (two cloud runs flipped two
+#     different benches, 2026-11-23), so every cloud run PRINTS what is owed, writes no entry and never holds the push.
 #   - A SKIP (load, no comparator, source mismatch, no binary) or a pass that carries an unconfirmed "verdict OWED"
 #     leaves `microbench` OWED; only a real pass on the PC clears it (a JSON-seam pass is not a measurement).
 #   - A bench missing from the baseline, or RECOVERED, leaves `microbench-baseline` OWED until a PC pass shows neither
@@ -27,8 +27,15 @@ if [[ "${PHORJ_IN_DOCKER:-}" != 1 && "$(git -C "$root" config --get phorj.runner
   exec "$root/scripts/dk" bash "$root/scripts/microbench-leg.sh" "$@"
 fi
 GATE="${MICROBENCH_GATE_SCRIPT:-$root/scripts/microbench-gate.sh}"
-owed() { (cd "$root" && bash scripts/owed-legs.sh "$@"); }
 env=pc; [[ "${CLAUDE_CODE_REMOTE:-}" == true ]] && env=cloud
+# A cloud session writes no entry and is never refused for one (DEC-597 refinement, 2026-11-23): it PRINTS what is
+# owed, and the developer's push after landing runs this leg on the landed tree and records what it cannot judge.
+owed() {
+  if [[ "$env" == cloud && "$1" == record ]]; then
+    echo "microbench-leg: OWED (cloud, not recorded: the PC push after landing judges it) $2: $4"; return 0
+  fi
+  (cd "$root" && bash scripts/owed-legs.sh "$@")
+}
 # A cloud run measures anyway: past the load guard, and past a php SOURCE MISMATCH (a cloud host without docker measures
 # on its own php8.5, not the baseline's `docker php:8.5-cli`), since output identity needs no baseline. Its ratios are
 # never a verdict; everything below records them OWED.

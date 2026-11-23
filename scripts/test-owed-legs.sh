@@ -2,7 +2,7 @@
 # Behaviour tests for scripts/owed-legs.sh (the durable OWED list, DEC-597) and scripts/microbench-leg.sh (pre-push's
 # microbench leg: the environment policy around microbench-gate.sh, DEC-597/598). Run by scripts/git-hooks/pre-push.
 #   - record is idempotent per leg (the oldest commit is kept), the line passes doc-guards G3, clear turns OPEN into
-#     CLEARED, list prints only OPEN entries, has-committed reads HEAD;
+#     CLEARED, list prints only OPEN entries;
 #   - check-staged, through a REAL pathspec commit with the hook installed, refuses a deleted OPEN entry and a new entry
 #     left out of the commit, and accepts both once staged;
 #   - the leg: an identity break blocks in every environment; a flip blocks on the PC and is recorded OWED in a cloud
@@ -38,7 +38,7 @@ git -C "$R" config phorj.runner host   # the leg runs its body here; the dk re-e
 O="$R/docs/plans/SLICE-STATE.md"
 owed() { (cd "$R" && bash scripts/owed-legs.sh "$@"); }
 
-# ── 1. record / clear / list / has-committed ─────────────────────────────────────────────────────────────────
+# ── 1. record / clear / list ─────────────────────────────────────────────────────────────────
 out="$(owed record microbench pc 'load 3.27 > 2.5 after 90s')"
 check "record adds one OPEN line inside the block, before the defect queue" \
   '[[ $(grep -c "^- OPEN microbench since " "$O") == 1 ]] && awk "/owed-legs -->/{a=NR} /^## DEFECT QUEUE/{b=NR} END{exit !(a && a<b)}" "$O"'
@@ -51,7 +51,7 @@ owed record microbench cloud 'another reason' >/dev/null
 check "record again: the oldest commit is kept, nothing changes" \
   '[[ $(grep -c "^- OPEN microbench " "$O") == 1 ]] && grep -q "since $sha1 " "$O" && git -C "$R" diff --quiet'
 check "list prints the OPEN entry" '[[ "$(owed list)" == "OWED (DEC-597): - OPEN microbench since $sha1 "* ]]'
-check "has-committed: yes for microbench, no for another leg" 'owed has-committed microbench && ! owed has-committed other'
+check "has-committed is gone with the cloud refusal (DEC-597 refinement): usage error" '(owed has-committed microbench >/dev/null 2>&1); [[ $? == 2 ]]'
 check "a bad leg name is refused (exit 2)" '(owed record "Bad Leg" pc x >/dev/null 2>&1); [[ $? == 2 ]]'
 # doc-guards G3: a SHA in docs/plans needs a backtick subject of >= 8 characters
 check "the written line passes doc-guards G3 (a backtick subject of 8+ characters)" \
@@ -99,9 +99,9 @@ check "cloud: an identity break blocks too (exit 1)" '[[ $rc == 1 ]]'
 reset_owed; seam "$TMP/flip.json"; rc=$?
 check "PC: a flip blocks (exit 1, DEC-598) and records nothing" '[[ $rc == 1 ]] && ! grep -q "^- OPEN " "$O"'
 reset_owed; CLAUDE_CODE_REMOTE=true seam "$TMP/flip.json"; rc=$?
-check "cloud: a flip does not block; microbench is OWED, naming the bench" '[[ $rc == 0 ]] && grep -qE "^- OPEN microbench .*cloud\).*$win" "$O"'
+check "cloud: a flip does not block; it is printed OWED, naming the bench, and nothing is written (DEC-597)" '[[ $rc == 0 ]] && ! grep -q "^- OPEN " "$O" && grep -qE "^microbench-leg: OWED \\(cloud, not recorded.*$win" "$TMP/legout"'
 reset_owed; CLAUDE_CODE_REMOTE=true seam "$TMP/clean.json"; rc=$?
-check "cloud: a clean pass is still OWED (ratios from a shared VM)" '[[ $rc == 0 ]] && grep -qE "^- OPEN microbench .*cloud\)" "$O"'
+check "cloud: a clean pass is still printed OWED (ratios from a shared VM), nothing written" '[[ $rc == 0 ]] && ! grep -q "^- OPEN " "$O" && grep -qE "^microbench-leg: OWED \\(cloud, not recorded" "$TMP/legout"'
 reset_owed; owed record microbench pc 'an older skip' >/dev/null; seam "$TMP/clean.json"; rc=$?
 check "a JSON-seam pass never clears" '[[ $rc == 0 ]] && grep -q "^- OPEN microbench " "$O"'
 reset_owed; FAKE_OUT='microbench-gate: 1-min load 3.27 still > 2.5 after 90s — SKIP the G-8 ratchet (box too loaded)' fake; rc=$?
@@ -119,7 +119,7 @@ check "cloud: a RECOVERED line (a comparator artefact there) opens no microbench
 reset_owed; FAKE_RC=2 FAKE_OUT='microbench-gate: SETUP ERROR — 1 malformed baseline ratio(s)' fake; rc=$?
 check "a setup error stays exit 2 and records nothing" '[[ $rc == 2 ]] && ! grep -q "^- OPEN " "$O"'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=2 FAKE_OUT='microbench-gate: harness run failed' fake; rc=$?
-check "cloud: a harness failure (infra) is OWED, exit 0: it never holds a cloud push" '[[ $rc == 0 ]] && grep -qE "^- OPEN microbench .*cloud\).*harness run failed" "$O"'
+check "cloud: a harness failure (infra) is printed OWED, exit 0: it never holds a cloud push" '[[ $rc == 0 ]] && ! grep -q "^- OPEN " "$O" && grep -qE "^microbench-leg: OWED \\(cloud, not recorded.*harness run failed" "$TMP/legout"'
 reset_owed; FAKE_RC=2 FAKE_OUT='microbench-gate: harness run failed' fake; rc=$?
 check "PC: a harness failure stays exit 2 (the developer is there to look)" '[[ $rc == 2 ]] && ! grep -q "^- OPEN " "$O"'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=2 FAKE_OUT='microbench-gate: SETUP ERROR — 1 malformed baseline ratio(s)' fake; rc=$?
@@ -129,7 +129,7 @@ check "cloud: a gate exit 1 with no FAIL line propagates (not read as timing), r
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=1 FAKE_OUT=$'  FAIL a: WIN->LOSS flip — baseline 2 (WIN) now 0.3\n  FAIL b: something else entirely' fake; rc=$?
 check "cloud: a FAIL that is not a flip or a deepening propagates" '[[ $rc == 1 ]] && ! grep -q "^- OPEN " "$O"'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=1 FAKE_OUT=$'  FAIL a: WIN->LOSS flip — baseline 2 (WIN) now 0.3\n  FAIL b: an OWED loss DEEPENED — was 0.9, now 0.5' fake; rc=$?
-check "cloud: flips and deepenings only: OWED naming both, exit 0" '[[ $rc == 0 ]] && grep -qE "^- OPEN microbench .*cloud\).*a b" "$O"'
+check "cloud: flips and deepenings only: printed OWED naming both, exit 0" '[[ $rc == 0 ]] && ! grep -q "^- OPEN " "$O" && grep -qE "^microbench-leg: OWED \\(cloud, not recorded.*a b" "$TMP/legout"'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_OUT='microbench-gate: PASS (ratchet: no flips, all output-identical)' fake
 check "cloud: the leg lifts the load guard and asks for identity through a source mismatch" 'grep -q "maxload=1000 idonly=1" "$TMP/legout"'
 FAKE_OUT='microbench-gate: PASS (ratchet: no flips, all output-identical)' fake
@@ -156,26 +156,21 @@ real() { CLAUDE_CODE_REMOTE=true MICROBENCH_PHP_BIN="$TMP/fakephp" PHG_BIN="$TMP
 reset_owed; real "$TMP/ident.json"; rc=$?
 check "cloud, real gate, loaded, source mismatch: an identity break BLOCKS (exit 1)" '[[ $rc == 1 ]] && grep -q "output-identity break" "$TMP/legout"'
 reset_owed; real "$TMP/flip.json"; rc=$?
-check "cloud, real gate, loaded, source mismatch: a flip is OWED, exit 0" '[[ $rc == 0 ]] && grep -qE "^- OPEN microbench .*cloud\).*$win" "$O"'
+check "cloud, real gate, loaded, source mismatch: a flip is printed OWED, exit 0" '[[ $rc == 0 ]] && ! grep -q "^- OPEN " "$O" && grep -qE "^microbench-leg: OWED \\(cloud, not recorded.*$win" "$TMP/legout"'
 fi
 
-# ── 4. The cloud pre-push refusal: the OWED entry travels with the push (DEC-597) ───────────────────────────
+# ── 4. A cloud pre-push is never refused for an owed leg (DEC-597 refinement, 2026-11-23) ─────────────────
+# The PC push after landing records what the cloud could not judge; the cloud writes nothing and goes on to the gate.
 H="$TMP/hookrepo"; mkdir -p "$H/scripts/git-hooks" "$H/docs/plans" "$TMP/hbin"
 cp "$ROOT/scripts/git-hooks/pre-push" "$H/scripts/git-hooks/pre-push"; cp "$ROOT/scripts/owed-legs.sh" "$H/scripts/"
 printf '# Slice state\n\n## DEFECT QUEUE\n' >"$H/docs/plans/SLICE-STATE.md"
 git -C "$H" init -q; git -C "$H" add -A; git -C "$H" commit -q -m "chore: the hook fixture's first commit"; git -C "$H" config phorj.runner host
 printf '#!/bin/sh\necho "$(basename "$0") $*" >>"%s/hook.calls"\nexit 0\n' "$TMP" >"$TMP/hbin/cargo"; cp "$TMP/hbin/cargo" "$TMP/hbin/docker"; chmod +x "$TMP/hbin/"*
-hook() { : >"$TMP/hook.calls"; (cd "$H" && CLAUDE_CODE_REMOTE=true PATH="$TMP/hbin:$PATH" bash scripts/git-hooks/pre-push origin url </dev/null >"$TMP/hookout" 2>&1); }
-hook; rc=$?
-check "cloud pre-push, entry not committed: REFUSED (exit 1) before any cargo or docker call" \
-  '[[ $rc == 1 ]] && grep -q "REFUSED (DEC-597)" "$TMP/hookout" && [[ ! -s "$TMP/hook.calls" ]]'
-check "...and it wrote the cloud OWED entry for microbench" 'grep -qE "^- OPEN microbench since [0-9a-f]+ .*cloud\)" "$H/docs/plans/SLICE-STATE.md"'
-git -C "$H" commit -q -m "docs: commit the owed microbench entry" -- docs/plans/SLICE-STATE.md
-hook; rc=$?
-check "cloud pre-push, entry committed: no refusal (it goes on to the gate)" '! grep -q "REFUSED" "$TMP/hookout"'
-git -C "$H" reset -q --hard HEAD~1   # back to no committed entry: the PC must not refuse either
-(cd "$H" && env -u CLAUDE_CODE_REMOTE PATH="$TMP/hbin:$PATH" bash scripts/git-hooks/pre-push origin url </dev/null >"$TMP/hookout" 2>&1)
-check "PC pre-push (no CLAUDE_CODE_REMOTE): never refused for an owed entry" '! grep -q "REFUSED" "$TMP/hookout"'
+: >"$TMP/hook.calls"; (cd "$H" && CLAUDE_CODE_REMOTE=true PATH="$TMP/hbin:$PATH" bash scripts/git-hooks/pre-push origin url </dev/null >"$TMP/hookout" 2>&1)
+# The PHP oracle step comes after the point where the old refusal exited: reaching it proves the push went on. On a
+# PC host it stops there (the fixture has no toolchain.env); in the image the oracle resolves and the legs run.
+check "cloud pre-push: no refusal, it goes on to the gate (reaches the PHP oracle step)" '! grep -q "REFUSED" "$TMP/hookout" && grep -qE "PHP 8.5 build|PHP oracle:" "$TMP/hookout"'
+check "...and it writes no OWED entry (the tree stays clean)" 'git -C "$H" diff --quiet && ! grep -q "^- OPEN" "$H/docs/plans/SLICE-STATE.md"'
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [[ $FAIL -eq 0 && $PASS -gt 0 ]]

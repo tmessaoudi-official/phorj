@@ -49,8 +49,8 @@ not in `CLAUDE.md`.
   and records anything it could not judge (a load skip, no comparator, a cloud session's ratios, an unconfirmed
   suspect, a bench missing from the baseline) with `scripts/owed-legs.sh` in SLICE-STATE's OWED GATE LEGS section.
   Only a real PC pass clears an entry (`microbench-leg.sh --verify`). pre-commit's `owed-legs.sh check-staged`
-  refuses a commit that deletes an OPEN entry or leaves a new one uncommitted; a cloud pre-push refuses until the
-  entry is committed. Every pre-push leg has a row in `scripts/gate-legs.tsv` (everywhere / owed / pc-only / info),
+  refuses a commit that deletes an OPEN entry or leaves a new one uncommitted. A cloud session writes no entry and
+  is never refused for one: the leg prints what is owed there, and the PC push after landing records it (DEC-597). Every pre-push leg has a row in `scripts/gate-legs.tsv` (everywhere / owed / pc-only / info),
   checked both ways by `scripts/test-gate-legs.sh`: a new leg fails pre-push until it is classified. `test-docker.sh`
   is the one pc-only leg: it runs before the dk re-exec, stdin closed.
 

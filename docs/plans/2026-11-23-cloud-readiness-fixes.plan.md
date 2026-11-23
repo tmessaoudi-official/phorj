@@ -71,7 +71,7 @@
 ### Needs research
 ### Fragile
 - B0b's rm-guard is a model of the hosted harness's guard: a fresh cloud session proves it.
-- Needs a fresh cloud session to prove: B0 (the rm-guard and GIT_CONFIG models), B1, B2 (the forward install inside the 120 s budget), the cloud pre-push refusal flow, and the cloud identity check (which php the gate resolves there, and whether its JIT probe passes).
+- Needs a fresh cloud session to prove: B0 (the rm-guard and GIT_CONFIG models), B1, B2 (the forward install inside the 120 s budget, and that sury serves the 8.6 packages), the cloud push printing its OWED lines and going through with no refusal and no SLICE-STATE edit, and the cloud identity check (which comparator the gate resolves: with docker it pulls `php:8.5-cli` from Docker Hub, without it the host php8.5 for identity only; and the leg's wall time there).
 ### Known issues
 - `_baseline_php_digest` is empty since the 2026-11-19 dockerize: `--emit` runs in the toolchain image, which cannot see the docker digest of its own php; the build line (`PHP 8.5.13 … built: Nov 19 2026`) is the remaining provenance. P3, not fixed here.
 - `--emit` takes one sample per bench (MICROBENCH_RUNS, default 3) with no re-measure, so a near-parity WIN can be written as a carried loss; use MICROBENCH_RUNS=7 and compare with a `--verify` run before committing an emit.
