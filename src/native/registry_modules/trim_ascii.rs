@@ -1,16 +1,19 @@
 //! `String.trimAscii` (DEC-545, named DEC-549, scout row 4n) — PHP's `trim()` with the character list
-//! `" \t\n\r\0\x0B"` stripped from both ends, nothing else. It is PHP's default list on PHP <= 8.5 only:
-//! 8.6 added `\f` to the default (rfc/trim_form_feed), so the emitted PHP passes the list EXPLICITLY —
-//! do not "simplify" it back to a bare `trim($s)`.
+//! `" \t\n\r\0\x0B\x0C"` stripped from both ends, nothing else. That is PHP 8.6's default list: 8.6
+//! added `\f` (rfc/trim_form_feed) and DEC-588 (ruled 2026-11-23) moved this set with it. PHP 8.5's
+//! default still lacks `\f`, so the emitted PHP passes the list EXPLICITLY and both minors agree — do
+//! not "simplify" it back to a bare `trim($s)`. Lifted from PHP <= 8.5 code, a trimmed form feed now
+//! differs from the original (disclosed: KNOWN_ISSUES TRIM-FORM-FEED-LIFT-85).
 //!
 //! `String.trim` strips Rust's Unicode White_Space set (UA-1.1), which is NOT PHP's: it also strips
 //! U+00A0, U+3000, form feed (`\x0C`)…, and it keeps `\0`. In a byte-identity harness that difference
 //! is a semantic change, so `trim($s)` could not lift to it and stayed unmapped. This native is the
-//! PHP set, so `trim($s)` lifts here and transpiles back to `trim($s, " \t\n\r\0\x0B")` (ladder case 1).
+//! PHP set, so `trim($s)` lifts here and transpiles back to `trim($s, " \t\n\r\0\x0B\x0C")` (ladder
+//! case 1).
 //!
-//! Also NOT Rust's `str::trim_ascii`: that set is `u8::is_ascii_whitespace` — it strips `\x0C` and
-//! keeps `\0` and `\x0B`. The name says "ASCII"; the set is PHP's, and the unit tests pin each of the
-//! three characters on which the two disagree.
+//! Also NOT Rust's `str::trim_ascii`: that set is `u8::is_ascii_whitespace` — it keeps `\0` and
+//! `\x0B`. The name says "ASCII"; the set is PHP's, and the unit tests pin the two characters on
+//! which the two disagree.
 //!
 //! No UTF-8 hazard: every character in the set is ASCII, and an ASCII byte never occurs inside a
 //! multi-byte UTF-8 sequence, so stripping by `char` strips exactly the bytes PHP strips.
@@ -19,8 +22,8 @@ use crate::native::*;
 use crate::types::Ty;
 use crate::value::Value;
 
-/// PHP's default `trim()` character list.
-const PHP_TRIM_SET: [char; 6] = [' ', '\t', '\n', '\r', '\0', '\u{0B}'];
+/// PHP 8.6's default `trim()` character list (DEC-588).
+const PHP_TRIM_SET: [char; 7] = [' ', '\t', '\n', '\r', '\0', '\u{0B}', '\u{0C}'];
 
 pub(crate) fn trim_ascii(s: &str) -> &str {
     s.trim_matches(&PHP_TRIM_SET[..])
@@ -44,8 +47,8 @@ pub(super) fn trim_ascii_natives() -> Vec<NativeFn> {
         // Only the ONE-argument form: `trim($s, $chars)` has a different arity, so the lifter's arity
         // check leaves it unmapped (DEC-545 rules the default set only).
         lift_from: &["trim"],
-        // Explicit list, never the default: PHP 8.6 added `\f` to `trim()`'s default (rfc/trim_form_feed).
-        php: |a| format!("trim({}, \" \\t\\n\\r\\0\\x0B\")", parg(a, 0)),
+        // Explicit list, never the default: PHP 8.5's default lacks the `\f` that 8.6's has (DEC-588).
+        php: |a| format!("trim({}, \" \\t\\n\\r\\0\\x0B\\x0C\")", parg(a, 0)),
     }]
 }
 
@@ -55,16 +58,21 @@ mod tests {
 
     #[test]
     fn strips_php_default_set_from_both_ends() {
-        assert_eq!(trim_ascii(" \t\n\r\0\x0Bx y \t\n\r\0\x0B"), "x y");
+        assert_eq!(trim_ascii(" \t\n\r\0\x0B\x0Cx y \t\n\r\0\x0B\x0C"), "x y");
         assert_eq!(trim_ascii(""), "");
         assert_eq!(trim_ascii(" \t "), "");
     }
 
-    /// The three characters on which PHP's set and Rust's `trim_ascii` disagree, and the Unicode
+    /// DEC-588: PHP 8.6's default list strips the form feed (8.5's kept it), and so does this set.
+    #[test]
+    fn strips_a_form_feed_like_php_8_6() {
+        assert_eq!(trim_ascii("\x0Cx\x0C"), "x");
+    }
+
+    /// The two characters on which PHP's set and Rust's `trim_ascii` disagree, and the Unicode
     /// spaces `String.trim` would strip.
     #[test]
     fn keeps_what_php_keeps() {
-        assert_eq!(trim_ascii("\x0Cx\x0C"), "\x0Cx\x0C"); // form feed: Rust strips, PHP keeps
         assert_eq!(trim_ascii("\0x\x0B"), "x"); // NUL, VT: PHP strips, Rust keeps
         assert_eq!(trim_ascii("\u{A0}x\u{3000}"), "\u{A0}x\u{3000}");
         assert_eq!(trim_ascii(" é\u{0301} "), "é\u{0301}");

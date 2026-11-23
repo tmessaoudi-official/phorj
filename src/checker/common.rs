@@ -286,10 +286,12 @@ pub(super) fn is_php_reserved_symbol_name(name: &str, kind: &str) -> bool {
         "as",
         "var",
     ];
-    // Additionally illegal as a PHP *class* name: the type words + `readonly`.
+    // Additionally illegal as a PHP *class* name: the type words + `readonly`; and `is`/`let`, which
+    // PHP 8.6 deprecates as a class, enum, interface or trait name (DEC-594, probed on 8.6.0
+    // 2026-11-23) — rejected, never renamed, since a type's name can surface in output.
     const CLASS_EXTRA: &[&str] = &[
         "readonly", "int", "float", "bool", "string", "void", "iterable", "object", "mixed",
-        "never", "self", "parent",
+        "never", "self", "parent", "is", "let",
     ];
     let lower = name.to_ascii_lowercase();
     match kind {

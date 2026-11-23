@@ -42,7 +42,7 @@ jobs:
       # The image carries the toolchain rust-toolchain.toml pins, PHP 8.5 (the transpile floor) with bcmath,
       # llvm-objcopy (the host `phg build` tests: without it built_binary_keeps_stdout_written_before_a_fault
       # fails by design, DEC-530) and cargo-nextest. Testing against the floor is the strict gate; `gate-php86`
-      # below runs the same tests on 8.6, because a PHP default can change between minors (DEC-588).
+      # below runs the same tests on 8.6, because a PHP default can change between minors (DEC-588, ruled 2026-11-23).
       - uses: ./.github/actions/phorj-image
         with:
           cache-key: gate

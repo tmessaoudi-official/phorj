@@ -1,10 +1,11 @@
 package Main;
 
-// `String.trimAscii` (DEC-545/549) is PHP's own `trim()`: it strips exactly " \t\n\r\0\x0B" from
-// both ends and nothing else. `String.trim` is the Unicode-correct one (guide/string-unicode-ws):
-// it also strips form feed and U+00A0, which PHP's `trim()` keeps. Both are byte-identical across
-// the interpreter, the VM and transpiled PHP; `trimAscii` transpiles to `trim($s)` itself, and
-// `phg lift` maps PHP's `trim($s)` onto it.
+// `String.trimAscii` (DEC-545/549/588) is PHP 8.6's own `trim()`: it strips exactly
+// " \t\n\r\0\x0B\x0C" from both ends and nothing else. `String.trim` is the Unicode-correct one
+// (guide/string-unicode-ws): it also strips U+00A0, which PHP's `trim()` keeps. Both are
+// byte-identical across the interpreter, the VM and transpiled PHP; `trimAscii` transpiles to
+// `trim($s, " \t\n\r\0\x0B\x0C")`, the list explicit so PHP 8.5 agrees too, and `phg lift` maps
+// PHP's `trim($s)` onto it.
 import Core.Output;
 import Core.String;
 import Core.Runtime.Entry;

@@ -730,9 +730,11 @@ prints.
 
 ## `trim` — PHP's own set (scout row 4n, DEC-545/549, 2026-09-27)
 
-`trim($s)` lifts to `s.trimAscii()`, a native stripping exactly PHP's default list
-`" \t\n\r\0\x0B"` and transpiling back to `trim($s)`. It deliberately does NOT lift to
-`String.trim`, which strips the Unicode White_Space set (form feed, U+00A0, U+3000, …) — in a
+`trim($s)` lifts to `s.trimAscii()`, a native stripping exactly PHP 8.6's default list
+`" \t\n\r\0\x0B\x0C"` and transpiling back to `trim($s, " \t\n\r\0\x0B\x0C")` (DEC-588). Lifted from
+code written for PHP 8.5, whose default keeps the form feed, a trimmed `\f` now differs from the
+original (KNOWN_ISSUES TRIM-FORM-FEED-LIFT-85). It deliberately does NOT lift to
+`String.trim`, which strips the Unicode White_Space set (U+00A0, U+3000, …) — in a
 byte-identity harness that would be a meaning change. The character-list form `trim($s, $chars)` has
 another arity and stays the unresolved `trim(…)`, loud at `phg check` (DEC-312's arity rule), and
 `trim(...)` as a first-class callable is refused like any registered builtin's (row 4f).

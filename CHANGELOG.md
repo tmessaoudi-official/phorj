@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `String.trimAscii` follows PHP 8.6's `trim()` set; PHP 8.6's deprecated names are kept out of the output (DEC-588, DEC-594, 2026-11-23)
+
+PHP 8.6 added the form feed to `trim()`'s default list. `String.trimAscii` now strips `" \t\n\r\0\x0B\x0C"` on every leg and
+transpiles to `trim($s, " \t\n\r\0\x0B\x0C")`, the list explicit so PHP 8.5 agrees (DEC-588; `gate-php86` was red on this).
+A `trim($s)` lifted from code that runs on PHP 8.5 now strips a form feed the original kept: disclosed as
+TRIM-FORM-FEED-LIFT-85 and asserted by `trim_of_a_form_feed_follows_php_8_6` on both minors. PHP 8.6 also deprecates a
+function named `let`, `is` or `readonly` and a type named `Is` or `Let`; such a function is now renamed in the PHP
+output (`let_`), as `clamp` is, and such a type is `E-RESERVED-NAME` on every leg (DEC-594). The `trimascii` microbench
+input swaps its form feed for a vertical tab, so its PHP side (bare `trim()`) prints the same checksum on 8.5 and 8.6.
+Tests: `tests/php_86_compat.rs`, `trim_ascii_is_php_trim_on_every_leg`, the `trim_ascii` unit tests. Plan:
+`docs/plans/2026-11-23-php86-floor-and-bridge.plan.md`.
+
 ### Fixed — a number with a trailing newline is not a number on the PHP leg either (defect R9-AE-4, P1, 2026-11-23)
 
 The transpiled PHP's number-parsing helpers anchored their regexes with `$` and no `D` modifier, and PCRE's `$` also

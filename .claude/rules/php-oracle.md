@@ -39,7 +39,8 @@ resolver, not a pin, and is deliberately not flagged), and `scripts/test-validat
 the check itself from going dark.
 
 **A PHP-side expectation must hold on every gating PHP, not only the floor.** The transpiled PHP is version-stable
-when it passes its arguments explicitly (`trimAscii` emits `trim($s, " \t\n\r\0\x0B")`), but `tests/lift_roundtrip.rs`
+when it passes its arguments explicitly (`trimAscii` emits `trim($s, " \t\n\r\0\x0B\x0C")`), but `tests/lift_roundtrip.rs`
 runs the ORIGINAL PHP source on whichever PHP the job installs, so a PHP default that changes between 8.5 and 8.6 reds
-`gate-php86` alone. First case: 8.6 added `\f` to `trim()`'s default set (DEC-588, PENDING). Compare
+`gate-php86` alone. First case: 8.6 added `\f` to `trim()`'s default set (DEC-588, ruled 2026-11-23: `trimAscii`
+follows 8.6, and the round-trip fixture that leans on `\f` asserts the 8.5 split instead of skipping it). Compare
 `scripts/dk php …` against `scripts/dk --php 8.6 php …` before adding a fixture that leans on a PHP default.

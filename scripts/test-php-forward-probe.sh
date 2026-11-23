@@ -138,26 +138,26 @@ else
 fi
 
 # ── 5. The real thing, when this machine has it ─────────────────────────────────────────────────
-# This case holds the defect-queue entry PHP86-DEPRECATED-NAMES in place: it asserts that the output
-# for `function let` IS reported today. The change that fixes that defect (the transpiler mangling the
-# name, as it does `clamp`) turns this case red on a machine with a newer PHP - by design. That change
-# swaps `let` here for a shape that is still deprecated, or drops the case; it is the only end-to-end
-# proof that the probe sees a real deprecation, not a gate on the defect.
+# The only end-to-end proof that the probe sees a REAL deprecation, so it needs a shape the transpiler
+# still emits and a newer PHP still deprecates. It was `function let` until DEC-594 (2026-11-23)
+# renamed that one like `clamp`; it is now a `return` inside `finally`. DEC-595 (ruled 2026-11-23,
+# QUEUED) makes that shape a check error, so the change that builds DEC-595 must swap this case again
+# or drop it - by design, not a gate on the defect.
 ROOT="$(cd "$HERE/.." && pwd)"
 real="$TMP/real.phg"
-printf 'package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\nfunction %s(int x): int { return x; }\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void { Output.printLine("x"); }\n' let > "$real"
+printf 'package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\nimport Core.Runtime.EntryKind;\nfunction f(): int { try { return 1; } finally { return 2; } }\n#[Entry(kind: EntryKind.Cli)]\nfunction main(): void { Output.printLine("{f()}"); }\n' > "$real"
 if [[ -x "$ROOT/target/release/phg" ]]; then
   err="$(bash "$TOOL" "$real" 2>&1 >/dev/null)"
   if [[ "$err" == *"nothing probed"* ]]; then
     skip "real probe: ${err#php-forward: }"
   else
     out="$(bash "$TOOL" --quiet "$real" 2>/dev/null)"; rc=$?
-    if [[ $rc -eq 1 && "$out" == *'"let" is deprecated since 8.6'* ]]; then
-      ok "REAL: a user function named let is reported by an installed newer PHP"
+    if [[ $rc -eq 1 && "$out" == *'Returning from a finally block is deprecated'* ]]; then
+      ok "REAL: a return inside finally is reported by an installed newer PHP"
     else
       bad "REAL probe found nothing: rc=$rc ${out:0:300}"
     fi
-    sed -i 's/function let(/function fine(/' "$real"
+    sed -i 's/finally { return 2; }/finally { Output.printLine("y"); }/' "$real"
     out="$(bash "$TOOL" --quiet "$real" 2>/dev/null)"; rc=$?
     if [[ $rc -eq 0 && -z "$out" ]]; then ok "REAL: the same file with an ordinary name is silent"; else bad "REAL clean file: rc=$rc $out"; fi
   fi

@@ -105,8 +105,11 @@
 | DEC-579 | Staged stable pre-1.0 releases; `1.0.0` only at the goal; a `v*` tag is always the developer's explicit instruction | RULED 2026-11-13 — numbering scheme and the fate of DEC-416 after a first stable release OPEN |
 | DEC-580 | Fifteen axes, list closed, each bar armed only with a checker and owed until then; home = `.claude/rules/north-star.md` + `VISION.md` imported by CLAUDE.md | RULED 2026-11-13 — BUILT as the page; the owed checkers are OWED |
 | DEC-591 | Programme order 2026-11-23: R9-AE-4, PHP 8.6 floor, rulings session, defect burn with the bridge's defects first plus the census ratchet, first stable pre-release, then bridge features; DEC-578 not amended | RULED 2026-11-23 — plan `docs/plans/2026-11-23-php86-floor-and-bridge.plan.md` |
-| DEC-592 | PHP 8.6 primary oracle and gate; 8.5 a second gate and the output's compatibility target until the first stable release | RULED 2026-11-23 — QUEUED (step 1); DEC-588 still PENDING |
+| DEC-592 | PHP 8.6 primary oracle and gate; 8.5 a second gate and the output's compatibility target until the first stable release | RULED 2026-11-23 — QUEUED (step 1); DEC-588 RULED the same day |
 | DEC-593 | Lift and transpile bar = a census ratchet on a pinned twes-in commit, the checker of north-star axis 8 | RULED 2026-11-23 — QUEUED (step 3) |
+| DEC-588 | `String.trimAscii` follows PHP 8.6's default `trim()` set (form feed stripped), passed explicitly; the 8.5 lift split is disclosed | RULED 2026-11-23 — BUILT (step 1a) |
+| DEC-594 | PHP 8.6 deprecated names: functions `let`/`is`/`readonly` renamed in the output (`let_`), types `Is`/`Let` rejected (`E-RESERVED-NAME`) | RULED 2026-11-23 — BUILT (step 1a) |
+| DEC-595 | A `return` inside `finally` is a check error on every leg | RULED 2026-11-23 — QUEUED (step 1b); code name to be asked |
 
 ## 0.08 THE SCOUT FORCING-FUNCTION RULINGS — mirror rows (DEC-504 … DEC-512)
 

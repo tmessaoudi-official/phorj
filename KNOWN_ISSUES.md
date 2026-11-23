@@ -3536,6 +3536,14 @@ stay byte-identical on the PHP leg via emitted helpers (`__phorj_text_reverse` /
 native `String.trimAscii` (DEC-545/549, 2026-09-27), which `phg lift` maps `trim($s)` onto; its
 character-list form `trim($s, $chars)` and `ltrim`/`rtrim` have no mapping yet.
 
+**TRIM-FORM-FEED-LIFT-85 (disclosed, DEC-588 ruled 2026-11-23).** `String.trimAscii` strips PHP 8.6's
+default set, form feed included, on every leg (the transpiled `trim()` passes the list explicitly, so
+PHP 8.5 agrees). PHP 8.5's own default keeps the form feed, so a `trim($s)` lifted from code that runs
+on 8.5 changes meaning when its input starts or ends with `\f`: `strlen(trim("\x0Cx\x0C"))` is 3 in
+the original on 8.5 and 1 after `phg lift` (measured on 8.5.13 and 8.6.0, 2026-11-23). On 8.6 the two
+agree. Pinned by `tests/lift_roundtrip.rs` `trim_of_a_form_feed_follows_php_8_6`, which asserts the
+split below 8.6 and the agreement from 8.6 on.
+
 Still ASCII-scoped: `equalsIgnoreCase`/`containsIgnoreCase` fold only ASCII letters
 (→ `strcasecmp`/`stripos`); Unicode case-folding is deferred to W4-4 (a known landmine —
 `strtoupper("straße")` diverges from Rust, a LADDER-quarantine candidate). And **`String.length`

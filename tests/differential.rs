@@ -8095,10 +8095,10 @@ function main(): void {
     );
 }
 
-/// DEC-545/549 (scout row 4n): `String.trimAscii` is PHP's `trim()` with its default list exactly —
-/// `" \t\n\r\0\x0B"` stripped, form feed and U+00A0 kept (where `String.trim` strips both) — and it
-/// transpiles to `trim($s, " \t\n\r\0\x0B")` — the list is explicit because PHP 8.6 added `\f` to the
-/// default — so the PHP leg is PHP's own function.
+/// DEC-545/549 (scout row 4n), DEC-588: `String.trimAscii` is PHP 8.6's `trim()` with its default list
+/// exactly — `" \t\n\r\0\x0B\x0C"` stripped, U+00A0 kept (where `String.trim` strips it) — and it
+/// transpiles to `trim($s, " \t\n\r\0\x0B\x0C")`, the list explicit so PHP 8.5 (whose default lacks
+/// `\f`) agrees too; the PHP leg is PHP's own function on both.
 #[test]
 fn trim_ascii_is_php_trim_on_every_leg() {
     agree_out_php(
@@ -8115,7 +8115,7 @@ function main(): void {
     Output.printLine(\"[{String.trimAscii(\\\"\\\")}]\");
 }
 ",
-        "[x y]\n3 1\n[\u{a0}x\u{a0}] [x]\n[]\n",
+        "[x y]\n1 1\n[\u{a0}x\u{a0}] [x]\n[]\n",
         "trim_ascii",
     );
 }

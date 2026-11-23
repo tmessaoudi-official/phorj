@@ -174,6 +174,13 @@ const BUILTIN_FUNCTIONS: &[&str] = &[
     // names are camelCase (E-NAME-CASE), so the snake_case 8.5/8.6 additions (`array_first`,
     // `stream_last_errors`, …) can never be a user function name.
     "clamp",
+    // Not builtins: words PHP 8.6 deprecates as a FUNCTION name (`Calling a function "let" is
+    // deprecated since 8.6`, namespaced too; a method of that name is fine). Renamed the same way
+    // (DEC-594, probed on 8.6.0 2026-11-23); `Is`/`Let` as a TYPE name are rejected instead
+    // (`checker::common::is_php_reserved_symbol_name`).
+    "let",
+    "is",
+    "readonly",
     "count",
     "sort",
     "rsort",

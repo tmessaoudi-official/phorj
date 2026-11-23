@@ -125,6 +125,37 @@ fn roundtrip(php: &str, label: &str, php_src: &str) {
     );
 }
 
+/// DEC-588 (ruled 2026-11-23): `trimAscii` follows PHP 8.6's default `trim()` list, form feed included.
+/// On PHP 8.6+ the lifted program agrees with its original on every leg. On an older PHP the
+/// original keeps the form feed and the lift strips it: the DISCLOSED split (KNOWN_ISSUES
+/// TRIM-FORM-FEED-LIFT-85), asserted here so it can neither widen nor vanish unnoticed.
+#[test]
+fn trim_of_a_form_feed_follows_php_8_6() {
+    let Some(php) = php_or_gate("trim_of_a_form_feed_follows_php_8_6") else {
+        return;
+    };
+    let src = r#"<?php
+echo strlen(trim("\x0Cx\x0C"));"#;
+    let version: u32 = run_php(&php, "<?php echo PHP_VERSION_ID;", "php_version_id")
+        .trim()
+        .parse()
+        .expect("PHP_VERSION_ID is an integer");
+    if version >= 80600 {
+        roundtrip(&php, "trim_form_feed", src);
+        return;
+    }
+    assert_eq!(
+        run_php(&php, src, "trim_form_feed_orig"),
+        "3",
+        "PHP {version} keeps \\f"
+    );
+    let phorj = lift::lifter::lift_source(src).expect("lift ok");
+    assert_eq!(cmd_treewalk(&phorj).expect("interpreter"), "1");
+    assert_eq!(cmd_run(&phorj).expect("vm"), "1");
+    let back = cli::cmd_transpile(&phorj).expect("transpile back");
+    assert_eq!(run_php(&php, &back, "trim_form_feed_back"), "1");
+}
+
 #[test]
 fn lift_recognizes_tostring_as_attribute() {
     // DEC-331 D9b: PHP `__toString` lifts to a phorj `#[ToString]` method named `toString`
@@ -636,12 +667,13 @@ echo cap(bp: 12); echo '|'; echo cap(4); echo '|'; echo grow([1, 2], 3); echo '|
 echo '|'; echo sorted([3, 1, 2])[0];"#,
         ),
         // Row 4n, DEC-545/549: PHP's `trim($s)` lifts to `s.trimAscii()` and transpiles back to
-        // `trim($s, " \t\n\r\0\x0B")` — the pre-8.6 default set, passed explicitly, so a NUL and a vertical tab go, a form feed stays.
+        // `trim($s, " \t\n\r\0\x0B\x0C")`, the list explicit. The characters here are trimmed by every
+        // PHP; the form feed, which only 8.6+ trims by default (DEC-588), is the separate test below.
         (
             "trim_default_set",
             r#"<?php
 function clean(string $s): string { return '[' . trim($s) . ']'; }
-echo clean(" \t\n\r\0\x0Bx y \n"); echo '|'; echo strlen(trim("\x0Cx\x0C")); echo '|'; echo clean('');"#,
+echo clean(" \t\n\r\0\x0Bx y \n"); echo '|'; echo strlen(trim("\0x\x0B")); echo '|'; echo clean('');"#,
         ),
         (
             "concat_conditional_holes",
@@ -825,7 +857,7 @@ echo $var;"#,
 
     // Every fixture runs even after one fails, and the failing labels are listed together: a
     // panic at the first one left every later fixture unexercised on PHP 8.6 while DEC-588 (8.6's
-    // `trim()` default set) kept `gate-php86` red on `trim_default_set`.
+    // `trim()` default set, since ruled) kept `gate-php86` red on `trim_default_set`.
     let mut failed = Vec::new();
     for (label, php_src) in cases {
         if std::panic::catch_unwind(|| roundtrip(&php, label, php_src)).is_err() {

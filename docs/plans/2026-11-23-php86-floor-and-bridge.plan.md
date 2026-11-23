@@ -15,6 +15,9 @@
 - [2026-11-23 11:51] AGREED: DEC-591 — programme order: 0 secure R9-AE-4, 1 PHP 8.6 floor (its rulings, then the build), 2 rulings session, 3 defect burn with the lift and transpile defects pulled forward plus the census ratchet, 4 first stable pre-release, 5 lift and transpile features measured by the ratchet. DEC-578 is not amended: bridge features wait for step 4. Alternatives: amend DEC-578 for the lift; 8.6 only and re-plan.
 - [2026-11-23 11:51] AGREED: DEC-592 — PHP floor policy: 8.6 is the primary oracle and gate, 8.5 stays a second CI gate until the first stable release, and generated PHP stays 8.5-compatible until then (twes-in declares php >=8.5). Alternatives: 8.6 only, dropping 8.5; 8.6 primary with 8.5 kept permanently.
 - [2026-11-23 11:51] AGREED: DEC-593 — the bar for 'lift and transpile to the maximum level' is a census ratchet on a PINNED twes-in commit (files lifted, packages checking, zero drafts that do not parse, format idempotency, transpile round-trips), run on a read-only copy; bumping the pin is a deliberate step. It is the checker of north-star axis 8. Alternatives: a hand-kept percentage target; fixtures only.
+- [2026-11-23 12:00] AGREED: DEC-588 RULED (option b): String.trimAscii follows PHP 8.6's default set, form feed included; the transpiled PHP passes the set explicitly so the 8.5 gate agrees. A form feed trimmed by lifted 8.5 code now changes (disclosed). Alternatives: keep 8.5's set; a lift target version picking a second native.
+- [2026-11-23 12:00] AGREED: DEC-594 — PHP86-DEPRECATED-NAMES fix style: a user function named let, is or readonly is renamed in the PHP output like clamp (let_); a user type named Let or Is (case-insensitive class names) is E-RESERVED-NAME on every leg like SortDirection. Alternatives: reserve the names in Phorj itself; rename classes too (rejected: a printed class name would differ on the PHP leg).
+- [2026-11-23 12:00] AGREED: DEC-595 — a return inside finally is a check error on every leg (it silently discards a pending exception; C# CS0157; PHP 8.6 deprecates it). break and continue leaving a finally are NOT included by this ruling. The E-code's name is asked with the build. Alternatives: keep it and silence 8.6 in the transpiled PHP; reject break and continue too.
 
 ## Formal Plan
 
@@ -43,7 +46,7 @@
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
 | 0 | Secure R9-AE-4 (`fix(transpile): a number with a trailing newline is not a number on the PHP leg`) | S | done | cc443044 | src/transpile/runtime_php.rs tests/differential.rs |
-| 1 | PHP 8.6 floor: DEC-588 + deprecated-names rulings, then image, CI, docs, perf rebaseline | M | todo | - | docker/** .github/workflows/** |
+| 1 | PHP 8.6 floor: 1a DEC-588 + DEC-594 built; 1b DEC-595; 1c image, CI, docs, perf rebaseline | M | doing | - | src/native/registry_modules/trim_ascii.rs src/php_names.rs src/checker/common.rs docker/** .github/workflows/** |
 | 2 | Rulings session for the PENDING rows blocking P0/P1 | M | todo | - | docs/research/full-audit/raw/C-decisions.md |
 | 3 | Defect burn, bridge defects first, plus the census ratchet | L | todo | - | - |
 | 4 | First stable pre-release | M | todo | - | - |
@@ -51,7 +54,7 @@
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
-- Step 1: DEC-588 (options a-d in the register) and the fix style of PHP86-DEPRECATED-NAMES.
+- Step 1: DEC-588, DEC-594 and DEC-595 RULED 2026-11-23. Open: the diagnostic code name for DEC-595 (step 1b).
 ### Needs research
 - The PHP 8.6 features the survey found untracked (partial function application, readonly property defaults,
   `#[\Override]` on constants, the URI builders, the stream-error and polling APIs): which belong in the gap
