@@ -13,12 +13,20 @@
 #                                          pinned fingerprint, and the keyring apt gets is `gpg --export` of that one
 #                                          fingerprint, never the downloaded file; the patch version floats
 #                                          (scripts/validate-infra.sh forbids patch pins);
+#   3b. PHP <FORWARD_PHP_MINOR> + bcmath — the forward build (8.6), from the same sury source, in its own apt call: what
+#                                          `scripts/dk --php 8.6` and scripts/php-forward-probe.sh use here (B2). Not a
+#                                          pre-push need yet, so a failure is a WARN; plan step 1c makes 8.6 the oracle;
 #   4. cargo-nextest                     — a pinned release, sha256-checked (the hooks fall back to cargo test without it);
 #   5. llvm-objcopy                      — checked only: tests/build.rs asserts it; a WARN names the remedy.
 # Rules: a no-op off the cloud (the kit's own test, inline: this runs even when the kit's install failed); idempotent;
 # one log line per step with its seconds; never fails the environment (exit 0). The PHP key and nextest pins are
 # constants: no environment variable overrides them. PHORJ_CLOUD_SETUP_PREFIX only relocates the root-owned paths for
 # scripts/test-cloud-setup.sh.
+# Not installed: the tools no pre-push leg needs, which run in CI on every cloud branch (developer ruling D1, 2026-11-23:
+# zig + cargo-zigbuild for `phg build --target`, wasm-pack + node for the playground and the VS Code extension, and the
+# pdo_mysql/pdo_pgsql extensions). scripts/test-cloud-setup.sh pins that every docker/Dockerfile ARG is either read
+# below or named on this line:
+# CI-only in a cloud session (D1): ZIG_VERSION ZIGBUILD_VERSION WASM_PACK_VERSION NODE_MAJOR
 set -u
 [[ "${CLAUDE_CODE_REMOTE:-}" == true && "$(realpath -m -- "${HOME:-}")" == /root ]] || exit 0
 
@@ -28,11 +36,12 @@ SURY_KEY_URL=https://packages.sury.org/php/apt.gpg
 SURY_REPO=https://packages.sury.org/php/
 KEYRING=/usr/share/keyrings/debsuryorg-archive-keyring.gpg
 # Versions come from docker/Dockerfile, the one place a tool version lives (docs/plans/2026-11-19-dockerize.plan.md):
-# this script is the cloud fallback for the image a cloud session cannot run. Read beside the script, not from the cwd.
+# this script provisions the host runner a cloud session uses instead of the image (D2). Read beside the script, not from the cwd.
 DOCKERFILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/docker/Dockerfile"
 dockerfile_arg() { sed -n "s/^ARG $1=//p" "$DOCKERFILE" 2>/dev/null | head -n1; }
 PHP_MINOR="$(dockerfile_arg PHP_MINOR)"
 PHP_PKGS=("php$PHP_MINOR-cli" "php$PHP_MINOR-bcmath" "php$PHP_MINOR-mbstring" "php$PHP_MINOR-sqlite3")
+FORWARD_PHP_MINOR="$(dockerfile_arg FORWARD_PHP_MINOR)"
 NEXTEST_VER="$(dockerfile_arg NEXTEST_VERSION)"
 NEXTEST_SHA_FOR=0.9.152                               # the version the sha256 below was computed for, 2026-11-19
 NEXTEST_URL="https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$NEXTEST_VER/cargo-nextest-$NEXTEST_VER-x86_64-unknown-linux-gnu.tar.gz"
@@ -48,9 +57,10 @@ hooks_path() {
     say WARN "hooksPath: $(pwd) has no scripts/git-hooks/pre-push: not phorj's root, left unset"; return 0
   fi
   git config core.hooksPath scripts/git-hooks && say INFO "hooksPath: core.hooksPath = scripts/git-hooks"
-  # No docker daemon here: the hooks and scripts/dk run on this machine, provisioned by this script. Said explicitly,
-  # because dk never infers it from a missing docker.
-  git config phorj.runner host && say INFO "runner: phorj.runner = host (no docker in a cloud session)"
+  # The hooks and scripts/dk run on this machine, provisioned by this script (D2: docker may run in a cloud session,
+  # but the host runner is proven and needs no Docker Hub pulls or cold image build). Said explicitly, because dk never
+  # infers the runner.
+  git config phorj.runner host && say INFO "runner: phorj.runner = host (the host runner, D2)"
 }
 
 prereqs() {
@@ -118,6 +128,24 @@ php_oracle() {
   rm -rf -- "$t"
 }
 
+php_forward() {
+  local v="$FORWARD_PHP_MINOR" p
+  if [[ -z "$v" ]]; then say WARN "php-forward: no ARG FORWARD_PHP_MINOR in $DOCKERFILE: skipped"; return 0; fi
+  if p="$(command -v "php$v")" && [[ "$("$p" -m 2>/dev/null | grep -cx bcmath)" != 0 ]]; then
+    say INFO "php-forward: php$v with bcmath already present ($p)"; return 0
+  fi
+  if [[ ! -f "$P/etc/apt/sources.list.d/php.list" ]]; then
+    say WARN "php-forward: no sury apt source (the php step wrote none): php$v not installed, scripts/dk --php $v refuses"
+    return 0
+  fi
+  if apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "php$v-cli" "php$v-bcmath" \
+     && p="$(command -v "php$v")" && [[ "$("$p" -m 2>/dev/null | grep -cx bcmath)" != 0 ]]; then
+    say INFO "php-forward: $p with bcmath installed from sury"
+  else
+    say WARN "php-forward: php$v-cli php$v-bcmath not installed (output above): scripts/dk --php $v refuses; the oracle is unaffected"
+  fi
+}
+
 nextest() {
   if command -v cargo-nextest >/dev/null; then say INFO "nextest: already present ($(command -v cargo-nextest))"; return 0; fi
   if [[ "$NEXTEST_VER" != "$NEXTEST_SHA_FOR" ]]; then
@@ -147,6 +175,7 @@ say INFO "start in $(pwd)"
 timed hooksPath hooks_path
 timed prereqs prereqs
 timed php php_oracle
+timed php-forward php_forward
 timed nextest nextest
 timed llvm-objcopy objcopy
 exit 0

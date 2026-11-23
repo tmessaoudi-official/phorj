@@ -487,7 +487,8 @@ scout's `docs/PHORJ-REQUIREMENTS.md` § "The classifier's cross-implementation c
 ## OWED GATE LEGS (DEC-597) — legs that could not run where they were; the FIRST work of a PC session that can run them (DEC-598)
 
 <!-- owed-legs -->
-- OPEN microbench since 9bf7fc57 `fix(cloud): dk resolves the PHP oracle on the host runner; the microbe` (2026-11-23, pc): the pre-push of 51aad5f8 skipped it (1-min load 6.36, still 3.27 after 90s); SLICE-STATE item 3 above: the baseline has not been gated against a real pass since its emit
+- CLEARED microbench since 9bf7fc57 `fix(cloud): dk resolves the PHP oracle on the host runner; the microbe` (2026-11-23, pc) by a PASS at d66c0787 (2026-11-23, microbench-gate PASS)
+- OPEN microbench-baseline since d66c0787 `feat(gates): every pre-push leg is classified, test-docker runs on eve` (2026-11-23, pc): not protected by the ratchet until re-emitted on a quiet PC: coalesceor constmap mapunion namedtuplefield nestedlist throwexpr trimascii 
 <!-- /owed-legs -->
 
 ## DEFECT QUEUE (DEC-578) — the ONE list; grades RATIFIED 2026-11-17 (seeded 2026-11-13)

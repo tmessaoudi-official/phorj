@@ -45,7 +45,7 @@ the interpreter, never the reverse.
 
 ## T-2b. Mechanical exhaustiveness covers `Expr` / `Stmt` / `Pattern`, not just `Op` (DEC-356)
 A new `Op` variant must extend three exhaustive, wildcard-free matches (Invariant 3 below / rule 3 in
-`CLAUDE.md`). **The identical rule now applies to `Expr` (37 variants), `Stmt` (15) and `Pattern` (11) — and,
+`CLAUDE.md`). **The identical rule now applies to `Expr` (38 variants), `Stmt` (16) and `Pattern` (11) — and,
 since CD-31 (2026-09-02), to `Item` (8): the item-level walks that dispatch on `Item` carry explicit arms,
 `item_leaves!()` exists, and the loader's `resolve_item`/`resolve_expr` are under the same ratchet (K8).**
 - **A named catch-all is WORSE than `_`**: `other => other` / `leaf => leaf` compiles cleanly, reads as

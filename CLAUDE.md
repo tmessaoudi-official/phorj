@@ -64,7 +64,10 @@ stay in `.claude/agents/`.
   (`docker/Dockerfile`, the ONE place a tool version is written; Rust's stays in `rust-toolchain.toml`), as the host
   uid, with the repo at its host path, so `target/` and every path are shared. Never call a host `cargo`, `php`,
   `node` or `/stack/tools/*` path; the git hooks re-run themselves through `dk`. Cloud sessions are the one host
-  runner: `.claude/cloud-setup.sh` installs the Dockerfile's versions and sets `git config phorj.runner host`.
+  runner (D2, 2026-11-23: docker may run there, but the host runner is the proven path): `.claude/cloud-setup.sh`
+  installs the Dockerfile's versions of every pre-push need, PHP 8.5 and 8.6 included, and sets
+  `git config phorj.runner host`. CI-only in a cloud session (D1): zig + cargo-zigbuild, wasm-pack, node and the
+  pdo_mysql/pdo_pgsql extensions; CI runs them on every cloud branch.
 
   | command | runs | replaces |
   |---|---|---|
@@ -117,7 +120,8 @@ stay in `.claude/agents/`.
 > **autonomous mode** — the ask-human gate family bypassed for this tree (global CLAUDE.md § Mode,
 > 2026-09-27; an `autonomous-3c-bypass` file alone no longer switches it) — which replaces the
 > per-gate tier question with the project's certification schedule
-> (`~/.claude/projects/-stack-projects-phorj/certification-schedule`, asked once). Between gates the refuting is done by EXECUTABLE evidence —
+> (the project's `certification-schedule` file in the per-project store under `~/.claude/projects/`, whose slug
+> differs per machine; asked once). Between gates the refuting is done by EXECUTABLE evidence —
 > failing test first, confirmed red for the stated reason, then a sabotage/mutation check proving the
 > suite would notice the guarantee breaking — which is the part that is genuinely non-negotiable here.
 > The MAXIMAL text below stands as the tier to RECOMMEND at a milestone boundary and as the ceiling
@@ -253,7 +257,7 @@ Two consequences worth stating, because both were live proposals in the 2026-08-
    (`src/vm/exec.rs:12`), `BytecodeProgram::validate` (`src/chunk/validate.rs:21`),
    `compiler::stack_effect` (`src/compiler/emit.rs:77`). All three are wildcard-free (verified
    2026-07-25) — never reintroduce a `_` arm.
-   **The same rule governs `Expr` (38) / `Stmt` (15) / `Pattern` (11) — and `Item` (8) since CD-31,
+   **The same rule governs `Expr` (38) / `Stmt` (16) / `Pattern` (11) — and `Item` (8) since CD-31,
    2026-09-02:** a rewriter's total walk carries
    NO catch-all, and a *named* one (`other => other`, `leaf => leaf`) is worse than `_` because it reads
    as deliberate and greps as handled. Leaf sets are single-sourced as or-pattern macros in

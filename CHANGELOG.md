@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — a cloud session has PHP 8.6 too, and says which tools it leaves to CI (cloud audit 2026-11-23, B2, B4, D1, D2)
+
+`.claude/cloud-setup.sh` installs `php<FORWARD_PHP_MINOR>` (8.6, read from `docker/Dockerfile`) with bcmath from the same
+sury source, in its own apt call; a failure is a WARN, since no pre-push leg needs it until plan step 1c makes 8.6 the
+oracle. On the host runner `scripts/dk --php 8.6 <cmd>` now runs the command with `PHORJ_PHP` set to that build (it used
+to refuse: "needs docker"), and dk exports `PHORJ_FORWARD_PHPS` as the image's `ENV` does, so the forward probe finds it.
+The tools no pre-push leg needs (zig + cargo-zigbuild, wasm-pack, node, pdo_mysql/pdo_pgsql) are declared CI-only in a
+cloud session (developer ruling D1) in the hook's header and CLAUDE.md, and `scripts/test-cloud-setup.sh` pins that
+every `docker/Dockerfile` ARG is either installed or on that line. The "no docker in a cloud session" wording is gone
+(D2: docker may run there; the host runner is the chosen path). Tests: `scripts/test-cloud-setup.sh` 49 -> 64 cases,
+two sabotages (the forward step removed; dk ignoring `--php 8.6`) each red, restored.
+
+### Fixed — stale facts in always-loaded files (cloud audit 2026-11-23, B5, B6)
+
+CLAUDE.md and `docs/INVARIANTS.md` said `Stmt` has 15 variants (16 since `using`), and INVARIANTS `Expr` 37 (38); the
+certification-schedule path in CLAUDE.md named this machine's project slug, which differs in a cloud session.
+`.claude/rules/expertise-core.md` was re-checked claim by claim (DEC-568 still PENDING, the LSP still advertises only
+signature help, no `Any` in `src/types.rs`) and its review date bumped.
+
 ### Added — a gate leg that cannot run where it is becomes a durable OWED entry, verified first on the PC (DEC-597, DEC-598)
 
 The microbench leg used to vanish silently: a load SKIP on the PC printed one line in a push log, and the first cloud fix
@@ -17,7 +36,9 @@ baseline is recorded too, by `scripts/owed-legs.sh`, in a new `OWED GATE LEGS` s
 only a real pass on the PC turns an entry CLEARED (`scripts/microbench-leg.sh --verify`: release build, long settle, run
 when the box is quiet). A cloud pre-push refuses in seconds until the OWED entry is committed, so it travels with the
 push; pre-commit refuses a commit that deletes an OPEN entry or leaves a new one behind, and lists what is owed. The
-first entry is real: the microbench leg was skipped on the push of `51aad5f8` (load 6.36). Tests: `scripts/test-owed-legs.sh`
+first entry is real: the microbench leg was skipped on the push of `51aad5f8` (load 6.36); the push of `d66c0787` ran it
+(load settled to 2.47), CLEARED it, and opened `microbench-baseline` for the seven benches the ratchet does not protect
+yet (five new, two recovered). Tests: `scripts/test-owed-legs.sh`
 (26 cases: the ledger, check-staged through real pathspec commits, the leg driven through the gate's JSON seam), and
 `scripts/test-microbench-gate.sh` case 20 (a cloud gating run measures).
 

@@ -9,7 +9,8 @@
 # rust-toolchain.toml changes (compose's build cache makes an unchanged rebuild a no-op).
 # Environment: DK_DOCKER (the docker binary; tests), DK_NO_BUILD=1 (skip the rebuild check: CI builds the image itself).
 #
-# The one other runner is the HOST, and it is never inferred: a claude.ai cloud session has no docker daemon, so
+# The one other runner is the HOST, and it is never inferred: a claude.ai cloud session uses it (D2, 2026-11-23: docker
+# may run there, but the host runner is proven, needs no Docker Hub pulls and no cold image build), so
 # `.claude/cloud-setup.sh` installs the same tool versions on the machine and sets `git config phorj.runner host`.
 # Without that switch, a missing docker is an error: falling back to whatever tools the host happens to carry is
 # exactly the dependence this wrapper exists to remove.
@@ -17,8 +18,9 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 docker_bin="${DK_DOCKER:-docker}"
 
-service=dev image=phorj-dev:php8.5
+service=dev image=phorj-dev:php8.5 php_ver=""
 if [[ "${1:-}" == "--php" ]]; then
+  php_ver="${2:-}"
   case "${2:-}" in
     8.5) service=dev ;;
     8.6) service=dev86 image=phorj-dev:php8.6 ;;
@@ -32,11 +34,24 @@ fi
 if [[ "${PHORJ_IN_DOCKER:-}" == 1 ]]; then exec "$@"; fi
 
 if [[ "$(git -C "$root" config --get phorj.runner 2>/dev/null || true)" == host ]]; then
-  [[ "$service" == dev ]] || { echo "dk: --php $2 needs docker; this checkout runs on the host (phorj.runner=host)" >&2; exit 2; }
   # Resolve the PHP oracle exactly as pre-push does: a bare `php` on a cloud host is Ubuntu's 8.3 without bcmath, and
   # tests/differential.rs falls back to it when PHORJ_PHP is unset (cloud audit 2026-11-23, B1).
   # shellcheck source=scripts/toolchain.env
   [[ -f "$root/scripts/toolchain.env" ]] && source "$root/scripts/toolchain.env"
+  # The forward PHP (B2): what the image's ENV PHORJ_FORWARD_PHPS names there, `php<FORWARD_PHP_MINOR>` here, installed
+  # by .claude/cloud-setup.sh; `--php <that minor>` runs the command on it, as the dev86 image would.
+  fwd=""
+  [[ -f "$root/docker/Dockerfile" ]] && fwd="$(sed -n 's/^ARG FORWARD_PHP_MINOR=//p' "$root/docker/Dockerfile" | head -n1)"
+  if [[ -z "${PHORJ_FORWARD_PHPS+set}" && -n "$fwd" ]] && fwd_php="$(command -v "php$fwd")"; then
+    export PHORJ_FORWARD_PHPS="$fwd_php"
+  fi
+  if [[ "$service" != dev ]]; then
+    if ! p="$(command -v "php$php_ver")" || [[ "$("$p" -m 2>/dev/null | grep -cx bcmath)" == 0 ]]; then
+      echo "dk: --php $php_ver: no php$php_ver with bcmath on this host (phorj.runner=host); .claude/cloud-setup.sh installs it" >&2
+      exit 2
+    fi
+    export PHORJ_PHP="$p"
+  fi
   exec "$@"
 fi
 

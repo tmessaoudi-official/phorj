@@ -105,6 +105,10 @@ echo "apt-get $*" >>"$CS_CALLS"
 [[ " $* " == *" install "* ]] || exit 0
 [[ "${CS_APT_FAIL:-}" == 1 ]] && exit 100
 [[ " $* " == *" gnupg "* && -n "${CS_GPG:-}" ]] && ln -sf "$CS_GPG" "$CS_FAKE/gpg"
+if [[ " $* " == *" php8.6-cli "* ]]; then   # the forward PHP (B2): its own apt call; CS_FWD_FAIL=1 fails it alone
+  [[ "${CS_FWD_FAIL:-}" == 1 ]] && exit 100
+  printf '#!/bin/sh\n[ "$1" = -m ] && printf "Core\\nbcmath\\n"\n' >"$CS_FAKE/php8.6"; chmod +x "$CS_FAKE/php8.6"
+fi
 if [[ " $* " == *" php8.5-cli "* ]]; then
   if [[ "${CS_NO_BCMATH:-}" == 1 ]]; then printf '#!/bin/sh\n[ "$1" = -m ] && printf "Core\\n"\n' >"$CS_FAKE/php8.5"
   else printf '#!/bin/sh\n[ "$1" = -m ] && printf "Core\\nbcmath\\n"\n' >"$CS_FAKE/php8.5"; fi
@@ -121,7 +125,7 @@ chmod +x "$FAKE/curl" "$FAKE/apt-get" "$FAKE/python3"
 
 # One run: a fresh prefix + repo per case unless KEEP=1; prints the hook's output into $OUT, rc into $RC.
 fresh() {
-  rm -rf "$TMP/p" "$TMP/repo" "$TMP/tmp" "$TMP/calls" "$FAKE/php8.5" "$FAKE/gpg"
+  rm -rf "$TMP/p" "$TMP/repo" "$TMP/tmp" "$TMP/calls" "$FAKE/php8.5" "$FAKE/php8.6" "$FAKE/gpg"
   mkdir -p "$TMP/p/etc" "$TMP/tmp" "$TMP/repo/scripts/git-hooks"
   printf 'NAME="Ubuntu"\nVERSION_CODENAME=noble\n' >"$TMP/p/etc/os-release"
   git -C "$TMP/repo" init -q; : >"$TMP/repo/scripts/git-hooks/pre-push"; : >"$TMP/calls"
@@ -129,7 +133,7 @@ fresh() {
 run() {   # $1 = HOME, $2 = CLAUDE_CODE_REMOTE ("" = unset)
   OUT="$(cd "$TMP/repo" && env -i PATH="$FAKE:${CS_TOOLS:-$TOOLS}" HOME="$1" ${2:+CLAUDE_CODE_REMOTE="$2"} TMPDIR="$TMP/tmp" \
          PHORJ_CLOUD_SETUP_PREFIX="$TMP/p" CS_CALLS="$TMP/calls" CS_FAKE="$FAKE" CS_KEY="${CS_KEY:-$KEY}" \
-         CS_NEXTEST="$TMP/nextest.tgz" ${CS_FAIL:+CS_FAIL=1} ${CS_APT_FAIL:+CS_APT_FAIL=1} \
+         CS_NEXTEST="$TMP/nextest.tgz" ${CS_FAIL:+CS_FAIL=1} ${CS_APT_FAIL:+CS_APT_FAIL=1} ${CS_FWD_FAIL:+CS_FWD_FAIL=1} \
          ${CS_NO_BCMATH:+CS_NO_BCMATH=1} ${CS_NO_YAML:+CS_NO_YAML=1} ${CS_GPG:+CS_GPG="$CS_GPG"} bash "$HOOK" 2>&1)"; RC=$?
   [[ -d "$TMP/tmp" && -z "$(ls -A "$TMP/tmp")" ]] || LEAKED+=" [${CASE:-?}]"   # fresh() empties it, so check every run
 }
@@ -168,7 +172,7 @@ check "apt-get update runs, then the four php8.5 packages are installed" \
   'grep -q "^apt-get update" $TMP/calls && grep -qE "^apt-get .*install .*php8\.5-cli php8\.5-bcmath php8\.5-mbstring php8\.5-sqlite3" $TMP/calls'
 check "php8.5 with bcmath is reported present after the install" 'grep -qE "INFO \| php: .*bcmath" <<<"$OUT"'
 check "core.hooksPath = scripts/git-hooks" '[[ "$(hooks_path)" == scripts/git-hooks ]]'
-check "phorj.runner = host (scripts/dk runs on this machine: no docker in a cloud session)" \
+check "phorj.runner = host (scripts/dk runs on this machine: the host runner, D2)" \
   '[[ "$(git -C "$TMP/repo" config --local --get phorj.runner)" == host ]]'
 check "the php packages are the minor docker/Dockerfile names" \
   'grep -qE "^apt-get .*install .*php$(sed -n "s/^ARG PHP_MINOR=//p" "$ROOT/docker/Dockerfile")-cli" "$TMP/calls"'
@@ -230,12 +234,33 @@ check "the keyring cannot be written: ERROR, no apt source, no PHP install" \
   '[[ $RC -eq 0 && ! -e $SRC ]] && ! php_installed && grep -qE "ERROR \| php: .*keyring" <<<"$OUT"'
 fresh; CS_NO_BCMATH=1 run /root true
 check "php8.5 installed without bcmath: ERROR" 'grep -qE "ERROR \| php: .*no bcmath" <<<"$OUT"'
+
+# ── 6c. The forward PHP (B2): docker/Dockerfile's FORWARD_PHP_MINOR, cli + bcmath, its own apt call ────────
+FWD="$(sed -n 's/^ARG FORWARD_PHP_MINOR=//p' "$ROOT/docker/Dockerfile")"
+check "fixture: docker/Dockerfile names FORWARD_PHP_MINOR (8.6), as the fake apt-get assumes" '[[ "$FWD" == 8.6 ]]'
+fresh; run /root true
+check "the forward PHP's cli and bcmath are installed, in an apt call of its own" \
+  'grep -E "^apt-get .*install .*php$FWD-cli" $TMP/calls | grep -q "php$FWD-bcmath" && ! grep -E "^apt-get .*install .*php$FWD-cli" $TMP/calls | grep -q "php8\.5-cli"'
+check "the forward PHP is reported present (INFO php-forward)" 'grep -qE "INFO \| php-forward: .*php$FWD.*bcmath" <<<"$OUT"'
+fresh; CS_FWD_FAIL=1 run /root true
+check "the forward install fails: a WARN, never an ERROR, and the oracle is still installed" \
+  '[[ $RC -eq 0 ]] && grep -qE "WARN \| php-forward: " <<<"$OUT" && ! grep -qE "ERROR \| php" <<<"$OUT" && php_installed'
+fresh; printf 'NAME="Ubuntu"\n' >"$TMP/p/etc/os-release"; run /root true
+check "no sury source (the oracle step failed): the forward PHP is not attempted, a WARN says why" \
+  '! grep -qE "^apt-get .*install .*php$FWD-cli" $TMP/calls && grep -qE "WARN \| php-forward: " <<<"$OUT"'
+
+# ── 6d. D1: every tool docker/Dockerfile pins is installed here or declared CI-only ────────────────────────
+for arg in $(sed -n 's/^ARG \([A-Z_0-9]*\)=.*/\1/p' "$ROOT/docker/Dockerfile" | grep -vE '_SHA256$|^PHORJ_INPUTS$' | sort -u); do
+  check "Dockerfile ARG $arg: read by dockerfile_arg here, or on the hook's CI-only line" \
+    'grep -qE "dockerfile_arg $arg\b" "$HOOK" || grep -E "^# CI-only in a cloud session \(D1\):" "$HOOK" | grep -qw "$arg"'
+done
+check "CLAUDE.md names the cloud session's CI-only tools (D1)" 'grep -q "CI-only in a cloud session (D1)" "$ROOT/CLAUDE.md"'
 fresh; rm -f "$TMP/repo/scripts/git-hooks/pre-push"; run /root true
 check "not phorj's root (no scripts/git-hooks/pre-push): WARN, hooksPath left unset" \
   '[[ -z "$(hooks_path)" ]] && grep -qE "WARN \| hooksPath: " <<<"$OUT"'
 
 # ── 6b. The host runner: with phorj.runner=host, scripts/dk and the hooks never reach for docker ──────────────
-# A cloud session has no docker and no terminal, and pre-push is fail-closed there: a dk or hook that still calls
+# A cloud session uses the host runner (D2) and has no terminal, and pre-push is fail-closed there: a dk or hook that calls
 # docker would refuse every push. Shims record calls: `docker` (must stay silent) and `cargo` (must run). The control
 # case, with the switch unset, proves the docker shim does record a call. PHORJ_IN_DOCKER is unset because pre-push
 # runs this suite inside the toolchain image.
@@ -262,8 +287,17 @@ want="$(cd "$D" && env -u PHORJ_PHP PATH="$TMP/dkshim:/usr/bin:/bin" bash -c 'so
 dkrun env -u PHORJ_PHP scripts/dk showphp
 check "runner=host: dk exports the PHORJ_PHP scripts/toolchain.env resolves (as pre-push does)" \
   '[[ $RC -eq 0 && -n "$want" && "$OUT" == *"PHORJ_PHP=$want"* ]]'
+mkdir -p "$D/docker"; cp "$ROOT/docker/Dockerfile" "$D/docker/Dockerfile"
 dkrun scripts/dk --php 8.6 cargo --version
-check "runner=host: dk --php 8.6 refuses (it needs docker) and names the switch" '[[ $RC -ne 0 && "$OUT" == *phorj.runner=host* ]] && ! grep -q "^docker" "$TMP/dkshim.calls"'
+check "runner=host, no php8.6: dk --php 8.6 refuses, naming .claude/cloud-setup.sh, never docker" \
+  '[[ $RC -ne 0 && "$OUT" == *cloud-setup.sh* ]] && ! grep -q "^docker" "$TMP/dkshim.calls"'
+cp "$TMP/dkshim/php8.5" "$TMP/dkshim/php8.6"
+dkrun env -u PHORJ_PHP scripts/dk --php 8.6 showphp
+check "runner=host: dk --php 8.6 runs on the host with PHORJ_PHP = php8.6 (B2)" '[[ $RC -eq 0 && "$OUT" == *"PHORJ_PHP=$TMP/dkshim/php8.6"* ]] && ! grep -q "^docker" "$TMP/dkshim.calls"'
+printf '#!/bin/sh\necho "FWD=$PHORJ_FORWARD_PHPS"\n' >"$TMP/dkshim/showfwd"; chmod +x "$TMP/dkshim/showfwd"
+dkrun env -u PHORJ_FORWARD_PHPS scripts/dk showfwd
+check "runner=host: dk exports PHORJ_FORWARD_PHPS = php8.6, as the image's ENV does (B2)" '[[ $RC -eq 0 && "$OUT" == *"FWD=$TMP/dkshim/php8.6"* ]]'
+rm -f "$TMP/dkshim/php8.6"
 dkrun bash scripts/git-hooks/pre-commit
 # The fixture is not a whole checkout, so the body stops at its first missing script; reaching it is the point.
 check "runner=host: the pre-commit hook runs its body here, never through docker" '[[ "$OUT" == *"[pre-commit] "* ]] && ! grep -q "^docker" "$TMP/dkshim.calls"'

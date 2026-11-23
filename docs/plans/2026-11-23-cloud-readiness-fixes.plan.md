@@ -55,12 +55,12 @@
 |---|------|------|-------|----------|-------|
 | 0 | B0 cloud pre-push suites (`test(cloud): the pre-push suites pass in a cloud session again`) | M | done | 51aad5f8 | scripts/test-cloud-setup.sh scripts/test-size-gate.sh .claude/hooks/test-lint-on-write.sh |
 | 1 | B1 host-runner PHP resolution (`fix(cloud): dk resolves the PHP oracle on the host runner`) | S | done | 9bf7fc57 | scripts/dk scripts/test-cloud-setup.sh |
-| 2 | B2 PHP 8.6 in the cloud | M | todo | - | .claude/cloud-setup.sh scripts/dk |
-| 3 | B4 docker-in-the-cloud wording (per D2) | S | todo | - | - |
-| 4 | B5 certification-schedule slug | S | todo | - | CLAUDE.md |
-| 5 | B6 expertise-core re-review | S | todo | - | .claude/rules/expertise-core.md |
+| 2 | B2 PHP 8.6 in the cloud | M | doing | - | .claude/cloud-setup.sh scripts/dk scripts/test-cloud-setup.sh |
+| 3 | B4 docker-in-the-cloud wording (per D2) | S | doing | - | .claude/cloud-setup.sh scripts/dk scripts/test-cloud-setup.sh CLAUDE.md |
+| 4 | B5 certification-schedule slug | S | doing | - | CLAUDE.md |
+| 5 | B6 expertise-core re-review (claims re-checked; stale Stmt/Expr counts fixed) | S | doing | - | .claude/rules/expertise-core.md CLAUDE.md docs/INVARIANTS.md |
 | 6 | C decisions D1-D6 (all ruled 2026-11-23); D6 cloud skip built with B1, replaced by row 7 | S | doing | - | scripts/microbench-gate.sh scripts/test-microbench-gate.sh |
-| 7 | DEC-597/598/599 durable OWED legs (`feat(gates): a leg that cannot run where it is becomes a durable OWED entry`), defects-first, legs classified | M | doing | 1d104c1a | scripts/owed-legs.sh scripts/microbench-leg.sh scripts/gate-legs.tsv scripts/git-hooks/pre-push scripts/git-hooks/pre-commit |
+| 7 | DEC-597/598/599 durable OWED legs (`feat(gates): a leg that cannot run where it is becomes a durable OWED entry`), defects-first, legs classified | M | done | 1d104c1a d66c0787 | scripts/owed-legs.sh scripts/microbench-leg.sh scripts/gate-legs.tsv scripts/git-hooks/pre-push scripts/git-hooks/pre-commit |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
