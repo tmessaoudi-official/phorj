@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the host-runner gate hands the forward PHP to the forward probe (cloud proof run 2026-11-23, F3)
+
+Only `scripts/dk` exported `PHORJ_FORWARD_PHPS` on the host runner, and pre-push there sources `scripts/toolchain.env`
+without going through dk, so `scripts/test-php-forward-probe.sh`'s real-probe case SKIPped on every cloud push ("no
+installed PHP build is newer than the oracle (8.5.13)", 15 passed, 1 skipped) although `/usr/bin/php8.6` was installed.
+The resolution moved from dk into `scripts/toolchain.env` (one resolver for dk and pre-push): an inherited value, the
+image's `ENV`, is kept; otherwise `php<FORWARD_PHP_MINOR>` from `docker/Dockerfile` when the machine has it. The
+Dockerfile is tested before it is read, because dk sources the file under `set -euo pipefail`. Tests:
+`scripts/test-cloud-setup.sh` 65 -> 68 (exported, inherited value kept, unset with no php8.6), red first for the
+stated reason; the forward probe's suite is 17/17 outside dk on the cloud host; sabotage (toolchain.env no longer
+exporting) reddens it and dk's B2 check, restored byte-exact. `scripts/test-docker.sh` (pc-only) fails the same 18
+cases in a cloud session with and without this change (the host runner never reaches the image).
+
 ### Fixed — in a cloud session a phg that fails inside the microbench harness blocks the push, as on the PC (cloud proof run 2026-11-23, F2)
 
 `scripts/microbench-leg.sh` turned every `harness run failed` in a cloud session into a printed OWED and exit 0 (infra:

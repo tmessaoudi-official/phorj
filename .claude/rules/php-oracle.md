@@ -32,7 +32,9 @@ CI (DEC-522: `{,n}`) is gone, and a `preg_*` pin now holds wherever the gate hol
 `scripts/toolchain.env` stays as the HOST-runner resolver (claude.ai cloud sessions, `git config phorj.runner host`):
 it capability-checks an inherited `PHORJ_PHP` (bcmath, probed with a DRAINING pipe: `grep -q` closes the pipe early,
 php dies with SIGPIPE, and under `pipefail` a valid oracle is rejected ~13% of the time — measured, DEC-456), then
-globs `php-8.5.*` and `php8.5`. Its phpbrew glob (`/stack/tools/phpbrew/php/`) is obsolete on this machine now that
+globs `php-8.5.*` and `php8.5`. It also exports the forward PHP `PHORJ_FORWARD_PHPS` (kept when inherited, as from the
+image's `ENV`; else `php<FORWARD_PHP_MINOR>` from `docker/Dockerfile` when installed), so dk and the host-runner
+pre-push see the same build (cloud proof run 2026-11-23, F3). Its phpbrew glob (`/stack/tools/phpbrew/php/`) is obsolete on this machine now that
 the hooks run in the image; it is kept until the developer agrees to remove it. No script may pin a patch version —
 `scripts/validate-infra.sh` enforces that over every tracked shell script and workflow (a variable-built path is a
 resolver, not a pin, and is deliberately not flagged), and `scripts/test-validate-infra.sh` (run by pre-push) keeps

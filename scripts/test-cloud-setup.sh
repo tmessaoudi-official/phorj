@@ -307,7 +307,14 @@ check "runner=host: dk --php 8.6 runs on the host with PHORJ_PHP = php8.6 (B2)" 
 printf '#!/bin/sh\necho "FWD=$PHORJ_FORWARD_PHPS"\n' >"$TMP/dkshim/showfwd"; chmod +x "$TMP/dkshim/showfwd"
 dkrun env -u PHORJ_FORWARD_PHPS scripts/dk showfwd
 check "runner=host: dk exports PHORJ_FORWARD_PHPS = php8.6, as the image's ENV does (B2)" '[[ $RC -eq 0 && "$OUT" == *"FWD=$TMP/dkshim/php8.6"* ]]'
+# F3 (cloud proof run 2026-11-23): on the host runner pre-push sources scripts/toolchain.env and never goes through dk,
+# so the forward PHP must come from toolchain.env itself, or test-php-forward-probe's real probe SKIPs in every cloud push.
+tcfwd() { (cd "$D" && env -u PHORJ_PHP "$@" PATH="$TMP/dkshim:$DKTOOLS" bash -c 'source scripts/toolchain.env 2>/dev/null; printf %s "${PHORJ_FORWARD_PHPS-unset}"'); }
+check "toolchain.env exports PHORJ_FORWARD_PHPS = php8.6 (what pre-push sources on the host runner: F3)" \
+  '[[ "$(tcfwd -u PHORJ_FORWARD_PHPS)" == "$TMP/dkshim/php8.6" ]]'
+check "toolchain.env keeps an inherited PHORJ_FORWARD_PHPS (the image's ENV)" '[[ "$(tcfwd PHORJ_FORWARD_PHPS=/image/php86)" == /image/php86 ]]'
 rm -f "$TMP/dkshim/php8.6"
+check "toolchain.env with no php8.6 leaves PHORJ_FORWARD_PHPS unset" '[[ "$(tcfwd -u PHORJ_FORWARD_PHPS)" == unset ]]'
 dkrun bash scripts/git-hooks/pre-commit
 # The fixture is not a whole checkout, so the body stops at its first missing script; reaching it is the point.
 check "runner=host: the pre-commit hook runs its body here, never through docker" '[[ "$OUT" == *"[pre-commit] "* ]] && ! grep -q "^docker" "$TMP/dkshim.calls"'

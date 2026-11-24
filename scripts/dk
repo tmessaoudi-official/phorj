@@ -37,14 +37,9 @@ if [[ "$(git -C "$root" config --get phorj.runner 2>/dev/null || true)" == host 
   # Resolve the PHP oracle exactly as pre-push does: a bare `php` on a cloud host is Ubuntu's 8.3 without bcmath, and
   # tests/differential.rs falls back to it when PHORJ_PHP is unset (cloud audit 2026-11-23, B1).
   # shellcheck source=scripts/toolchain.env
+  # It also exports the forward PHP, PHORJ_FORWARD_PHPS, as the image's ENV does (B2; resolved there since F3).
   [[ -f "$root/scripts/toolchain.env" ]] && source "$root/scripts/toolchain.env"
-  # The forward PHP (B2): what the image's ENV PHORJ_FORWARD_PHPS names there, `php<FORWARD_PHP_MINOR>` here, installed
-  # by .claude/cloud-setup.sh; `--php <that minor>` runs the command on it, as the dev86 image would.
-  fwd=""
-  [[ -f "$root/docker/Dockerfile" ]] && fwd="$(sed -n 's/^ARG FORWARD_PHP_MINOR=//p' "$root/docker/Dockerfile" | head -n1)"
-  if [[ -z "${PHORJ_FORWARD_PHPS+set}" && -n "$fwd" ]] && fwd_php="$(command -v "php$fwd")"; then
-    export PHORJ_FORWARD_PHPS="$fwd_php"
-  fi
+  # `--php <the forward minor>` runs the command on that build, as the dev86 image would.
   if [[ "$service" != dev ]]; then
     if ! p="$(command -v "php$php_ver")" || [[ "$("$p" -m 2>/dev/null | grep -cx bcmath)" == 0 ]]; then
       echo "dk: --php $php_ver: no php$php_ver with bcmath on this host (phorj.runner=host); .claude/cloud-setup.sh installs it" >&2
