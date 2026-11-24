@@ -6,7 +6,8 @@
 #   - On the PC, a confirmed WIN->LOSS flip blocks (DEC-598: a P1 regression), as the gate always did.
 #   - In a claude.ai cloud session (CLAUDE_CODE_REMOTE=true) the gate measures regardless of load, so the identity half
 #     runs whenever a PHP comparator resolves; ratios from a shared VM are never a verdict (two cloud runs flipped two
-#     different benches, 2026-11-23), so every cloud run PRINTS what is owed, writes no entry and never holds the push.
+#     different benches, 2026-11-23), so every cloud run PRINTS what is owed, writes no entry and never holds the push
+#     for a ratio or for infra (an identity break, a malformed baseline and a phg that fails in the harness still do).
 #   - On the PC, a SKIP (load, no comparator, source mismatch, no binary) or a pass that carries an unconfirmed
 #     "verdict OWED" leaves `microbench` OWED; only a real PC pass clears it (a JSON-seam pass is not a measurement).
 #   - On the PC, a bench missing from the baseline, or RECOVERED, leaves `microbench-baseline` OWED until a pass shows neither

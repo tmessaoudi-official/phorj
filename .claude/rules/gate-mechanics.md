@@ -45,7 +45,8 @@ not in `CLAUDE.md`.
   At write time `.claude/hooks/lint-on-write.sh` relays both, warn-only, for the file just written.
 
 - **Owed legs and the leg table** (DEC-597, DEC-598, DEC-599, 2026-11-23). pre-push runs the microbench through
-  `scripts/microbench-leg.sh`, which blocks on an output-identity break everywhere and on a confirmed flip on the PC,
+  `scripts/microbench-leg.sh`, which blocks on an output-identity break and on a phg that fails inside the harness
+  everywhere (`scripts/microbench.sh` names it: a defect, never infra), and on a confirmed flip on the PC,
   and records anything it could not judge (a load skip, no comparator, a cloud session's ratios, an unconfirmed
   suspect, a bench missing from the baseline) with `scripts/owed-legs.sh` in SLICE-STATE's OWED GATE LEGS section.
   Only a real PC pass clears an entry (`microbench-leg.sh --verify`). A RECOVERED bench opens `microbench-baseline` only
