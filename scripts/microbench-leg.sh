@@ -53,8 +53,10 @@ log="$(mktemp)"; trap 'rm -f -- "$log"' EXIT
 bash "$GATE" 2>&1 | tee "$log"; rc=${PIPESTATUS[0]}
 if [[ "$rc" == 2 ]]; then
   # In a cloud session a harness that cannot run (a docker pull, the host php) is infra: OWED, never a held push. A
-  # setup error in the repo (a malformed baseline) still stops it, as on the PC.
-  if [[ "$env" == cloud ]] && grep -q 'harness run failed' "$log" && ! grep -q 'malformed baseline' "$log"; then
+  # setup error in the repo (a malformed baseline) still stops it, as on the PC, and so does a phg that fails on a
+  # bench (scripts/microbench.sh names it: a phorj defect, never infra; cloud proof run 2026-11-23, F2).
+  if [[ "$env" == cloud ]] && grep -q 'harness run failed' "$log" && ! grep -q 'malformed baseline' "$log" \
+     && ! grep -q '^microbench: phg failed on ' "$log"; then
     owed record microbench cloud "the harness could not run in a cloud session: harness run failed"; exit 0
   fi
   exit 2

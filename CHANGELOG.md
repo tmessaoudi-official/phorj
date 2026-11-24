@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — in a cloud session a phg that fails inside the microbench harness blocks the push, as on the PC (cloud proof run 2026-11-23, F2)
+
+`scripts/microbench-leg.sh` turned every `harness run failed` in a cloud session into a printed OWED and exit 0 (infra:
+a docker pull, the host php). A phg that panicked on every bench took the same path, reported as "the harness could
+not run in a cloud session" (reproduced with a fake phg exiting 101). `scripts/microbench.sh` now names a phg failure
+(`microbench: phg failed on <bench> (exit N): a phorj defect, not infra`, exit 3) and the leg's cloud conversion skips
+it, so the leg exits 2 there as it already did on the PC. The docker-both branch stays unnamed: a failure there may be
+docker's. Tests: `scripts/test-owed-legs.sh` 48 -> 50 (the fake gate; the real gate and the REAL harness with a
+panicking phg), red first for the stated reason; sabotages (the leg ignoring the marker; the harness not naming phg)
+each red, restored byte-exact; a real one-bench cloud run still measures and passes.
+
 ### Fixed — the cloud pre-push suite no longer reads the machine's php8.6 (cloud proof run 2026-11-23, F1)
 
 `scripts/test-cloud-setup.sh`'s case "runner=host, no php8.6: dk --php 8.6 refuses" ran dk with `/usr/bin` on its

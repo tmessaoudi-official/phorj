@@ -135,6 +135,8 @@ reset_owed; FAKE_RC=2 FAKE_OUT='microbench-gate: SETUP ERROR — 1 malformed bas
 check "a setup error stays exit 2 and records nothing" '[[ $rc == 2 ]] && ! grep -q "^- OPEN " "$O"'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=2 FAKE_OUT='microbench-gate: harness run failed' fake; rc=$?
 check "cloud: a harness failure (infra) is printed OWED, exit 0: it never holds a cloud push" '[[ $rc == 0 ]] && ! grep -q "^- OPEN " "$O" && grep -qE "^microbench-leg: OWED \\(cloud, not recorded.*harness run failed" "$TMP/legout"'
+reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=2 FAKE_OUT=$'microbench: phg failed on x (exit 101): a phorj defect, not infra\nmicrobench-gate: harness run failed' fake; rc=$?
+check "cloud: a phg failure inside the harness is a defect, not infra: exit 2, nothing printed OWED (F2)" '[[ $rc == 2 ]] && ! grep -q "^microbench-leg: OWED" "$TMP/legout"'
 reset_owed; FAKE_RC=2 FAKE_OUT='microbench-gate: harness run failed' fake; rc=$?
 check "PC: a harness failure stays exit 2 (the developer is there to look)" '[[ $rc == 2 ]] && ! grep -q "^- OPEN " "$O"'
 reset_owed; CLAUDE_CODE_REMOTE=true FAKE_RC=2 FAKE_OUT='microbench-gate: SETUP ERROR — 1 malformed baseline ratio(s)' fake; rc=$?
@@ -170,6 +172,14 @@ real() { CLAUDE_CODE_REMOTE=true MICROBENCH_PHP_BIN="$TMP/fakephp" PHG_BIN="$TMP
   HARNESS_JSON="$1" MICROBENCH_LOADAVG="$TMP/load-high" MICROBENCH_SETTLE_SECS=0 leg; }
 reset_owed; real "$TMP/ident.json"; rc=$?
 check "cloud, real gate, loaded, source mismatch: an identity break BLOCKS (exit 1)" '[[ $rc == 1 ]] && grep -q "output-identity break" "$TMP/legout"'
+# The REAL harness (scripts/microbench.sh) with a phg that panics: it names phg, and the cloud leg blocks (exit 2)
+# instead of printing "the harness could not run" OWED (cloud proof run 2026-11-23, F2: a crash read as infra).
+printf '#!/bin/sh\necho "thread main panicked" >&2\nexit 101\n' >"$TMP/crashphg"; chmod +x "$TMP/crashphg"
+reset_owed; (cd "$R" && CLAUDE_CODE_REMOTE=true MICROBENCH_BASELINE="$B" MICROBENCH_PHP_BIN="$TMP/fakephp" PHG_BIN="$TMP/crashphg" \
+  MICROBENCH_HARNESS="$ROOT/scripts/microbench.sh" MICROBENCH_LOADAVG="$TMP/load-high" MICROBENCH_SETTLE_SECS=0 \
+  bash scripts/microbench-leg.sh >"$TMP/legout" 2>&1); rc=$?
+check "cloud, real gate and harness: a phg that panics blocks (exit 2), named, never OWED (F2)" \
+  '[[ $rc == 2 ]] && grep -q "microbench: phg failed on " "$TMP/legout" && ! grep -q "^microbench-leg: OWED" "$TMP/legout"'
 reset_owed; real "$TMP/flip.json"; rc=$?
 check "cloud, real gate, loaded, source mismatch: a flip is printed OWED, exit 0" '[[ $rc == 0 ]] && ! grep -q "^- OPEN " "$O" && grep -qE "^microbench-leg: OWED \\(cloud, not recorded.*$win" "$TMP/legout"'
 # The confirming re-run through the REAL gate (PC, quiet, matching source): a one-bench harness result still prints the

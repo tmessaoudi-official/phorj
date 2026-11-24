@@ -175,7 +175,12 @@ for name in "${features[@]}"; do
     if [[ "$DOCKER_BOTH" == "1" ]]; then
       line="$(docker exec "$CONTAINER" /phg run $PHG_ARGS "/w/$name.phg")"
     else
-      line="$(taskset -c "$CPU" "$BIN" run $PHG_ARGS "$MICRO/$name.phg")"
+      # Named, so a caller can tell a phorj defect from infra (cloud proof run 2026-11-23, F2: a panicking phg read
+      # as "the harness could not run" in a cloud session). The docker-both branch above stays unnamed: there a
+      # failure may be docker's.
+      line="$(taskset -c "$CPU" "$BIN" run $PHG_ARGS "$MICRO/$name.phg")" || {
+        rc=$?; echo "microbench: phg failed on $name (exit $rc): a phorj defect, not infra" >&2; exit 3
+      }
     fi
     ns="$(printf '%s' "$line" | cut -f2)"
     vcs="$(printf '%s' "$line" | cut -f3)"
