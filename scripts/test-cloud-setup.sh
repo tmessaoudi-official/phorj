@@ -288,7 +288,17 @@ dkrun env -u PHORJ_PHP scripts/dk showphp
 check "runner=host: dk exports the PHORJ_PHP scripts/toolchain.env resolves (as pre-push does)" \
   '[[ $RC -eq 0 && -n "$want" && "$OUT" == *"PHORJ_PHP=$want"* ]]'
 mkdir -p "$D/docker"; cp "$ROOT/docker/Dockerfile" "$D/docker/Dockerfile"
-dkrun scripts/dk --php 8.6 cargo --version
+# "No php8.6" must be true by construction: a cloud VM has /usr/bin/php8.6 (B2 installs it), so this case read the
+# machine and was red on every cloud pre-push (cloud proof run 2026-11-23, F1). It runs on the closed PATH instead:
+# the shims, then the fixture's system tools plus the three dk and scripts/toolchain.env use (ls, sort, id).
+DKTOOLS="$TMP/tools-dk"; cp -a "$TOOLS" "$DKTOOLS"
+for t in ls sort id; do
+  p=""; for d in /usr/bin /bin; do [[ -x "$d/$t" ]] && { p="$d/$t"; break; }; done
+  if [[ -n "$p" ]]; then ln -sf "$p" "$DKTOOLS/$t"; else bad "fixture: $t is in /usr/bin or /bin"; fi
+done
+check "fixture: no php8.6 resolves on the closed dk PATH (whatever this machine has installed)" \
+  '! PATH="$TMP/dkshim:$DKTOOLS" command -v php8.6 >/dev/null'
+: > "$TMP/dkshim.calls"; OUT="$(cd "$D" && timeout 60 env -u PHORJ_IN_DOCKER PATH="$TMP/dkshim:$DKTOOLS" scripts/dk --php 8.6 cargo --version 2>&1)"; RC=$?
 check "runner=host, no php8.6: dk --php 8.6 refuses, naming .claude/cloud-setup.sh, never docker" \
   '[[ $RC -ne 0 && "$OUT" == *cloud-setup.sh* ]] && ! grep -q "^docker" "$TMP/dkshim.calls"'
 cp "$TMP/dkshim/php8.5" "$TMP/dkshim/php8.6"

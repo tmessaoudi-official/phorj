@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the cloud pre-push suite no longer reads the machine's php8.6 (cloud proof run 2026-11-23, F1)
+
+`scripts/test-cloud-setup.sh`'s case "runner=host, no php8.6: dk --php 8.6 refuses" ran dk with `/usr/bin` on its
+PATH, and in a cloud session `.claude/cloud-setup.sh` installs `/usr/bin/php8.6` (B2): the suite was 63/64 there, so
+every cloud pre-push was refused, while the PC (no php8.6 in `/usr/bin`) stayed green. The case now runs on a closed
+PATH (the shims, then the fixture's system tools plus `ls`, `sort`, `id`), and a new fixture check asserts no php8.6
+resolves on it. 65/65 as root in a fresh cloud session; sabotages (dk no longer refusing; `/usr/bin` back on the closed
+PATH) each red, restored byte-exact.
+
 ### Added — a cloud session has PHP 8.6 too, and says which tools it leaves to CI (cloud audit 2026-11-23, B2, B4, D1, D2)
 
 `.claude/cloud-setup.sh` installs `php<FORWARD_PHP_MINOR>` (8.6, read from `docker/Dockerfile`) with bcmath from the same

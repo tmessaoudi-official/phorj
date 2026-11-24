@@ -21,6 +21,7 @@
 - [2026-11-23 20:29] AGREED: LIVE-ROUNDTRIPS-NOWHERE graded P2, ratified (a gate that runs nowhere, not wrong output). Alternative: P1.
 - [2026-11-23 20:29] AGREED: The PC is quiet now: run the D3 re-baseline (microbench-gate.sh --emit) then microbench-leg.sh --verify. Alternative: wait.
 - [2026-11-23 21:25] AGREED: The owed-list flap: a RECOVERED reading opens microbench-baseline only after a re-measure confirms it, as WIN->LOSS flips are confirmed. Alternatives: open only for a bench missing from the baseline; leave as is.
+- [2026-11-23 22:43] AGREED: Cloud proof run (a fresh cloud session): fix F1 (test-cloud-setup's 'no php8.6' case read /usr/bin, where B2 installs php8.6, so every cloud gate run before publishing was red), F2 (a phg failure inside the microbench harness was read as infra and printed OWED in the cloud) and F3 (the host-runner gate never handed the forward PHP to test-php-forward-probe), each test-first, one commit each, on the cloud branch; F4-F7 reported only. Certification: advisor() only. Alternatives: F1 only; publish at HEAD with no fix.
 
 ## Formal Plan
 
@@ -65,6 +66,7 @@
 | 5 | B6 expertise-core re-review (every cited anchor re-checked; stale Stmt/Expr counts and the CorpusTally cite fixed) (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | .claude/rules/expertise-core.md CLAUDE.md docs/INVARIANTS.md |
 | 6 | C decisions D1-D6 (all ruled 2026-11-23); D6 cloud skip built with B1, replaced by row 7; D1 (`feat(cloud): PHP 8.6 on the host runner, CI-only tools declared`) | S | done | ea126849 | scripts/microbench-gate.sh scripts/test-microbench-gate.sh |
 | 7 | DEC-597/598/599 durable OWED legs (`feat(gates): a leg that cannot run where it is becomes a durable OWED entry`), defects-first, legs classified | M | done | 1d104c1a d66c0787 15c935f6 (`fix(gates): a cloud run checks output identity through a php source mismatch`) 0ee17780 (`fix(gates): the cloud identity check needs no JIT`) 4e6b1651 (`fix(gates): a harness that cannot run in a cloud session is OWED`) a2d23a40 (`chore(bench): re-emit the G-8 microbench baseline on a quiet PC`) cef9aca1 (`fix(gates): a cloud session prints what is owed and is never refused for it`) af5b2d06 (`fix(gates): a RECOVERED reading is re-measured before it opens microbench-baseline`) | scripts/owed-legs.sh scripts/microbench-leg.sh scripts/gate-legs.tsv scripts/git-hooks/pre-push scripts/git-hooks/pre-commit |
+| 8 | Cloud proof run fixes F1-F3 (a fresh cloud session, 2026-11-23): F1 the "no php8.6" suite case read `/usr/bin` | S | in progress | F1 in the commit `test(cloud): the "no php8.6" case runs on a closed PATH` | scripts/test-cloud-setup.sh |
 <!-- /progress-block -->
 ### Blocked
 ### Needs input
