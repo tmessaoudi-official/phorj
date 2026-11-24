@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — the forward PHP is exported on the host runner only; the PC's forward probe is unchanged (F3 follow-up)
+
+F3 made `scripts/toolchain.env` export `PHORJ_FORWARD_PHPS = php<FORWARD_PHP_MINOR>` wherever the machine has that
+build, and the developer's PC has an apt `/usr/bin/php8.6`: every PC source of the file (pre-push, the forward probe)
+then probed that one build and dropped the phpbrew glob's `php-8.6.0` and `php-master`. The export now also requires
+`phorj.runner = host`, as `scripts/dk` and pre-push read it, so the PC resolves exactly as before F3 (`PHORJ_FORWARD_PHPS`
+unset, measured on the PC) and the host runner still exports php8.6. Tests: `scripts/test-cloud-setup.sh` 68 -> 69 (the
+PC case: runner unset, php8.6 on the PATH, left unset), red first for the stated reason, then green.
+
 ### Fixed — the host-runner gate hands the forward PHP to the forward probe (cloud proof run 2026-11-23, F3)
 
 Only `scripts/dk` exported `PHORJ_FORWARD_PHPS` on the host runner, and pre-push there sources `scripts/toolchain.env`

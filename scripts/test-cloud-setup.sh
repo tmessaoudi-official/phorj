@@ -313,6 +313,12 @@ tcfwd() { (cd "$D" && env -u PHORJ_PHP "$@" PATH="$TMP/dkshim:$DKTOOLS" bash -c 
 check "toolchain.env exports PHORJ_FORWARD_PHPS = php8.6 (what pre-push sources on the host runner: F3)" \
   '[[ "$(tcfwd -u PHORJ_FORWARD_PHPS)" == "$TMP/dkshim/php8.6" ]]'
 check "toolchain.env keeps an inherited PHORJ_FORWARD_PHPS (the image's ENV)" '[[ "$(tcfwd PHORJ_FORWARD_PHPS=/image/php86)" == /image/php86 ]]'
+# The PC is unchanged by F3: with phorj.runner unset, a php8.6 on the PATH (the developer's PC has /usr/bin/php8.6) is
+# not exported, so php-forward-probe keeps its phpbrew glob (8.6 AND php-master) instead of that one apt build.
+git -C "$D" config --unset phorj.runner
+check "PC (runner unset): toolchain.env leaves PHORJ_FORWARD_PHPS unset even with a php8.6 on the PATH" \
+  '[[ "$(tcfwd -u PHORJ_FORWARD_PHPS)" == unset ]]'
+git -C "$D" config phorj.runner host
 rm -f "$TMP/dkshim/php8.6"
 check "toolchain.env with no php8.6 leaves PHORJ_FORWARD_PHPS unset" '[[ "$(tcfwd -u PHORJ_FORWARD_PHPS)" == unset ]]'
 dkrun bash scripts/git-hooks/pre-commit
